@@ -52,6 +52,7 @@ The function requires the following application settings:
 - `SERVICEBUS_CONNECTION` – connection string for the queue.
 - `SERVICEBUS_QUEUE` – name of the queue containing chat events.
 - `OPENAI_API_KEY` – API key used by the `openai` library.
+- `OPENAI_MODEL` – model name passed to OpenAI. Defaults to `gpt-3.5-turbo`.
 
 ### Expected event
 
@@ -122,6 +123,8 @@ messaging:
 
 - `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
   calling OpenAI.
+- `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI 
+  (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
   namespace.
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.

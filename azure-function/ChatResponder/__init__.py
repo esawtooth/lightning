@@ -11,6 +11,7 @@ from events import Event, LLMChatEvent
 
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
 
 client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 
@@ -25,7 +26,10 @@ def main(msg: func.ServiceBusMessage) -> None:
         return
 
     try:
-        response = openai.ChatCompletion.create(messages=event.messages)
+        response = openai.ChatCompletion.create(
+            messages=event.messages,
+            model=OPENAI_MODEL,
+        )
         reply = response["choices"][0]["message"]["content"]
         logging.info("Assistant reply: %s", reply)
     except Exception as e:
