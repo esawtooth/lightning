@@ -11,6 +11,7 @@ from events import Event, LLMChatEvent
 
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
 
 missing = []
@@ -18,6 +19,8 @@ if not SERVICEBUS_CONN:
     missing.append("SERVICEBUS_CONNECTION")
 if not SERVICEBUS_QUEUE:
     missing.append("SERVICEBUS_QUEUE")
+if not OPENAI_API_KEY:
+    missing.append("OPENAI_API_KEY")
 if missing:
     logging.error("Missing required environment variable(s): %s", ", ".join(missing))
     raise RuntimeError("Azure Function misconfigured")
