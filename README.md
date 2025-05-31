@@ -23,6 +23,30 @@ generated. Send a JSON body describing the event:
 
 The function validates the data and publishes it to the Service Bus queue. The `type` field is used as the topic of the message.
 
+### POST /api/schedule
+
+Schedule an event for future delivery. Provide the `X-User-ID` header and a JSON
+body containing the event payload and either a one-time `timestamp` or a `cron`
+expression:
+
+```json
+{
+  "event": { "type": "user.message", "source": "client", "metadata": {"message": "hi"} },
+  "timestamp": "2023-01-01T01:00:00Z"
+}
+```
+
+or
+
+```json
+{
+  "event": { "type": "user.message", "source": "client", "metadata": {"message": "hi"} },
+  "cron": "0 * * * *"
+}
+```
+
+The function stores the schedule in durable storage and returns a schedule ID.
+
 ## Python library
 
 The `events` package provides a dataclass `Event` that can be used to structure events before they are sent to the API or processed downstream.
