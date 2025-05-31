@@ -3,6 +3,7 @@ import sys
 import json
 import types
 import importlib.util
+import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -72,6 +73,7 @@ def test_openai_model_env(monkeypatch):
     os.environ['SERVICEBUS_CONNECTION'] = 'endpoint'
     os.environ['SERVICEBUS_QUEUE'] = 'queue'
     os.environ['OPENAI_MODEL'] = 'test-model'
+    os.environ['OPENAI_API_KEY'] = 'sk-test'
 
     captured = {}
     module, SBMessage = load_chat_responder(monkeypatch, captured)
@@ -87,3 +89,13 @@ def test_openai_model_env(monkeypatch):
     module.main(msg)
 
     assert captured['model'] == 'test-model'
+
+
+def test_missing_api_key(monkeypatch):
+    os.environ['SERVICEBUS_CONNECTION'] = 'endpoint'
+    os.environ['SERVICEBUS_QUEUE'] = 'queue'
+    if 'OPENAI_API_KEY' in os.environ:
+        del os.environ['OPENAI_API_KEY']
+
+    with pytest.raises(RuntimeError):
+        load_chat_responder(monkeypatch, {})

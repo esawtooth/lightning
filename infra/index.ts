@@ -4,6 +4,11 @@ import * as azure from "@pulumi/azure-native";
 const config = new pulumi.Config();
 const location = config.get("location") || "centralindia";
 
+const openaiApiKey = process.env.OPENAI_API_KEY;
+if (!openaiApiKey) {
+  throw new Error("OPENAI_API_KEY must be set when deploying");
+}
+
 const resourceGroup = new azure.resources.ResourceGroup("lightning", {
   resourceGroupName: "lightning",
   location,
@@ -111,6 +116,7 @@ const funcApp = new azure.web.WebApp("event-function", {
         value: sendKeys.primaryConnectionString,
       },
       { name: "SERVICEBUS_QUEUE", value: queue.name },
+      { name: "OPENAI_API_KEY", value: openaiApiKey },
       { name: "STORAGE_CONNECTION", value: storageConnectionString },
       { name: "SCHEDULE_TABLE", value: scheduleTable.name },
       { name: "REPO_TABLE", value: repoTable.name },

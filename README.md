@@ -138,7 +138,9 @@ assistant reply:
    func azure functionapp publish event-function
    ```
 
-Ensure `OPENAI_API_KEY` is configured on the Function App before publishing.
+If deploying via the provided GitHub Actions workflow, set an `OPENAI_API_KEY` secret
+so Pulumi can configure it on the Function App. Otherwise make sure the key is set
+manually before publishing.
 
 ## Function Configuration
 
