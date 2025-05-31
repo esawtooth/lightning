@@ -1,5 +1,12 @@
 import pulumi
-from pulumi_azure_native import resources, servicebus, storage, web
+from pulumi_azure_native import (
+    resources,
+    servicebus,
+    storage,
+    web,
+    authorization,
+)
+from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
@@ -95,11 +102,15 @@ send_keys = servicebus.list_queue_keys_output(
 )
 
 # Function App
+client_config = get_client_config()
+subscription_id = client_config.subscription_id
+
 func_app = web.WebApp(
     "event-function",
     resource_group_name=resource_group.name,
     server_farm_id=app_service_plan.id,
     kind="FunctionApp",
+    identity=web.ManagedServiceIdentityArgs(type=web.ManagedServiceIdentityType.SYSTEM_ASSIGNED),
     site_config=web.SiteConfigArgs(
         app_settings=[
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
@@ -110,9 +121,20 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
             web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
             web.NameValuePairArgs(name="REPO_TABLE", value=repo_table.name),
-            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
+            web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
+            web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
+            web.NameValuePairArgs(name="ACI_REGION", value=location),
+            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key)
         ]
     ),
+)
+
+aci_role = RoleAssignment(
+    "aci-contributor",
+    principal_id=func_app.identity.principal_id,
+    principal_type="ServicePrincipal",
+    role_definition_id=f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+    scope=resource_group.id,
 )
 
 pulumi.export(
