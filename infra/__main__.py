@@ -3,6 +3,7 @@ from pulumi_azure_native import resources, servicebus, storage, web
 
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
+openai_api_key = config.require_secret("openaiApiKey")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -109,6 +110,7 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
             web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
             web.NameValuePairArgs(name="REPO_TABLE", value=repo_table.name),
+            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
         ]
     ),
 )
