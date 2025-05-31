@@ -134,6 +134,55 @@ messaging:
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
 
+## Local Testing
+
+When running the project on your machine you can provide the environment
+settings either through `azure-function/local.settings.json` (used by Azure
+Functions Core Tools) or through a `.env` file in the repository root.
+
+### Sample `local.settings.json`
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "OPENAI_API_KEY": "sk-...",
+    "OPENAI_MODEL": "gpt-3.5-turbo",
+    "SERVICEBUS_CONNECTION": "<connection-string>",
+    "SERVICEBUS_QUEUE": "chat-events",
+    "NOTIFY_URL": "http://localhost:8000/notify"
+  }
+}
+```
+
+### Sample `.env`
+
+```env
+OPENAI_API_KEY=sk-...
+OPENAI_MODEL=gpt-3.5-turbo
+SERVICEBUS_CONNECTION=<connection-string>
+SERVICEBUS_QUEUE=chat-events
+NOTIFY_URL=http://localhost:8000/notify
+```
+
+Start the functions locally from the `azure-function` directory:
+
+```bash
+cd azure-function
+func start
+```
+
+In another terminal, run the chat client:
+
+```bash
+chainlit run chat_client/chainlit_app.py
+```
+
+Set `EVENT_API_URL` to `http://localhost:7071/api/events` so the client sends
+events to your local Function App.
+
 ## Chainlit client
 
 Run the interactive chat client using [Chainlit](https://github.com/Chainlit/chainlit):
