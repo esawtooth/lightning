@@ -21,7 +21,7 @@ generated. Send a JSON body describing the event:
 }
 ```
 
-The function validates the data and publishes it to the Event Hub. The `type` field is used as the topic of the event in the hub.
+The function validates the data and publishes it to the Service Bus queue. The `type` field is used as the topic of the message.
 
 ## Python library
 
