@@ -26,3 +26,4 @@ def register(agent_cls: type) -> type:
 
 
 from . import echo_agent  # noqa: F401  # register built-in agents
+from . import openai_shell_agent  # noqa: F401

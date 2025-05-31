@@ -23,7 +23,9 @@ def load_chainlit_app(monkeypatch, capture):
 
     cl_mod.on_message = on_message
     cl_mod.Message = Msg
-    app_obj = types.SimpleNamespace(post=lambda path: (lambda f: f))
+    def mount(path, app, **kw):
+        pass
+    app_obj = types.SimpleNamespace(post=lambda path: (lambda f: f), mount=mount)
     cl_mod.server = types.SimpleNamespace(app=app_obj)
     monkeypatch.setitem(sys.modules, 'chainlit', cl_mod)
     monkeypatch.setitem(sys.modules, 'chainlit.server', types.SimpleNamespace(app=app_obj))
@@ -34,7 +36,59 @@ def load_chainlit_app(monkeypatch, capture):
         def __init__(self, status_code, detail=None):
             self.status_code = status_code
             self.detail = detail
+    class FastAPI:
+        def mount(self, *a, **kw):
+            pass
+        def get(self, *a, **kw):
+            def wrapper(f):
+                return f
+            return wrapper
+        def post(self, *a, **kw):
+            def wrapper(f):
+                return f
+            return wrapper
+    def Depends(obj):
+        return obj
+    class Jinja2Templates:
+        def __init__(self, directory):
+            pass
+    class RedirectResponse:
+        def __init__(self, *a, **kw):
+            pass
+    class HTMLResponse:
+        pass
+    class StaticFiles:
+        def __init__(self, *a, **kw):
+            pass
     fastapi_mod.HTTPException = HTTPException
+    fastapi_mod.FastAPI = FastAPI
+    fastapi_mod.Depends = Depends
+    fastapi_mod.Jinja2Templates = Jinja2Templates
+    fastapi_mod.RedirectResponse = RedirectResponse
+    fastapi_mod.HTMLResponse = HTMLResponse
+    fastapi_mod.StaticFiles = StaticFiles
+    templating_mod = types.ModuleType('fastapi.templating')
+    templating_mod.Jinja2Templates = Jinja2Templates
+    responses_mod = types.ModuleType('fastapi.responses')
+    responses_mod.RedirectResponse = RedirectResponse
+    responses_mod.HTMLResponse = HTMLResponse
+    staticfiles_mod = types.ModuleType('fastapi.staticfiles')
+    staticfiles_mod.StaticFiles = StaticFiles
+    monkeypatch.setitem(sys.modules, 'fastapi.templating', templating_mod)
+    monkeypatch.setitem(sys.modules, 'fastapi.responses', responses_mod)
+    monkeypatch.setitem(sys.modules, 'fastapi.staticfiles', staticfiles_mod)
+    # Stub pydantic
+    pydantic_mod = types.ModuleType('pydantic')
+    class BaseModel:
+        pass
+    pydantic_mod.BaseModel = BaseModel
+    monkeypatch.setitem(sys.modules, 'pydantic', pydantic_mod)
+    # Stub starlette
+    starlette_mod = types.ModuleType('starlette.requests')
+    class Request:
+        pass
+    starlette_mod.Request = Request
+    monkeypatch.setitem(sys.modules, 'starlette.requests', starlette_mod)
     monkeypatch.setitem(sys.modules, 'fastapi', fastapi_mod)
 
     # Stub requests

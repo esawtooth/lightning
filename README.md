@@ -167,9 +167,12 @@ assistant reply:
 2. Publish the functions to Azure:
 
    ```bash
-   cd ../azure-function
-   func azure functionapp publish event-function
-   ```
+ cd ../azure-function
+  func azure functionapp publish event-function
+  ```
+
+The stack also provisions a container instance running the Chainlit UI and
+dashboard. Pulumi exports the container's public URL as `uiUrl`.
 
 If deploying manually, ensure `OPENAI_API_KEY` is configured on the Function App
 before publishing. The GitHub Actions workflow reads the `OPENAI_API_KEY` secret

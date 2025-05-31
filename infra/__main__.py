@@ -6,6 +6,7 @@ from pulumi_azure_native import (
     web,
     authorization,
     documentdb,
+    containerinstance
 )
 from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 
@@ -191,3 +192,47 @@ pulumi.export(
     "functionEndpoint",
     pulumi.Output.concat("https://", func_app.default_host_name, "/api/events"),
 )
+
+# Container group hosting the Chainlit app and dashboard
+
+ui_image = config.get("uiImage") or "chainlit-dashboard"
+
+ui_container = containerinstance.ContainerGroup(
+    "chat-ui",
+    resource_group_name=resource_group.name,
+    container_group_name="chat-ui",
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="chat-ui",
+            image=ui_image,
+            ports=[
+                containerinstance.ContainerPortArgs(port=8000),
+            ],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(
+                    name="EVENT_API_URL",
+                    value=pulumi.Output.concat(
+                        "https://", func_app.default_host_name, "/api/events"
+                    ),
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="API_BASE",
+                    value=pulumi.Output.concat(
+                        "https://", func_app.default_host_name, "/api"
+                    ),
+                ),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
+            ),
+        )
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=8000)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+)
+
+pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
