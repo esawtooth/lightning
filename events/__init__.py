@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 from typing import Any, Dict, Optional, List
+import uuid
 
 
 @dataclass
@@ -35,7 +36,7 @@ class Event:
             type=data["type"],
             user_id=data["userID"],
             metadata=data.get("metadata", {}),
-            id=data.get("id"),
+            id=data.get("id") or uuid.uuid4().hex,
         )
 
     def to_dict(self) -> Dict[str, Any]:
