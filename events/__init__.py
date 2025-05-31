@@ -25,7 +25,12 @@ class Event:
             raise ValueError("userID required")
         ts = data["timestamp"]
         if isinstance(ts, str):
-            timestamp = datetime.fromisoformat(ts)
+            if ts.endswith("Z"):
+                ts = ts[:-1] + "+00:00"
+            try:
+                timestamp = datetime.fromisoformat(ts)
+            except ValueError:
+                raise ValueError("invalid timestamp")
         elif isinstance(ts, (int, float)):
             timestamp = datetime.fromtimestamp(ts)
         else:
