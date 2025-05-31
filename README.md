@@ -196,6 +196,7 @@ messaging:
 - `USER_TABLE` &mdash; table storing user accounts. Defaults to `users`.
 - `REPO_TABLE` &mdash; table storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_TABLE` &mdash; table used by the scheduler. Defaults to `schedules`.
+- `USER_TABLE` &mdash; Azure Table for storing user credentials (defaults to `users`).
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
@@ -241,6 +242,7 @@ STORAGE_CONNECTION=UseDevelopmentStorage=true
 USER_TABLE=users
 REPO_TABLE=repos
 SCHEDULE_TABLE=schedules
+AUTH_TOKEN=<jwt-token>
 ```
 
 Start the functions locally from the `azure-function` directory:
@@ -257,7 +259,9 @@ chainlit run chat_client/chainlit_app.py
 ```
 
 Set `EVENT_API_URL` to `http://localhost:7071/api/events` so the client sends
-events to your local Function App.
+events to your local Function App. Provide your bearer token in the
+`AUTH_TOKEN` environment variable so the client can authenticate with the Event
+API.
 
 ## Chainlit client
 
@@ -267,7 +271,8 @@ Run the interactive chat client using [Chainlit](https://github.com/Chainlit/cha
 chainlit run chat_client/chainlit_app.py
 ```
 
-`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure Function.
-Configure `NOTIFY_URL` for the Azure Functions as `http://<chainlit_host>/notify`
-so `UserMessenger` can forward messages back to the client.
+`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure
+Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
+Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
+forward messages back to the client.
 
