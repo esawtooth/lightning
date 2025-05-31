@@ -30,3 +30,18 @@ def test_event_round_trip():
     assert event.user_id == "u1"
     out = event.to_dict()
     assert out["userID"] == "u1"
+
+
+def test_event_auto_generates_id():
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "source": "s",
+        "type": "t",
+        "userID": "u2",
+    }
+    event = Event.from_dict(data)
+    assert event.id is not None
+    # id should be a 32 character hex string
+    assert isinstance(event.id, str) and len(event.id) == 32
+    out = event.to_dict()
+    assert out["id"] == event.id
