@@ -125,6 +125,21 @@ messaging:
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
   namespace.
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
+- `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
+  to the chat client.
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
+
+## Chainlit client
+
+Run the interactive chat client using [Chainlit](https://github.com/Chainlit/chainlit):
+
+```bash
+chainlit run chat_client/chainlit_app.py
+```
+
+`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure Function.
+Configure `NOTIFY_URL` for the Azure Functions as `http://<chainlit_host>/notify`
+so `UserMessenger` can forward messages back to the client.
+
