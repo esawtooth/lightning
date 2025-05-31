@@ -19,6 +19,46 @@ def test_llmchat_missing_messages():
         LLMChatEvent.from_dict(data)
 
 
+def test_llmchat_invalid_messages_type():
+    data = {
+        "timestamp": datetime.now().isoformat(),
+        "source": "s",
+        "type": "llm.chat",
+        "userID": "u1",
+        "metadata": {"messages": "notalist"},
+    }
+    with pytest.raises(ValueError):
+        LLMChatEvent.from_dict(data)
+
+
+def test_llmchat_message_missing_role():
+    now = datetime.now()
+    msgs = [{"content": "hi"}]
+    data = {
+        "timestamp": now.isoformat(),
+        "source": "s",
+        "type": "llm.chat",
+        "userID": "u1",
+        "metadata": {"messages": msgs},
+    }
+    with pytest.raises(ValueError):
+        LLMChatEvent.from_dict(data)
+
+
+def test_llmchat_message_missing_content():
+    now = datetime.now()
+    msgs = [{"role": "user"}]
+    data = {
+        "timestamp": now.isoformat(),
+        "source": "s",
+        "type": "llm.chat",
+        "userID": "u1",
+        "metadata": {"messages": msgs},
+    }
+    with pytest.raises(ValueError):
+        LLMChatEvent.from_dict(data)
+
+
 def test_llmchat_round_trip():
     now = datetime.now()
     msgs = [{"role": "user", "content": "hi"}]
