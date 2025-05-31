@@ -75,3 +75,21 @@ def test_user_message_event(monkeypatch):
     module.main(msg)
     assert captured['url'] == 'http://notify'
     assert captured['json'] == {'user_id': 'u', 'message': 'hi'}
+
+
+def test_chat_response_event(monkeypatch):
+    os.environ['NOTIFY_URL'] = 'http://notify'
+    captured = {}
+    module, SBMessage = load_user_messenger(monkeypatch, captured)
+
+    event = {
+        'timestamp': '2023-01-01T00:00:00Z',
+        'source': 'ChatResponder',
+        'type': 'llm.chat.response',
+        'userID': 'u',
+        'metadata': {'reply': 'ok'}
+    }
+    msg = SBMessage(json.dumps(event))
+    module.main(msg)
+    assert captured['url'] == 'http://notify'
+    assert captured['json'] == {'user_id': 'u', 'message': 'ok'}
