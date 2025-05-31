@@ -1,0 +1,3 @@
+name: lightning
+runtime: nodejs
+description: Azure resources for lightning
