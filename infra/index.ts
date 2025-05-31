@@ -47,6 +47,19 @@ const storageKeys = pulumi
 const primaryStorageKey = storageKeys.apply((keys) => keys.keys[0].value);
 const storageConnectionString = pulumi.interpolate`DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${primaryStorageKey}`;
 
+// Tables for schedules and repositories
+const scheduleTable = new azure.storage.Table("schedule-table", {
+  resourceGroupName: resourceGroup.name,
+  accountName: storage.name,
+  tableName: "schedules",
+});
+
+const repoTable = new azure.storage.Table("repo-table", {
+  resourceGroupName: resourceGroup.name,
+  accountName: storage.name,
+  tableName: "repos",
+});
+
 // App Service plan for Function App
 const appServicePlan = new azure.web.AppServicePlan("function-plan", {
   resourceGroupName: resourceGroup.name,
@@ -88,6 +101,9 @@ const funcApp = new azure.web.WebApp("event-function", {
         value: sendKeys.primaryConnectionString,
       },
       { name: "SERVICEBUS_QUEUE", value: queue.name },
+      { name: "STORAGE_CONNECTION", value: storageConnectionString },
+      { name: "SCHEDULE_TABLE", value: scheduleTable.name },
+      { name: "REPO_TABLE", value: repoTable.name },
     ],
   },
 });

@@ -75,3 +75,29 @@ class LLMChatEvent(Event):
         meta["messages"] = self.messages
         d["metadata"] = meta
         return d
+
+
+@dataclass
+class WorkerTaskEvent(Event):
+    """Event describing a task to run against a user's repository."""
+
+    commands: List[str] = field(default_factory=list)
+    repo_url: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "WorkerTaskEvent":
+        base = Event.from_dict(data)
+        cmds = base.metadata.get("commands")
+        if not cmds:
+            raise ValueError("metadata.commands required")
+        repo = base.metadata.get("repo_url")
+        return cls(**asdict(base), commands=cmds, repo_url=repo)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["commands"] = self.commands
+        if self.repo_url is not None:
+            meta["repo_url"] = self.repo_url
+        d["metadata"] = meta
+        return d
