@@ -24,6 +24,10 @@ def main(msg: func.ServiceBusMessage) -> None:
         logging.error("Invalid event: %s", e)
         return
 
+    if event.type != "llm.chat":
+        logging.info("Skipping event type %s", event.type)
+        return
+
     try:
         response = openai.ChatCompletion.create(messages=event.messages)
         reply = response["choices"][0]["message"]["content"]
