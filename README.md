@@ -138,7 +138,9 @@ assistant reply:
    func azure functionapp publish event-function
    ```
 
-Ensure `OPENAI_API_KEY` is configured on the Function App before publishing.
+If deploying manually, ensure `OPENAI_API_KEY` is configured on the Function App
+before publishing. The GitHub Actions workflow reads the `OPENAI_API_KEY` secret
+and sets this application setting automatically when running Pulumi.
 
 ## Function Configuration
 
@@ -147,6 +149,8 @@ messaging:
 
 - `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
   calling OpenAI.
+  When deploying with GitHub Actions, set this as the `OPENAI_API_KEY` secret
+  so the workflow can configure the Function App.
 - `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI 
   (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
