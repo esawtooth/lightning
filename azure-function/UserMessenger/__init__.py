@@ -24,20 +24,25 @@ def main(msg: func.ServiceBusMessage) -> None:
         logging.error("Invalid event: %s", e)
         return
 
-    if not event_matches(event.type, "user.message"):
-        return
-
-    user_text = event.metadata.get("message")
-    if not user_text:
-        logging.error("user.message event missing 'message'")
+    if event_matches(event.type, "user.message"):
+        text = event.metadata.get("message")
+        if not text:
+            logging.error("user.message event missing 'message'")
+            return
+    elif event_matches(event.type, "llm.chat.response"):
+        text = event.metadata.get("reply")
+        if not text:
+            logging.error("llm.chat.response event missing 'reply'")
+            return
+    else:
         return
 
     if not NOTIFY_URL:
-        logging.info("User %s says: %s", event.user_id, user_text)
+        logging.info("User %s says: %s", event.user_id, text)
         return
 
     try:
-        resp = requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": user_text})
+        resp = requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": text})
         if not 200 <= resp.status_code < 300:
             logging.warning("Notify endpoint returned status %s: %s", resp.status_code, resp.text)
     except Exception as e:

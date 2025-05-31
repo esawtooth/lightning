@@ -60,9 +60,9 @@ ensured to appear under the `metadata` key.
 
 ### UserMessenger function
 
-The `UserMessenger` Azure Function listens to the Service Bus queue for events of type `user.message`. When such an event is processed it will forward the message to the user. If no notification endpoint is configured (via the `NOTIFY_URL` environment variable) the message is logged instead.
+The `UserMessenger` Azure Function listens to the Service Bus queue for events of type `user.message` and `llm.chat.response`. When such an event is processed it forwards the text to the user. If no notification endpoint is configured (via the `NOTIFY_URL` environment variable) the text is logged instead.
 
-This allows the platform to acknowledge incoming chat messages before the LLM generates a response. Downstream services can also listen for `llm.chat.response` events to notify the user when a reply is available.
+This allows the platform to acknowledge incoming chat messages before the LLM generates a response and then deliver the assistant's reply once it is available.
 
 ## ChatResponder function
 
