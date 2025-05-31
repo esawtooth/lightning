@@ -3,24 +3,34 @@ import os
 from datetime import datetime
 
 import azure.functions as func
-from azure.data.tables import TableServiceClient
+from azure.cosmos import CosmosClient, PartitionKey
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 from croniter import croniter
 
-STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
-SCHEDULE_TABLE = os.environ.get("SCHEDULE_TABLE", "schedules")
+COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+SCHEDULE_CONTAINER = os.environ.get("SCHEDULE_CONTAINER", "schedules")
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
 
-service = TableServiceClient.from_connection_string(STORAGE_CONN)
-_table = service.get_table_client(SCHEDULE_TABLE)
+_client = CosmosClient.from_connection_string(COSMOS_CONN)
+_db = _client.create_database_if_not_exists(COSMOS_DB)
+_container = _db.create_container_if_not_exists(
+    id=SCHEDULE_CONTAINER, partition_key=PartitionKey(path="/pk")
+)
 _servicebus = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 
 
 def main(mytimer: func.TimerRequest) -> None:
     now = datetime.utcnow()
-    due_filter = f"runAt le '{now.isoformat()}'"
-    entities = list(_table.query_entities(due_filter))
+    query = "SELECT * FROM c WHERE c.runAt <= @t"
+    entities = list(
+        _container.query_items(
+            query,
+            parameters=[{"name": "@t", "value": now.isoformat()}],
+            enable_cross_partition_query=True,
+        )
+    )
     for ent in entities:
         event = json.loads(ent["event"])
         msg = ServiceBusMessage(json.dumps(event))
@@ -32,6 +42,6 @@ def main(mytimer: func.TimerRequest) -> None:
         if ent.get("cron"):
             next_time = croniter(ent["cron"], now).get_next(datetime)
             ent["runAt"] = next_time.isoformat()
-            _table.update_entity(ent)
+            _container.upsert_item(ent)
         else:
-            _table.delete_entity(ent["PartitionKey"], ent["RowKey"])
+            _container.delete_item(ent["id"], partition_key=ent["pk"])

@@ -17,21 +17,25 @@ from azure.mgmt.containerinstance.models import (
 from datetime import datetime
 
 import azure.functions as func
-from azure.data.tables import TableServiceClient
+from azure.cosmos import CosmosClient, PartitionKey
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
 from events import Event, WorkerTaskEvent
 
-STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
-REPO_TABLE = os.environ.get("REPO_TABLE", "repos")
+COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+REPO_CONTAINER = os.environ.get("REPO_CONTAINER", "repos")
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
 ACI_RESOURCE_GROUP = os.environ.get("ACI_RESOURCE_GROUP")
 ACI_SUBSCRIPTION_ID = os.environ.get("ACI_SUBSCRIPTION_ID")
 ACI_REGION = os.environ.get("ACI_REGION", "centralindia")
 
-_table_service = TableServiceClient.from_connection_string(STORAGE_CONN)
-_repo_table = _table_service.get_table_client(REPO_TABLE)
+_client = CosmosClient.from_connection_string(COSMOS_CONN)
+_db = _client.create_database_if_not_exists(COSMOS_DB)
+_repo_container = _db.create_container_if_not_exists(
+    id=REPO_CONTAINER, partition_key=PartitionKey(path="/pk")
+)
 _sb_client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 _credential = DefaultAzureCredential()
 _aci_client = None
@@ -54,7 +58,7 @@ def main(msg: func.ServiceBusMessage) -> None:
     repo = event.repo_url
     if not repo:
         try:
-            ent = _repo_table.get_entity(event.user_id, "repo")
+            ent = _repo_container.read_item("repo", partition_key=event.user_id)
             repo = ent["repo"]
         except Exception as e:
             logging.error("Repo not found for user %s: %s", event.user_id, e)

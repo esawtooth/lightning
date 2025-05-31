@@ -5,6 +5,7 @@ from pulumi_azure_native import (
     storage,
     web,
     authorization,
+    documentdb,
 )
 from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 
@@ -48,30 +49,69 @@ storage_account = storage.StorageAccount(
     kind=storage.Kind.STORAGE_V2,
 )
 
-schedule_table_name = "schedules"
-schedule_table = storage.Table(
-    "schedule-table",
+# Cosmos DB account and database
+cosmos_account = documentdb.DatabaseAccount(
+    "cosmos-account",
     resource_group_name=resource_group.name,
-    account_name=storage_account.name,
-    table_name=schedule_table_name,
+    account_name="lightning-cosmos",
+    location=resource_group.location,
+    database_account_offer_type="Standard",
+    locations=[documentdb.LocationArgs(location_name=resource_group.location)],
+    consistency_policy=documentdb.ConsistencyPolicyArgs(
+        default_consistency_level=documentdb.DefaultConsistencyLevel.SESSION
+    ),
 )
 
-repo_table = storage.Table(
-    "repo-table",
+cosmos_db = documentdb.SqlResourceSqlDatabase(
+    "cosmos-db",
+    account_name=cosmos_account.name,
     resource_group_name=resource_group.name,
-    account_name=storage_account.name,
-    table_name="repos",
+    database_name="lightning",
+    resource=documentdb.SqlDatabaseResourceArgs(id="lightning"),
 )
 
-user_table_name = "users"
-user_table = storage.Table(
-    "user-table",
+user_container = documentdb.SqlResourceSqlContainer(
+    "users-container",
+    account_name=cosmos_account.name,
     resource_group_name=resource_group.name,
-    account_name=storage_account.name,
-    table_name=user_table_name,
+    database_name=cosmos_db.name,
+    container_name="users",
+    resource=documentdb.SqlContainerResourceArgs(
+        id="users",
+        partition_key=documentdb.ContainerPartitionKeyArgs(paths=["/pk"], kind="Hash"),
+    ),
 )
 
-# Retrieve the storage connection string
+repo_container = documentdb.SqlResourceSqlContainer(
+    "repos-container",
+    account_name=cosmos_account.name,
+    resource_group_name=resource_group.name,
+    database_name=cosmos_db.name,
+    container_name="repos",
+    resource=documentdb.SqlContainerResourceArgs(
+        id="repos",
+        partition_key=documentdb.ContainerPartitionKeyArgs(paths=["/pk"], kind="Hash"),
+    ),
+)
+
+schedule_container = documentdb.SqlResourceSqlContainer(
+    "schedules-container",
+    account_name=cosmos_account.name,
+    resource_group_name=resource_group.name,
+    database_name=cosmos_db.name,
+    container_name="schedules",
+    resource=documentdb.SqlContainerResourceArgs(
+        id="schedules",
+        partition_key=documentdb.ContainerPartitionKeyArgs(paths=["/pk"], kind="Hash"),
+    ),
+)
+
+cosmos_keys = documentdb.list_database_account_connection_strings_output(
+    account_name=cosmos_account.name,
+    resource_group_name=resource_group.name,
+)
+cosmos_connection_string = cosmos_keys.connection_strings[0].connection_string
+
 storage_keys = storage.list_storage_account_keys_output(
     resource_group_name=resource_group.name,
     account_name=storage_account.name,
@@ -124,12 +164,13 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
             web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
             web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
-            web.NameValuePairArgs(name="STORAGE_CONNECTION", value=storage_connection_string),
-            web.NameValuePairArgs(name="SCHEDULE_TABLE", value=schedule_table_name),
+            web.NameValuePairArgs(name="COSMOS_CONNECTION", value=cosmos_connection_string),
+            web.NameValuePairArgs(name="COSMOS_DATABASE", value="lightning"),
+            web.NameValuePairArgs(name="SCHEDULE_CONTAINER", value="schedules"),
             web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
             web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
-            web.NameValuePairArgs(name="REPO_TABLE", value=repo_table.name),
-            web.NameValuePairArgs(name="USER_TABLE", value=user_table_name),
+            web.NameValuePairArgs(name="REPO_CONTAINER", value="repos"),
+            web.NameValuePairArgs(name="USER_CONTAINER", value="users"),
             web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
             web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
             web.NameValuePairArgs(name="ACI_REGION", value=location),

@@ -3,15 +3,18 @@ import os
 import logging
 
 import azure.functions as func
-from azure.data.tables import TableServiceClient
+from azure.cosmos import CosmosClient, PartitionKey
 from auth import verify_token
 
-STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
-REPO_TABLE = os.environ.get("REPO_TABLE", "repos")
+COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+REPO_CONTAINER = os.environ.get("REPO_CONTAINER", "repos")
 
-service = TableServiceClient.from_connection_string(STORAGE_CONN)
-_table = service.get_table_client(REPO_TABLE)
-_table.create_table_if_not_exists()
+_client = CosmosClient.from_connection_string(COSMOS_CONN)
+_db = _client.create_database_if_not_exists(COSMOS_DB)
+_container = _db.create_container_if_not_exists(
+    id=REPO_CONTAINER, partition_key=PartitionKey(path="/pk")
+)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -29,9 +32,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     if not repo:
         return func.HttpResponse("Missing repo", status_code=400)
 
-    entity = {"PartitionKey": user_id, "RowKey": "repo", "repo": repo}
+    entity = {"id": "repo", "pk": user_id, "repo": repo}
     try:
-        _table.upsert_entity(entity)
+        _container.upsert_item(entity)
     except Exception as e:
         logging.error("Failed to save repo: %s", e)
         return func.HttpResponse("Failed", status_code=500)
