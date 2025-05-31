@@ -289,3 +289,10 @@ Set `API_BASE` to the base URL of your Azure Functions (defaults to
 `http://localhost:7071/api`). If `AUTH_TOKEN` is provided the dashboard will use
 it for outgoing requests; otherwise use the `/login` page to obtain a token.
 
+
+## Worker Agents
+
+The `agents/` directory contains agent implementations that the worker container can
+invoke to process tasks. Each agent registers itself in `agents.AGENT_REGISTRY`
+and exposes a `run()` method used to handle the commands from a
+`WorkerTaskEvent`.
