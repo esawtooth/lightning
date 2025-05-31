@@ -45,3 +45,14 @@ def test_event_auto_generates_id():
     assert isinstance(event.id, str) and len(event.id) == 32
     out = event.to_dict()
     assert out["id"] == event.id
+
+
+def test_event_parses_z_timezone():
+    data = {
+        "timestamp": "2023-01-01T00:00:00Z",
+        "source": "s",
+        "type": "t",
+        "userID": "u3",
+    }
+    event = Event.from_dict(data)
+    assert event.timestamp.isoformat() == "2023-01-01T00:00:00+00:00"
