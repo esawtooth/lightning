@@ -10,6 +10,7 @@ from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
+openai_api_key = config.require_secret("openaiApiKey")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -123,6 +124,7 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
             web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
             web.NameValuePairArgs(name="ACI_REGION", value=location),
+            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key)
         ]
     ),
 )

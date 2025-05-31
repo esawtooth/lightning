@@ -8,8 +8,9 @@ Deploying the infrastructure will create an Azure Function that exposes an HTTP 
 
 ### POST /api/events
 
-Include a header `X-User-ID` identifying the user on whose behalf the event was
-generated. Send a JSON body describing the event:
+Authenticate requests with a bearer token in the `Authorization` header.
+The token must be signed using the key provided in `JWT_SIGNING_KEY` and
+identifies the user. Send a JSON body describing the event:
 
 ```json
 {
@@ -25,9 +26,9 @@ The function validates the data and publishes it to the Service Bus queue. The `
 
 ### POST /api/schedule
 
-Schedule an event for future delivery. Provide the `X-User-ID` header and a JSON
-body containing the event payload and either a one-time `timestamp` or a `cron`
-expression:
+Schedule an event for future delivery. Provide the same bearer token in the
+`Authorization` header and a JSON body containing the event payload and either
+a one-time `timestamp` or a `cron` expression:
 
 ```json
 {
@@ -102,7 +103,7 @@ Send a chat event via the HTTP endpoint:
 
 ```bash
 curl -X POST \
-  -H "X-User-ID: abc123" \
+  -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d @event.json \
   https://<function-app>.azurewebsites.net/api/events
@@ -138,7 +139,9 @@ assistant reply:
    func azure functionapp publish event-function
    ```
 
-Ensure `OPENAI_API_KEY` is configured on the Function App before publishing.
+If deploying manually, ensure `OPENAI_API_KEY` is configured on the Function App
+before publishing. The GitHub Actions workflow reads the `OPENAI_API_KEY` secret
+and sets this application setting automatically when running Pulumi.
 
 ## Function Configuration
 
@@ -147,6 +150,8 @@ messaging:
 
 - `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
   calling OpenAI.
+  When deploying with GitHub Actions, set this as the `OPENAI_API_KEY` secret
+  so the workflow can configure the Function App.
 - `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI 
   (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
@@ -154,6 +159,7 @@ messaging:
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
 - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
   to the chat client.
+- `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
@@ -176,7 +182,8 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "OPENAI_MODEL": "gpt-3.5-turbo",
     "SERVICEBUS_CONNECTION": "<connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
-    "NOTIFY_URL": "http://localhost:8000/notify"
+    "NOTIFY_URL": "http://localhost:8000/notify",
+    "JWT_SIGNING_KEY": "secret"
   }
 }
 ```
@@ -189,6 +196,7 @@ OPENAI_MODEL=gpt-3.5-turbo
 SERVICEBUS_CONNECTION=<connection-string>
 SERVICEBUS_QUEUE=chat-events
 NOTIFY_URL=http://localhost:8000/notify
+JWT_SIGNING_KEY=secret
 ```
 
 Start the functions locally from the `azure-function` directory:

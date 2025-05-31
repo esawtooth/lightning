@@ -16,6 +16,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
         working-directory: infra
+      - name: Configure OpenAI key
+        run: pulumi config set openaiApiKey "$OPENAI_API_KEY" --secret
+        working-directory: infra
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       - uses: pulumi/actions@v3
         with:
           command: up
