@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from chainlit.server import app as fastapi_app
 
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 
 
 @cl.on_message
@@ -15,6 +16,9 @@ async def on_message(message: cl.Message):
     """Handle incoming user message and queue a chat event."""
     if not EVENT_API_URL:
         await cl.Message(content="EVENT_API_URL not configured", author="system").send()
+        return
+    if not AUTH_TOKEN:
+        await cl.Message(content="AUTH_TOKEN not configured", author="system").send()
         return
 
     event = {
@@ -26,7 +30,7 @@ async def on_message(message: cl.Message):
         },
     }
 
-    headers = {"X-User-ID": message.author}
+    headers = {"Authorization": f"Bearer {AUTH_TOKEN}"}
     try:
         resp = requests.post(EVENT_API_URL, json=event, headers=headers)
         if not 200 <= resp.status_code < 300:
