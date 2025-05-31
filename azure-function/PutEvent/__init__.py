@@ -11,10 +11,21 @@ from events import Event
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
 
-client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
+client = None
+if SERVICEBUS_CONN:
+    client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
+    missing = []
+    if not SERVICEBUS_CONN:
+        missing.append("SERVICEBUS_CONNECTION")
+    if not SERVICEBUS_QUEUE:
+        missing.append("SERVICEBUS_QUEUE")
+    if missing:
+        logging.error("Missing required environment variable(s): %s", ", ".join(missing))
+        return func.HttpResponse("Service not configured", status_code=500)
+
     try:
         data = req.get_json()
     except ValueError:

@@ -13,6 +13,15 @@ SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-3.5-turbo")
 
+missing = []
+if not SERVICEBUS_CONN:
+    missing.append("SERVICEBUS_CONNECTION")
+if not SERVICEBUS_QUEUE:
+    missing.append("SERVICEBUS_QUEUE")
+if missing:
+    logging.error("Missing required environment variable(s): %s", ", ".join(missing))
+    raise RuntimeError("Azure Function misconfigured")
+
 client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 
 

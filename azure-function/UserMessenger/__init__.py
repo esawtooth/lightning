@@ -10,6 +10,10 @@ from events.utils import event_matches
 
 NOTIFY_URL = os.environ.get("NOTIFY_URL")
 
+if not NOTIFY_URL:
+    logging.error("Missing required environment variable: NOTIFY_URL")
+    raise RuntimeError("Azure Function misconfigured")
+
 
 def main(msg: func.ServiceBusMessage) -> None:
     body = msg.get_body().decode("utf-8")
