@@ -33,3 +33,17 @@ The `events` package provides a dataclass `Event` that can be used to structure 
 `metadata.messages`. Each message should be a mapping with at least `role` and
 `content` keys. When `LLMChatEvent.to_dict()` is called, the messages are
 ensured to appear under the `metadata` key.
+
+## Function Configuration
+
+The Azure Functions rely on several environment variables for authentication and
+messaging:
+
+- `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
+  calling OpenAI.
+- `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
+  namespace.
+- `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
+
+Set these values in your deployment environment or in a local `.env` file when
+testing the functions locally.
