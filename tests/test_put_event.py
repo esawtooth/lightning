@@ -7,7 +7,7 @@ import importlib.util
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-def load_put_event(monkeypatch, capture):
+def load_put_event(monkeypatch, capture, token_map=None):
     azure_mod = types.ModuleType('azure')
     func_mod = types.ModuleType('functions')
 
@@ -61,9 +61,20 @@ def load_put_event(monkeypatch, capture):
     sb_mod.ServiceBusMessage = DummyMessage
     azure_mod.servicebus = sb_mod
 
+    auth_mod = types.ModuleType('auth')
+    token_map = token_map or {'Bearer good': 'u'}
+
+    def verify_token(header):
+        if header in token_map:
+            return token_map[header]
+        raise Exception('bad token')
+
+    auth_mod.verify_token = verify_token
+
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
     monkeypatch.setitem(sys.modules, 'azure.functions', func_mod)
     monkeypatch.setitem(sys.modules, 'azure.servicebus', sb_mod)
+    monkeypatch.setitem(sys.modules, 'auth', auth_mod)
 
     spec = importlib.util.spec_from_file_location(
         'PutEvent',
@@ -81,13 +92,13 @@ def test_invalid_json(monkeypatch):
     captured = {}
     module, HttpRequest = load_put_event(monkeypatch, captured)
 
-    req = HttpRequest(body='not-json', headers={'x-user-id': 'u'})
+    req = HttpRequest(body='not-json', headers={'Authorization': 'Bearer good'})
     resp = module.main(req)
     assert resp.status_code == 400
     assert 'message' not in captured
 
 
-def test_missing_user_id(monkeypatch):
+def test_missing_token(monkeypatch):
     os.environ['SERVICEBUS_CONNECTION'] = 'endpoint'
     os.environ['SERVICEBUS_QUEUE'] = 'q'
     captured = {}
@@ -100,7 +111,24 @@ def test_missing_user_id(monkeypatch):
     }
     req = HttpRequest(body=json.dumps(event))
     resp = module.main(req)
-    assert resp.status_code == 400
+    assert resp.status_code == 401
+    assert 'message' not in captured
+
+
+def test_invalid_token(monkeypatch):
+    os.environ['SERVICEBUS_CONNECTION'] = 'endpoint'
+    os.environ['SERVICEBUS_QUEUE'] = 'q'
+    captured = {}
+    module, HttpRequest = load_put_event(monkeypatch, captured)
+
+    event = {
+        'timestamp': '2023-01-01T00:00:00Z',
+        'source': 'test',
+        'type': 't'
+    }
+    req = HttpRequest(body=json.dumps(event), headers={'Authorization': 'Bearer bad'})
+    resp = module.main(req)
+    assert resp.status_code == 401
     assert 'message' not in captured
 
 
@@ -116,7 +144,7 @@ def test_valid_request(monkeypatch):
         'type': 'sample',
         'metadata': {'a': 1}
     }
-    req = HttpRequest(body=json.dumps(event), headers={'x-user-id': 'u'})
+    req = HttpRequest(body=json.dumps(event), headers={'Authorization': 'Bearer good'})
     resp = module.main(req)
     assert resp.status_code == 202
     assert 'message' in captured

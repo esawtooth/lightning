@@ -4,3 +4,4 @@ openai
 requests
 azure-data-tables
 croniter
+pyjwt

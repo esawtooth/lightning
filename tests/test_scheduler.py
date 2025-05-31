@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 
-def load_scheduler(monkeypatch, capture):
+def load_scheduler(monkeypatch, capture, token_map=None):
     azure_mod = types.ModuleType('azure')
     tables_mod = types.ModuleType('tables')
     class DummyTable:
@@ -23,8 +23,19 @@ def load_scheduler(monkeypatch, capture):
         from_connection_string=lambda *a, **k: DummyService()
     )
     azure_mod.data = types.SimpleNamespace(tables=tables_mod)
+    auth_mod = types.ModuleType('auth')
+    token_map = token_map or {'Bearer good': 'u1'}
+
+    def verify_token(header):
+        if header in token_map:
+            return token_map[header]
+        raise Exception('bad')
+
+    auth_mod.verify_token = verify_token
+
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
     monkeypatch.setitem(sys.modules, 'azure.data.tables', tables_mod)
+    monkeypatch.setitem(sys.modules, 'auth', auth_mod)
 
     func_mod = types.ModuleType('functions')
     class DummyResponse:
@@ -66,11 +77,51 @@ def test_schedule_creation(monkeypatch):
     }
     req = types.SimpleNamespace(
         get_json=lambda: {'event': event, 'timestamp': (datetime.utcnow() + timedelta(hours=1)).isoformat()},
-        headers={'x-user-id': 'u1'}
+        headers={'Authorization': 'Bearer good'}
     )
     resp = mod.main(req)
     assert resp.status_code == 201
     assert capture['entity']['PartitionKey'] == 'u1'
+
+
+def test_schedule_missing_token(monkeypatch):
+    os.environ['STORAGE_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_TABLE'] = 't'
+    capture = {}
+    mod = load_scheduler(monkeypatch, capture)
+
+    event = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'source': 's',
+        'type': 't',
+        'metadata': {}
+    }
+    req = types.SimpleNamespace(
+        get_json=lambda: {'event': event, 'timestamp': (datetime.utcnow() + timedelta(hours=1)).isoformat()},
+        headers={}
+    )
+    resp = mod.main(req)
+    assert resp.status_code == 401
+
+
+def test_schedule_invalid_token(monkeypatch):
+    os.environ['STORAGE_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_TABLE'] = 't'
+    capture = {}
+    mod = load_scheduler(monkeypatch, capture)
+
+    event = {
+        'timestamp': datetime.utcnow().isoformat(),
+        'source': 's',
+        'type': 't',
+        'metadata': {}
+    }
+    req = types.SimpleNamespace(
+        get_json=lambda: {'event': event, 'timestamp': (datetime.utcnow() + timedelta(hours=1)).isoformat()},
+        headers={'Authorization': 'Bearer bad'}
+    )
+    resp = mod.main(req)
+    assert resp.status_code == 401
 
 
 def load_worker(monkeypatch, schedules, sent):
