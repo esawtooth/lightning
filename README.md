@@ -8,13 +8,15 @@ Deploying the infrastructure will create an Azure Function that exposes an HTTP 
 
 ### PUT /api/events
 
-Send a JSON body describing the event:
+Include a header `X-User-ID` identifying the user on whose behalf the event was
+generated. Send a JSON body describing the event:
 
 ```json
 {
   "timestamp": "2023-01-01T00:00:00Z",
   "source": "sensor-1",
   "type": "movement",
+  "userID": "abc123",
   "metadata": {"x": 1, "y": 2}
 }
 ```

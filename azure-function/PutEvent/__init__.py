@@ -19,6 +19,11 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError:
         return func.HttpResponse("Invalid JSON", status_code=400)
 
+    user_id = req.headers.get("x-user-id")
+    if not user_id:
+        return func.HttpResponse("Missing user ID", status_code=400)
+    data["userID"] = user_id
+
     try:
         event = Event.from_dict(data)
     except ValueError as e:
