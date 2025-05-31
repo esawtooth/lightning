@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 
+import logging
 import requests
 import chainlit as cl
 from fastapi import HTTPException
@@ -27,7 +28,9 @@ async def on_message(message: cl.Message):
 
     headers = {"X-User-ID": message.author}
     try:
-        requests.post(EVENT_API_URL, json=event, headers=headers)
+        resp = requests.post(EVENT_API_URL, json=event, headers=headers)
+        if not 200 <= resp.status_code < 300:
+            logging.warning("Event API returned status %s: %s", resp.status_code, resp.text)
     except Exception as e:
         await cl.Message(content=f"Failed to send event: {e}", author="system").send()
         return

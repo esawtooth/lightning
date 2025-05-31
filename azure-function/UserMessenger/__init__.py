@@ -37,7 +37,9 @@ def main(msg: func.ServiceBusMessage) -> None:
         return
 
     try:
-        requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": user_text})
+        resp = requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": user_text})
+        if not 200 <= resp.status_code < 300:
+            logging.warning("Notify endpoint returned status %s: %s", resp.status_code, resp.text)
     except Exception as e:
         logging.error("Failed to notify user: %s", e)
 
