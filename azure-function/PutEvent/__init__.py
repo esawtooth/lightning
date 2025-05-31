@@ -4,13 +4,14 @@ import os
 from datetime import datetime
 
 import azure.functions as func
-from azure.eventhub import EventHubProducerClient, EventData
+from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
 from events import Event
 
-EVENTHUB_CONN = os.environ.get("EVENTHUB_CONNECTION")
+SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
+SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
 
-producer = EventHubProducerClient.from_connection_string(EVENTHUB_CONN)
+client = ServiceBusClient.from_connection_string(SERVICEBUS_CONN)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -24,11 +25,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError as e:
         return func.HttpResponse(str(e), status_code=400)
 
-    event_data = EventData(json.dumps(event.to_dict()))
-    event_data.properties = {"topic": event.type}
+    message = ServiceBusMessage(json.dumps(event.to_dict()))
+    message.application_properties = {"topic": event.type}
     try:
-        with producer:
-            producer.send_batch([event_data])
+        with client:
+            sender = client.get_queue_sender(queue_name=SERVICEBUS_QUEUE)
+            with sender:
+                sender.send_messages(message)
     except Exception as e:
         logging.error("Failed to send event: %s", e)
         return func.HttpResponse("Failed to queue event", status_code=500)

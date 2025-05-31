@@ -5,87 +5,91 @@ const config = new pulumi.Config();
 const location = config.get("location") || "centralindia";
 
 const resourceGroup = new azure.resources.ResourceGroup("lightning", {
-    resourceGroupName: "lightning",
-    location,
+  resourceGroupName: "lightning",
+  location,
 });
 
-const namespace = new azure.eventhub.Namespace("lightning-namespace", {
-    resourceGroupName: resourceGroup.name,
-    namespaceName: "lightning-namespace",
-    location: resourceGroup.location,
-    sku: {
-        name: "Standard",
-        tier: "Standard",
-    },
-    kafkaEnabled: true,
+const namespace = new azure.servicebus.Namespace("lightning-namespace", {
+  resourceGroupName: resourceGroup.name,
+  namespaceName: "lightning-namespace",
+  location: resourceGroup.location,
+  sku: {
+    name: "Standard",
+    tier: "Standard",
+  },
 });
 
-const eventHub = new azure.eventhub.EventHub("lightning-hub", {
-    resourceGroupName: resourceGroup.name,
-    namespaceName: namespace.name,
-    eventHubName: "lightning-hub",
-    partitionCount: 2,
-    messageRetentionInDays: 1,
+const queue = new azure.servicebus.Queue("lightning-queue", {
+  resourceGroupName: resourceGroup.name,
+  namespaceName: namespace.name,
+  queueName: "lightning-queue",
+  enablePartitioning: true,
 });
 
 export const resourceGroupName = resourceGroup.name;
-export const eventHubNamespaceName = namespace.name;
-export const eventHubName = eventHub.name;
+export const serviceBusNamespaceName = namespace.name;
+export const queueName = queue.name;
 
 // Storage account for Function App
 const storage = new azure.storage.StorageAccount("funcsa", {
-    resourceGroupName: resourceGroup.name,
-    sku: {
-        name: azure.storage.SkuName.Standard_LRS,
-    },
-    kind: azure.storage.Kind.StorageV2,
+  resourceGroupName: resourceGroup.name,
+  sku: {
+    name: azure.storage.SkuName.Standard_LRS,
+  },
+  kind: azure.storage.Kind.StorageV2,
 });
 
-const storageKeys = pulumi.all([resourceGroup.name, storage.name]).apply(([resourceGroupName, accountName]) =>
-    azure.storage.listStorageAccountKeys({ resourceGroupName, accountName })
-);
-const primaryStorageKey = storageKeys.apply(keys => keys.keys[0].value);
+const storageKeys = pulumi
+  .all([resourceGroup.name, storage.name])
+  .apply(([resourceGroupName, accountName]) =>
+    azure.storage.listStorageAccountKeys({ resourceGroupName, accountName }),
+  );
+const primaryStorageKey = storageKeys.apply((keys) => keys.keys[0].value);
 const storageConnectionString = pulumi.interpolate`DefaultEndpointsProtocol=https;AccountName=${storage.name};AccountKey=${primaryStorageKey}`;
 
 // App Service plan for Function App
 const appServicePlan = new azure.web.AppServicePlan("function-plan", {
-    resourceGroupName: resourceGroup.name,
-    kind: "FunctionApp",
-    sku: {
-        tier: "Dynamic",
-        name: "Y1",
-    },
+  resourceGroupName: resourceGroup.name,
+  kind: "FunctionApp",
+  sku: {
+    tier: "Dynamic",
+    name: "Y1",
+  },
 });
 
-// Authorization rule to send events
-const sendRule = new azure.eventhub.EventHubAuthorizationRule("send-rule", {
-    resourceGroupName: resourceGroup.name,
-    namespaceName: namespace.name,
-    eventHubName: eventHub.name,
-    authorizationRuleName: "send",
-    rights: ["Send"],
+// Authorization rule to send messages
+const sendRule = new azure.servicebus.QueueAuthorizationRule("send-rule", {
+  resourceGroupName: resourceGroup.name,
+  namespaceName: namespace.name,
+  queueName: queue.name,
+  authorizationRuleName: "send",
+  rights: ["Send"],
 });
 
-const sendKeys = azure.eventhub.listEventHubKeysOutput({
-    authorizationRuleName: sendRule.name,
-    eventHubName: eventHub.name,
-    namespaceName: namespace.name,
-    resourceGroupName: resourceGroup.name,
+const sendKeys = azure.servicebus.listQueueKeysOutput({
+  authorizationRuleName: sendRule.name,
+  queueName: queue.name,
+  namespaceName: namespace.name,
+  resourceGroupName: resourceGroup.name,
 });
 
 // Function App
 const funcApp = new azure.web.WebApp("event-function", {
-    resourceGroupName: resourceGroup.name,
-    serverFarmId: appServicePlan.id,
-    kind: "FunctionApp",
-    siteConfig: {
-        appSettings: [
-            { name: "AzureWebJobsStorage", value: storageConnectionString },
-            { name: "FUNCTIONS_EXTENSION_VERSION", value: "~4" },
-            { name: "FUNCTIONS_WORKER_RUNTIME", value: "python" },
-            { name: "EVENTHUB_CONNECTION", value: sendKeys.primaryConnectionString },
-        ],
-    },
+  resourceGroupName: resourceGroup.name,
+  serverFarmId: appServicePlan.id,
+  kind: "FunctionApp",
+  siteConfig: {
+    appSettings: [
+      { name: "AzureWebJobsStorage", value: storageConnectionString },
+      { name: "FUNCTIONS_EXTENSION_VERSION", value: "~4" },
+      { name: "FUNCTIONS_WORKER_RUNTIME", value: "python" },
+      {
+        name: "SERVICEBUS_CONNECTION",
+        value: sendKeys.primaryConnectionString,
+      },
+      { name: "SERVICEBUS_QUEUE", value: queue.name },
+    ],
+  },
 });
 
 export const functionEndpoint = pulumi.interpolate`https://${funcApp.defaultHostName}/api/events`;
