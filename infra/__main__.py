@@ -63,6 +63,14 @@ repo_table = storage.Table(
     table_name="repos",
 )
 
+user_table_name = "users"
+user_table = storage.Table(
+    "user-table",
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+    table_name=user_table_name,
+)
+
 # Retrieve the storage connection string
 storage_keys = storage.list_storage_account_keys_output(
     resource_group_name=resource_group.name,
@@ -121,6 +129,7 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
             web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
             web.NameValuePairArgs(name="REPO_TABLE", value=repo_table.name),
+            web.NameValuePairArgs(name="USER_TABLE", value=user_table_name),
             web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
             web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
             web.NameValuePairArgs(name="ACI_REGION", value=location),

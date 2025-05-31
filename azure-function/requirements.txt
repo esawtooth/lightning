@@ -6,4 +6,4 @@ azure-data-tables
 croniter
 azure-identity
 azure-mgmt-containerinstance
-PyJWT
+pyjwt

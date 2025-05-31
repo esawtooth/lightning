@@ -67,6 +67,11 @@ class LLMChatEvent(Event):
         msgs = base.metadata.get("messages")
         if not msgs:
             raise ValueError("metadata.messages required")
+        if not isinstance(msgs, list):
+            raise ValueError("metadata.messages must be a list")
+        for msg in msgs:
+            if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
+                raise ValueError("invalid message entry")
         return cls(**asdict(base), messages=msgs)
 
     def to_dict(self) -> Dict[str, Any]:

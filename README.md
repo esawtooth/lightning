@@ -48,6 +48,38 @@ or
 
 The function stores the schedule in durable storage and returns a schedule ID.
 
+## Authentication API
+
+New endpoints allow registering users and retrieving JWT tokens for authenticated
+access to the rest of the service.
+
+### POST /api/register
+
+Create a new user by sending a JSON payload containing an identifier and
+password:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"userID": "alice", "password": "secret"}' \
+  https://<function-app>.azurewebsites.net/api/register
+```
+
+### POST /api/token
+
+Exchange credentials for a signed JWT. Include the same JSON body used during
+registration:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"userID": "alice", "password": "secret"}' \
+  https://<function-app>.azurewebsites.net/api/token
+```
+
+The returned token should be provided in the `Authorization` header when calling
+the other API endpoints.
+
 ## Python library
 
 The `events` package provides a dataclass `Event` that can be used to structure events before they are sent to the API or processed downstream.
@@ -160,6 +192,11 @@ messaging:
 - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
   to the chat client.
 - `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
+- `STORAGE_CONNECTION` &mdash; connection string used for Azure Table storage.
+- `USER_TABLE` &mdash; table storing user accounts. Defaults to `users`.
+- `REPO_TABLE` &mdash; table storing repository URLs. Defaults to `repos`.
+- `SCHEDULE_TABLE` &mdash; table used by the scheduler. Defaults to `schedules`.
+- `USER_TABLE` &mdash; Azure Table for storing user credentials (defaults to `users`).
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
@@ -183,7 +220,11 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "SERVICEBUS_CONNECTION": "<connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
     "NOTIFY_URL": "http://localhost:8000/notify",
-    "JWT_SIGNING_KEY": "secret"
+    "JWT_SIGNING_KEY": "secret",
+    "STORAGE_CONNECTION": "UseDevelopmentStorage=true",
+    "USER_TABLE": "users",
+    "REPO_TABLE": "repos",
+    "SCHEDULE_TABLE": "schedules"
   }
 }
 ```
@@ -197,6 +238,11 @@ SERVICEBUS_CONNECTION=<connection-string>
 SERVICEBUS_QUEUE=chat-events
 NOTIFY_URL=http://localhost:8000/notify
 JWT_SIGNING_KEY=secret
+STORAGE_CONNECTION=UseDevelopmentStorage=true
+USER_TABLE=users
+REPO_TABLE=repos
+SCHEDULE_TABLE=schedules
+AUTH_TOKEN=<jwt-token>
 ```
 
 Start the functions locally from the `azure-function` directory:
@@ -213,7 +259,9 @@ chainlit run chat_client/chainlit_app.py
 ```
 
 Set `EVENT_API_URL` to `http://localhost:7071/api/events` so the client sends
-events to your local Function App.
+events to your local Function App. Provide your bearer token in the
+`AUTH_TOKEN` environment variable so the client can authenticate with the Event
+API.
 
 ## Chainlit client
 
@@ -223,7 +271,21 @@ Run the interactive chat client using [Chainlit](https://github.com/Chainlit/cha
 chainlit run chat_client/chainlit_app.py
 ```
 
-`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure Function.
-Configure `NOTIFY_URL` for the Azure Functions as `http://<chainlit_host>/notify`
-so `UserMessenger` can forward messages back to the client.
+`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure
+Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
+Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
+forward messages back to the client.
+
+## Dashboard
+
+A simple FastAPI dashboard is located in the `dashboard/` directory. It allows
+logging in and submitting events to the backend. Launch it with:
+
+```bash
+uvicorn dashboard.app:app --reload
+```
+
+Set `API_BASE` to the base URL of your Azure Functions (defaults to
+`http://localhost:7071/api`). If `AUTH_TOKEN` is provided the dashboard will use
+it for outgoing requests; otherwise use the `/login` page to obtain a token.
 
