@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+azure-function/local.settings.json
+node_modules/
+.Python
+.env
