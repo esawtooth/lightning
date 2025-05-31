@@ -6,6 +6,7 @@ import requests
 import chainlit as cl
 from fastapi import HTTPException
 from chainlit.server import app as fastapi_app
+from dashboard.app import app as dashboard_app
 
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
@@ -52,3 +53,6 @@ async def notify(payload: dict):
 
     await cl.Message(content=message, author=user_id or "assistant").send()
     return {"status": "ok"}
+
+# Expose the dashboard under /dashboard on the Chainlit FastAPI app
+fastapi_app.mount("/dashboard", dashboard_app)
