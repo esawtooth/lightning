@@ -8,6 +8,7 @@ class Event:
     timestamp: datetime
     source: str
     type: str
+    user_id: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     id: Optional[str] = None
 
@@ -19,6 +20,8 @@ class Event:
             raise ValueError("source required")
         if "type" not in data:
             raise ValueError("type required")
+        if "userID" not in data:
+            raise ValueError("userID required")
         ts = data["timestamp"]
         if isinstance(ts, str):
             timestamp = datetime.fromisoformat(ts)
@@ -30,6 +33,7 @@ class Event:
             timestamp=timestamp,
             source=data["source"],
             type=data["type"],
+            user_id=data["userID"],
             metadata=data.get("metadata", {}),
             id=data.get("id"),
         )
@@ -39,6 +43,7 @@ class Event:
             "timestamp": self.timestamp.isoformat(),
             "source": self.source,
             "type": self.type,
+            "userID": self.user_id,
             "metadata": self.metadata,
             "id": self.id,
         }
