@@ -8,6 +8,7 @@ from azure.data.tables import TableServiceClient
 from croniter import croniter
 
 from events import Event
+from auth import verify_token
 
 STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
 SCHEDULE_TABLE = os.environ.get("SCHEDULE_TABLE", "schedules")
@@ -22,9 +23,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     except ValueError:
         return func.HttpResponse("Invalid JSON", status_code=400)
 
-    user_id = req.headers.get("x-user-id")
-    if not user_id:
-        return func.HttpResponse("Missing user ID", status_code=400)
+    try:
+        user_id = verify_token(req.headers.get("Authorization"))
+    except Exception:
+        return func.HttpResponse("Unauthorized", status_code=401)
 
     event_payload = data.get("event")
     cron_expr = data.get("cron")
