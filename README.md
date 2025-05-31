@@ -34,6 +34,81 @@ The `events` package provides a dataclass `Event` that can be used to structure 
 `content` keys. When `LLMChatEvent.to_dict()` is called, the messages are
 ensured to appear under the `metadata` key.
 
+## ChatResponder function
+
+`ChatResponder` is an Azure Function that listens to the Service Bus queue and
+uses OpenAI's chat API to generate replies to incoming `LLMChatEvent` messages.
+
+### Configuration
+
+The function requires the following application settings:
+
+- `SERVICEBUS_CONNECTION` – connection string for the queue.
+- `SERVICEBUS_QUEUE` – name of the queue containing chat events.
+- `OPENAI_API_KEY` – API key used by the `openai` library.
+
+### Expected event
+
+Events must include a `metadata.messages` list of chat messages:
+
+```json
+{
+  "timestamp": "2023-01-01T00:00:00Z",
+  "source": "client",
+  "type": "llm.chat",
+  "userID": "abc123",
+  "metadata": {
+    "messages": [
+      {"role": "user", "content": "Hello!"}
+    ]
+  }
+}
+```
+
+### Example usage
+
+Send a chat event via the HTTP endpoint:
+
+```bash
+curl -X PUT \
+  -H "X-User-ID: abc123" \
+  -H "Content-Type: application/json" \
+  -d @event.json \
+  https://<function-app>.azurewebsites.net/api/events
+```
+
+`ChatResponder` publishes a new event of type `llm.chat.response` containing the
+assistant reply:
+
+```json
+{
+  "timestamp": "2023-01-01T00:00:01Z",
+  "source": "ChatResponder",
+  "type": "llm.chat.response",
+  "userID": "abc123",
+  "metadata": {"reply": "..."}
+}
+```
+
+### Deployment
+
+1. Deploy the infrastructure with Pulumi:
+
+   ```bash
+   cd infra
+   npm install
+   pulumi up
+   ```
+
+2. Publish the functions to Azure:
+
+   ```bash
+   cd ../azure-function
+   func azure functionapp publish event-function
+   ```
+
+Ensure `OPENAI_API_KEY` is configured on the Function App before publishing.
+
 ## Function Configuration
 
 The Azure Functions rely on several environment variables for authentication and
