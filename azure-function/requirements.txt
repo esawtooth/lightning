@@ -1,3 +1,4 @@
 azure-functions
 azure-servicebus  # or azure-eventhub if using Event Hub trigger
 openai
+requests
