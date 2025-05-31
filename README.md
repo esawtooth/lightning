@@ -108,3 +108,17 @@ assistant reply:
    ```
 
 Ensure `OPENAI_API_KEY` is configured on the Function App before publishing.
+
+## Function Configuration
+
+The Azure Functions rely on several environment variables for authentication and
+messaging:
+
+- `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
+  calling OpenAI.
+- `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
+  namespace.
+- `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
+
+Set these values in your deployment environment or in a local `.env` file when
+testing the functions locally.
