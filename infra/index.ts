@@ -39,6 +39,14 @@ const storage = new azure.storage.StorageAccount("funcsa", {
   kind: azure.storage.Kind.StorageV2,
 });
 
+// Table for scheduled events
+const scheduleTableName = "schedules";
+const scheduleTable = new azure.storage.Table("schedule-table", {
+  resourceGroupName: resourceGroup.name,
+  accountName: storage.name,
+  tableName: scheduleTableName,
+});
+
 const storageKeys = pulumi
   .all([resourceGroup.name, storage.name])
   .apply(([resourceGroupName, accountName]) =>
@@ -96,6 +104,8 @@ const funcApp = new azure.web.WebApp("event-function", {
       { name: "AzureWebJobsStorage", value: storageConnectionString },
       { name: "FUNCTIONS_EXTENSION_VERSION", value: "~4" },
       { name: "FUNCTIONS_WORKER_RUNTIME", value: "python" },
+      { name: "STORAGE_CONNECTION", value: storageConnectionString },
+      { name: "SCHEDULE_TABLE", value: scheduleTableName },
       {
         name: "SERVICEBUS_CONNECTION",
         value: sendKeys.primaryConnectionString,

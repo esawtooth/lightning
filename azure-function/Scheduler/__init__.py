@@ -14,7 +14,6 @@ SCHEDULE_TABLE = os.environ.get("SCHEDULE_TABLE", "schedules")
 
 service = TableServiceClient.from_connection_string(STORAGE_CONN)
 _table = service.get_table_client(SCHEDULE_TABLE)
-_table.create_table_if_not_exists()
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
