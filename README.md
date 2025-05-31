@@ -232,3 +232,16 @@ Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
 Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
 forward messages back to the client.
 
+## Dashboard
+
+A simple FastAPI dashboard is located in the `dashboard/` directory. It allows
+logging in and submitting events to the backend. Launch it with:
+
+```bash
+uvicorn dashboard.app:app --reload
+```
+
+Set `API_BASE` to the base URL of your Azure Functions (defaults to
+`http://localhost:7071/api`). If `AUTH_TOKEN` is provided the dashboard will use
+it for outgoing requests; otherwise use the `/login` page to obtain a token.
+
