@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 
 @dataclass
@@ -47,3 +47,25 @@ class Event:
             "metadata": self.metadata,
             "id": self.id,
         }
+
+
+@dataclass
+class LLMChatEvent(Event):
+    """Event representing an LLM chat interaction."""
+
+    messages: List[Any] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "LLMChatEvent":
+        base = Event.from_dict(data)
+        msgs = base.metadata.get("messages")
+        if not msgs:
+            raise ValueError("metadata.messages required")
+        return cls(**asdict(base), messages=msgs)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["messages"] = self.messages
+        d["metadata"] = meta
+        return d

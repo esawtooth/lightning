@@ -26,3 +26,10 @@ The function validates the data and publishes it to the Service Bus queue. The `
 ## Python library
 
 The `events` package provides a dataclass `Event` that can be used to structure events before they are sent to the API or processed downstream.
+
+### LLMChatEvent
+
+`LLMChatEvent` extends `Event` and expects a list of chat messages stored under
+`metadata.messages`. Each message should be a mapping with at least `role` and
+`content` keys. When `LLMChatEvent.to_dict()` is called, the messages are
+ensured to appear under the `metadata` key.
