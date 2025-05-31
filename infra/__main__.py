@@ -1,0 +1,119 @@
+import pulumi
+from pulumi_azure_native import resources, servicebus, storage, web
+
+config = pulumi.Config()
+location = config.get("location") or "centralindia"
+
+# Resource group
+resource_group = resources.ResourceGroup(
+    "lightning",
+    resource_group_name="lightning",
+    location=location,
+)
+
+# Service Bus namespace and queue
+namespace = servicebus.Namespace(
+    "lightning-namespace",
+    resource_group_name=resource_group.name,
+    namespace_name="lightning-namespace",
+    location=resource_group.location,
+    sku=servicebus.SBSkuArgs(name="Standard", tier="Standard"),
+)
+
+queue = servicebus.Queue(
+    "lightning-queue",
+    resource_group_name=resource_group.name,
+    namespace_name=namespace.name,
+    queue_name="lightning-queue",
+    enable_partitioning=True,
+)
+
+pulumi.export("resourceGroupName", resource_group.name)
+pulumi.export("serviceBusNamespaceName", namespace.name)
+pulumi.export("queueName", queue.name)
+
+# Storage account for Function App
+storage_account = storage.StorageAccount(
+    "funcsa",
+    resource_group_name=resource_group.name,
+    sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
+    kind=storage.Kind.STORAGE_V2,
+)
+
+schedule_table_name = "schedules"
+schedule_table = storage.Table(
+    "schedule-table",
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+    table_name=schedule_table_name,
+)
+
+repo_table = storage.Table(
+    "repo-table",
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+    table_name="repos",
+)
+
+# Retrieve the storage connection string
+storage_keys = storage.list_storage_account_keys_output(
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+)
+primary_storage_key = storage_keys.keys[0].value
+storage_connection_string = pulumi.Output.concat(
+    "DefaultEndpointsProtocol=https;AccountName=",
+    storage_account.name,
+    ";AccountKey=",
+    primary_storage_key,
+)
+
+# App Service plan for Function App
+app_service_plan = web.AppServicePlan(
+    "function-plan",
+    resource_group_name=resource_group.name,
+    kind="FunctionApp",
+    sku=web.SkuDescriptionArgs(tier="Dynamic", name="Y1"),
+)
+
+# Authorization rule to send messages
+send_rule = servicebus.QueueAuthorizationRule(
+    "send-rule",
+    resource_group_name=resource_group.name,
+    namespace_name=namespace.name,
+    queue_name=queue.name,
+    authorization_rule_name="send",
+    rights=["Send"],
+)
+
+send_keys = servicebus.list_queue_keys_output(
+    authorization_rule_name=send_rule.name,
+    queue_name=queue.name,
+    namespace_name=namespace.name,
+    resource_group_name=resource_group.name,
+)
+
+# Function App
+func_app = web.WebApp(
+    "event-function",
+    resource_group_name=resource_group.name,
+    server_farm_id=app_service_plan.id,
+    kind="FunctionApp",
+    site_config=web.SiteConfigArgs(
+        app_settings=[
+            web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
+            web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
+            web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
+            web.NameValuePairArgs(name="STORAGE_CONNECTION", value=storage_connection_string),
+            web.NameValuePairArgs(name="SCHEDULE_TABLE", value=schedule_table_name),
+            web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
+            web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
+            web.NameValuePairArgs(name="REPO_TABLE", value=repo_table.name),
+        ]
+    ),
+)
+
+pulumi.export(
+    "functionEndpoint",
+    pulumi.Output.concat("https://", func_app.default_host_name, "/api/events"),
+)

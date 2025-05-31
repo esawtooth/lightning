@@ -127,7 +127,7 @@ assistant reply:
 
    ```bash
    cd infra
-   npm install
+   pip install -r requirements.txt
    pulumi up
    ```
 

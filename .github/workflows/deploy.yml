@@ -10,11 +10,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions/setup-node@v3
+      - uses: actions/setup-python@v4
         with:
-          node-version: '16'
+          python-version: '3.11'
       - name: Install dependencies
-        run: npm install
+        run: pip install -r requirements.txt
         working-directory: infra
       - uses: pulumi/actions@v3
         with:
