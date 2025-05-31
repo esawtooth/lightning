@@ -6,7 +6,7 @@ Event based AI
 
 Deploying the infrastructure will create an Azure Function that exposes an HTTP endpoint for queuing events.
 
-### PUT /api/events
+### POST /api/events
 
 Include a header `X-User-ID` identifying the user on whose behalf the event was
 generated. Send a JSON body describing the event:
@@ -101,7 +101,7 @@ Events must include a `metadata.messages` list of chat messages:
 Send a chat event via the HTTP endpoint:
 
 ```bash
-curl -X PUT \
+curl -X POST \
   -H "X-User-ID: abc123" \
   -H "Content-Type: application/json" \
   -d @event.json \
