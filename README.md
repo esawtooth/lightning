@@ -160,6 +160,7 @@ messaging:
 - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
   to the chat client.
 - `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
+- `USER_TABLE` &mdash; Azure Table for storing user credentials (defaults to `users`).
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
