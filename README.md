@@ -195,11 +195,11 @@ messaging:
 - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
   to the chat client.
 - `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
-- `STORAGE_CONNECTION` &mdash; connection string used for Azure Table storage.
-- `USER_TABLE` &mdash; table storing user accounts. Defaults to `users`.
-- `REPO_TABLE` &mdash; table storing repository URLs. Defaults to `repos`.
-- `SCHEDULE_TABLE` &mdash; table used by the scheduler. Defaults to `schedules`.
-- `USER_TABLE` &mdash; Azure Table for storing user credentials (defaults to `users`).
+- `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
+- `COSMOS_DATABASE` &mdash; database name (defaults to `lightning`).
+- `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
+- `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
+- `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
@@ -224,10 +224,11 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "SERVICEBUS_QUEUE": "chat-events",
     "NOTIFY_URL": "http://localhost:8000/notify",
     "JWT_SIGNING_KEY": "secret",
-    "STORAGE_CONNECTION": "UseDevelopmentStorage=true",
-    "USER_TABLE": "users",
-    "REPO_TABLE": "repos",
-    "SCHEDULE_TABLE": "schedules"
+    "COSMOS_CONNECTION": "<cosmos-connection-string>",
+    "COSMOS_DATABASE": "lightning",
+    "USER_CONTAINER": "users",
+    "REPO_CONTAINER": "repos",
+    "SCHEDULE_CONTAINER": "schedules"
   }
 }
 ```
@@ -241,10 +242,11 @@ SERVICEBUS_CONNECTION=<connection-string>
 SERVICEBUS_QUEUE=chat-events
 NOTIFY_URL=http://localhost:8000/notify
 JWT_SIGNING_KEY=secret
-STORAGE_CONNECTION=UseDevelopmentStorage=true
-USER_TABLE=users
-REPO_TABLE=repos
-SCHEDULE_TABLE=schedules
+COSMOS_CONNECTION=<cosmos-connection-string>
+COSMOS_DATABASE=lightning
+USER_CONTAINER=users
+REPO_CONTAINER=repos
+SCHEDULE_CONTAINER=schedules
 AUTH_TOKEN=<jwt-token>
 ```
 

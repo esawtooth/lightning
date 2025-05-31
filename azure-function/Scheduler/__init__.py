@@ -4,17 +4,21 @@ import uuid
 from datetime import datetime
 
 import azure.functions as func
-from azure.data.tables import TableServiceClient
+from azure.cosmos import CosmosClient, PartitionKey
 from croniter import croniter
 
 from events import Event
 from auth import verify_token
 
-STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
-SCHEDULE_TABLE = os.environ.get("SCHEDULE_TABLE", "schedules")
+COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+SCHEDULE_CONTAINER = os.environ.get("SCHEDULE_CONTAINER", "schedules")
 
-service = TableServiceClient.from_connection_string(STORAGE_CONN)
-_table = service.get_table_client(SCHEDULE_TABLE)
+_client = CosmosClient.from_connection_string(COSMOS_CONN)
+_db = _client.create_database_if_not_exists(COSMOS_DB)
+_container = _db.create_container_if_not_exists(
+    id=SCHEDULE_CONTAINER, partition_key=PartitionKey(path="/pk")
+)
 
 
 def main(req: func.HttpRequest) -> func.HttpResponse:
@@ -56,13 +60,13 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
 
     sched_id = uuid.uuid4().hex
     entity = {
-        "PartitionKey": user_id,
-        "RowKey": sched_id,
+        "id": sched_id,
+        "pk": user_id,
         "event": json.dumps(event_payload),
         "cron": cron_expr or "",
         "runAt": next_time.isoformat(),
     }
-    _table.upsert_entity(entity)
+    _container.upsert_item(entity)
 
     return func.HttpResponse(
         json.dumps({"id": sched_id}),

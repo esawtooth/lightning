@@ -33,32 +33,32 @@ def load_user_auth(monkeypatch, store, token_capture):
     func_mod.HttpResponse = DummyResponse
     azure_mod.functions = func_mod
 
-    tables_mod = types.ModuleType('tables')
+    cosmos_mod = types.ModuleType('cosmos')
 
-    class DummyTable:
+    class DummyContainer:
         def __init__(self):
             self.store = store
 
-        def create_table_if_not_exists(self):
-            pass
-
-        def get_entity(self, pk, rk):
-            key = (pk, rk)
+        def read_item(self, id, partition_key=None):
+            key = (partition_key, id)
             if key not in self.store:
                 raise Exception('nf')
             return self.store[key]
 
-        def upsert_entity(self, ent):
-            self.store[(ent['PartitionKey'], ent['RowKey'])] = ent
+        def upsert_item(self, item):
+            self.store[(item['pk'], item['id'])] = item
 
-    class DummyService:
-        def get_table_client(self, name):
-            return DummyTable()
+    class DummyDatabase:
+        def create_container_if_not_exists(self, *a, **k):
+            return DummyContainer()
 
-    tables_mod.TableServiceClient = types.SimpleNamespace(
-        from_connection_string=lambda *a, **k: DummyService()
-    )
-    azure_mod.data = types.SimpleNamespace(tables=tables_mod)
+    class DummyClient:
+        def create_database_if_not_exists(self, *a, **k):
+            return DummyDatabase()
+
+    cosmos_mod.CosmosClient = types.SimpleNamespace(from_connection_string=lambda *a, **k: DummyClient())
+    cosmos_mod.PartitionKey = lambda path: {'path': path}
+    azure_mod.cosmos = cosmos_mod
 
     jwt_mod = types.ModuleType('jwt')
 
@@ -71,7 +71,7 @@ def load_user_auth(monkeypatch, store, token_capture):
 
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
     monkeypatch.setitem(sys.modules, 'azure.functions', func_mod)
-    monkeypatch.setitem(sys.modules, 'azure.data.tables', tables_mod)
+    monkeypatch.setitem(sys.modules, 'azure.cosmos', cosmos_mod)
     monkeypatch.setitem(sys.modules, 'jwt', jwt_mod)
 
     spec = importlib.util.spec_from_file_location(
@@ -85,8 +85,8 @@ def load_user_auth(monkeypatch, store, token_capture):
 
 
 def test_register_success(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['USER_TABLE'] = 'users'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     store = {}
     cap = {}
@@ -101,11 +101,11 @@ def test_register_success(monkeypatch):
 
 
 def test_register_duplicate(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['USER_TABLE'] = 'users'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
-    store = {('bob', 'user'): {'PartitionKey': 'bob', 'RowKey': 'user', 'salt': salt, 'hash': hashlib.sha256((salt + 'pw').encode()).hexdigest()}}
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashlib.sha256((salt + 'pw').encode()).hexdigest()}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
@@ -116,12 +116,12 @@ def test_register_duplicate(monkeypatch):
 
 
 def test_login_success(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['USER_TABLE'] = 'users'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
     hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
-    store = {('bob', 'user'): {'PartitionKey': 'bob', 'RowKey': 'user', 'salt': salt, 'hash': hashed}}
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     capture = {}
     mod, Request = load_user_auth(monkeypatch, store, capture)
 
@@ -135,12 +135,12 @@ def test_login_success(monkeypatch):
 
 
 def test_login_bad_password(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['USER_TABLE'] = 'users'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
     hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
-    store = {('bob', 'user'): {'PartitionKey': 'bob', 'RowKey': 'user', 'salt': salt, 'hash': hashed}}
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 

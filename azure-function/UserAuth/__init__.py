@@ -5,16 +5,19 @@ import secrets
 from datetime import datetime, timedelta
 
 import azure.functions as func
-from azure.data.tables import TableServiceClient
+from azure.cosmos import CosmosClient, PartitionKey
 import jwt
 
-STORAGE_CONN = os.environ.get("STORAGE_CONNECTION")
-USER_TABLE = os.environ.get("USER_TABLE", "users")
+COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+USER_CONTAINER = os.environ.get("USER_CONTAINER", "users")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
 
-service = TableServiceClient.from_connection_string(STORAGE_CONN)
-_table = service.get_table_client(USER_TABLE)
-_table.create_table_if_not_exists()
+_client = CosmosClient.from_connection_string(COSMOS_CONN)
+_db = _client.create_database_if_not_exists(COSMOS_DB)
+_container = _db.create_container_if_not_exists(
+    id=USER_CONTAINER, partition_key=PartitionKey(path="/pk")
+)
 
 
 def _hash_password(password: str, salt: str) -> str:
@@ -27,14 +30,14 @@ def _register(data: dict) -> func.HttpResponse:
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
     try:
-        _table.get_entity(username, "user")
+        _container.read_item("user", partition_key=username)
         return func.HttpResponse("Username exists", status_code=409)
     except Exception:
         pass
     salt = secrets.token_hex(16)
     hashed = _hash_password(password, salt)
-    entity = {"PartitionKey": username, "RowKey": "user", "hash": hashed, "salt": salt}
-    _table.upsert_entity(entity)
+    entity = {"id": "user", "pk": username, "hash": hashed, "salt": salt}
+    _container.upsert_item(entity)
     return func.HttpResponse("", status_code=201)
 
 
@@ -44,7 +47,7 @@ def _login(data: dict) -> func.HttpResponse:
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
     try:
-        entity = _table.get_entity(username, "user")
+        entity = _container.read_item("user", partition_key=username)
     except Exception:
         return func.HttpResponse("Unauthorized", status_code=401)
     expected = _hash_password(password, entity.get("salt", ""))

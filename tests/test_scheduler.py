@@ -10,19 +10,29 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 def load_scheduler(monkeypatch, capture, token_map=None):
     azure_mod = types.ModuleType('azure')
-    tables_mod = types.ModuleType('tables')
-    class DummyTable:
-        def create_table_if_not_exists(self):
+    cosmos_mod = types.ModuleType('cosmos')
+
+    class DummyContainer:
+        def __init__(self):
             pass
-        def upsert_entity(self, entity):
-            capture['entity'] = entity
-    class DummyService:
-        def get_table_client(self, table):
-            return DummyTable()
-    tables_mod.TableServiceClient = types.SimpleNamespace(
-        from_connection_string=lambda *a, **k: DummyService()
-    )
-    azure_mod.data = types.SimpleNamespace(tables=tables_mod)
+
+        def upsert_item(self, item):
+            capture['entity'] = item
+
+    class DummyDatabase:
+        def create_container_if_not_exists(self, id=None, partition_key=None):
+            return DummyContainer()
+
+    class DummyClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def create_database_if_not_exists(self, *a, **k):
+            return DummyDatabase()
+
+    cosmos_mod.CosmosClient = types.SimpleNamespace(from_connection_string=lambda *a, **k: DummyClient())
+    cosmos_mod.PartitionKey = lambda path: {'path': path}
+    azure_mod.cosmos = cosmos_mod
     auth_mod = types.ModuleType('auth')
     token_map = token_map or {'Bearer good': 'u1'}
 
@@ -34,7 +44,7 @@ def load_scheduler(monkeypatch, capture, token_map=None):
     auth_mod.verify_token = verify_token
 
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
-    monkeypatch.setitem(sys.modules, 'azure.data.tables', tables_mod)
+    monkeypatch.setitem(sys.modules, 'azure.cosmos', cosmos_mod)
     monkeypatch.setitem(sys.modules, 'auth', auth_mod)
 
     func_mod = types.ModuleType('functions')
@@ -64,8 +74,8 @@ def load_scheduler(monkeypatch, capture, token_map=None):
 
 
 def test_schedule_creation(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['SCHEDULE_TABLE'] = 't'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_CONTAINER'] = 't'
     capture = {}
     mod = load_scheduler(monkeypatch, capture)
 
@@ -81,12 +91,12 @@ def test_schedule_creation(monkeypatch):
     )
     resp = mod.main(req)
     assert resp.status_code == 201
-    assert capture['entity']['PartitionKey'] == 'u1'
+    assert capture['entity']['pk'] == 'u1'
 
 
 def test_schedule_missing_token(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['SCHEDULE_TABLE'] = 't'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_CONTAINER'] = 't'
     capture = {}
     mod = load_scheduler(monkeypatch, capture)
 
@@ -105,8 +115,8 @@ def test_schedule_missing_token(monkeypatch):
 
 
 def test_schedule_invalid_token(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['SCHEDULE_TABLE'] = 't'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_CONTAINER'] = 't'
     capture = {}
     mod = load_scheduler(monkeypatch, capture)
 
@@ -126,23 +136,31 @@ def test_schedule_invalid_token(monkeypatch):
 
 def load_worker(monkeypatch, schedules, sent):
     azure_mod = types.ModuleType('azure')
-    tables_mod = types.ModuleType('tables')
-    class DummyTable:
-        def query_entities(self, *a, **k):
+    cosmos_mod = types.ModuleType('cosmos')
+
+    class DummyContainer:
+        def query_items(self, *a, **k):
             return schedules
-        def update_entity(self, e):
+
+        def upsert_item(self, e):
             sent['updated'] = e
-        def delete_entity(self, pk, rk):
-            sent.setdefault('deleted', []).append((pk, rk))
-    class DummyService:
-        def get_table_client(self, table):
-            return DummyTable()
-    tables_mod.TableServiceClient = types.SimpleNamespace(
-        from_connection_string=lambda *a, **k: DummyService()
-    )
-    azure_mod.data = types.SimpleNamespace(tables=tables_mod)
+
+        def delete_item(self, id, partition_key=None):
+            sent.setdefault('deleted', []).append((partition_key, id))
+
+    class DummyDatabase:
+        def create_container_if_not_exists(self, *a, **k):
+            return DummyContainer()
+
+    class DummyClient:
+        def create_database_if_not_exists(self, *a, **k):
+            return DummyDatabase()
+
+    cosmos_mod.CosmosClient = types.SimpleNamespace(from_connection_string=lambda *a, **k: DummyClient())
+    cosmos_mod.PartitionKey = lambda path: {'path': path}
+    azure_mod.cosmos = cosmos_mod
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
-    monkeypatch.setitem(sys.modules, 'azure.data.tables', tables_mod)
+    monkeypatch.setitem(sys.modules, 'azure.cosmos', cosmos_mod)
 
     sb_mod = types.ModuleType('servicebus')
     class DummySender:
@@ -152,7 +170,7 @@ def load_worker(monkeypatch, schedules, sent):
             pass
         def send_messages(self, msg):
             sent.setdefault('messages', []).append(json.loads(msg.body))
-    class DummyClient:
+    class DummySBClient:
         def __enter__(self):
             return self
         def __exit__(self, exc_type, exc, tb):
@@ -160,7 +178,7 @@ def load_worker(monkeypatch, schedules, sent):
         def get_queue_sender(self, queue_name=None):
             return DummySender()
     sb_mod.ServiceBusClient = types.SimpleNamespace(
-        from_connection_string=lambda *a, **k: DummyClient()
+        from_connection_string=lambda *a, **k: DummySBClient()
     )
     class DummyMessage:
         def __init__(self, body):
@@ -191,15 +209,15 @@ def load_worker(monkeypatch, schedules, sent):
 
 
 def test_worker_publishes_event(monkeypatch):
-    os.environ['STORAGE_CONNECTION'] = 'c'
-    os.environ['SCHEDULE_TABLE'] = 't'
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['SCHEDULE_CONTAINER'] = 't'
     os.environ['SERVICEBUS_CONNECTION'] = 'sb'
     os.environ['SERVICEBUS_QUEUE'] = 'q'
 
     event = {'timestamp': datetime.utcnow().isoformat(), 'source': 's', 'type': 't', 'userID': 'u1', 'metadata': {}}
     schedules = [{
-        'PartitionKey': 'u1',
-        'RowKey': '1',
+        'pk': 'u1',
+        'id': '1',
         'event': json.dumps(event),
         'runAt': (datetime.utcnow() - timedelta(minutes=1)).isoformat(),
         'cron': ''
