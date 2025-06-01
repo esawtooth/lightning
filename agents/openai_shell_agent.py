@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 import os
 import subprocess
 import json
@@ -12,7 +12,7 @@ class OpenAIShellAgent(Agent):
 
     name = "openai-shell"
 
-    def run(self, commands: List[str]) -> str:
+    def run(self, commands: Union[List[str], str]) -> str:
         try:
             import openai
         except ModuleNotFoundError as e:
@@ -37,8 +37,13 @@ class OpenAIShellAgent(Agent):
             },
         }
 
+        if isinstance(commands, str):
+            instructions = [commands]
+        else:
+            instructions = commands
+
         outputs = []
-        for instruction in commands:
+        for instruction in instructions:
             response = openai.ChatCompletion.create(
                 messages=[{"role": "user", "content": instruction}],
                 model=model,
