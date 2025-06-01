@@ -12,6 +12,7 @@ from typing import Optional
 import jwt
 import requests
 from fastapi import FastAPI, Request, Form, HTTPException, Depends, Cookie
+from common.jwt_utils import verify_token as _verify_token
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -33,19 +34,11 @@ logger = logging.getLogger(__name__)
 
 def verify_token(token: str) -> Optional[str]:
     """Verify JWT token and return username if valid."""
-    if not JWT_SIGNING_KEY:
-        logger.error("JWT_SIGNING_KEY not configured")
-        return None
-    
     try:
-        payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
-        if username and payload.get("exp", 0) > datetime.utcnow().timestamp():
-            return username
-    except jwt.InvalidTokenError as e:
+        return _verify_token(token)
+    except Exception as e:
         logger.warning(f"Invalid token: {e}")
-    
-    return None
+        return None
 
 
 async def get_current_user(request: Request) -> Optional[str]:
