@@ -24,12 +24,26 @@ def _hash_password(password: str, salt: str) -> str:
     return crypt.crypt(password, salt)
 
 
+def _is_strong_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    return has_letter and has_digit
+
+
 def _register(data: dict) -> func.HttpResponse:
     username = data.get("username")
     password = data.get("password")
     email = data.get("email", "")
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
+
+    if not _is_strong_password(password):
+        return func.HttpResponse(
+            "Password must be at least 8 characters and include letters and numbers",
+            status_code=400,
+        )
     try:
         existing_user = _container.read_item("user", partition_key=username)
         return func.HttpResponse("Username exists", status_code=409)

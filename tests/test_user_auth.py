@@ -95,12 +95,12 @@ def test_register_success(monkeypatch):
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'alice', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'alice', 'password': 'Password1'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 201
     assert ('alice', 'user') in store
-    assert store[('alice', 'user')]['hash'] != 'pw'
+    assert store[('alice', 'user')]['hash'] != 'Password1'
 
 
 def test_register_duplicate(monkeypatch):
@@ -112,7 +112,7 @@ def test_register_duplicate(monkeypatch):
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'bob', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 409
@@ -128,7 +128,7 @@ def test_login_success(monkeypatch):
     capture = {}
     mod, Request = load_user_auth(monkeypatch, store, capture)
 
-    req = Request(body=json.dumps({'username': 'bob', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1'}))
     req.route_params = {'action': 'login'}
     resp = mod.main(req)
     assert resp.status_code == 200
@@ -151,4 +151,18 @@ def test_login_bad_password(monkeypatch):
     req.route_params = {'action': 'login'}
     resp = mod.main(req)
     assert resp.status_code == 401
+
+
+def test_register_weak_password(monkeypatch):
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
+    os.environ['JWT_SIGNING_KEY'] = 'k'
+    store = {}
+    cap = {}
+    mod, Request = load_user_auth(monkeypatch, store, cap)
+
+    req = Request(body=json.dumps({'username': 'weak', 'password': 'short'}))
+    req.route_params = {'action': 'register'}
+    resp = mod.main(req)
+    assert resp.status_code == 400
 

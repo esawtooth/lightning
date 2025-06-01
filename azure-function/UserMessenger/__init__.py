@@ -9,6 +9,7 @@ from events import Event
 from events.utils import event_matches
 
 NOTIFY_URL = os.environ.get("NOTIFY_URL")
+NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
 if not NOTIFY_URL:
     logging.error("Missing required environment variable: NOTIFY_URL")
@@ -42,7 +43,8 @@ def main(msg: func.ServiceBusMessage) -> None:
         return
 
     try:
-        resp = requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": text})
+        headers = {"Authorization": f"Bearer {NOTIFY_TOKEN}"} if NOTIFY_TOKEN else None
+        resp = requests.post(NOTIFY_URL, json={"user_id": event.user_id, "message": text}, headers=headers)
         if not 200 <= resp.status_code < 300:
             logging.warning("Notify endpoint returned status %s: %s", resp.status_code, resp.text)
     except Exception as e:
