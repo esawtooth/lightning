@@ -203,6 +203,7 @@ messaging:
 - `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
+- `TASK_CONTAINER` &mdash; container storing worker task records. Defaults to `tasks`.
 - `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package including a SAS
   token. The Function App cannot start without this token. Pulumi populates this
   value automatically.
@@ -234,7 +235,8 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "COSMOS_DATABASE": "lightning",
     "USER_CONTAINER": "users",
     "REPO_CONTAINER": "repos",
-    "SCHEDULE_CONTAINER": "schedules"
+    "SCHEDULE_CONTAINER": "schedules",
+    "TASK_CONTAINER": "tasks"
   }
 }
 ```
@@ -253,6 +255,7 @@ COSMOS_DATABASE=lightning
 USER_CONTAINER=users
 REPO_CONTAINER=repos
 SCHEDULE_CONTAINER=schedules
+TASK_CONTAINER=tasks
 AUTH_TOKEN=<jwt-token>
 ```
 
@@ -290,7 +293,7 @@ forward messages back to the client.
 ## Dashboard
 
 A simple FastAPI dashboard is located in the `dashboard/` directory. It allows
-logging in and submitting events to the backend. Launch it with:
+logging in, submitting events, and monitoring worker tasks. Launch it with:
 
 ```bash
 uvicorn dashboard.app:app --reload
@@ -299,6 +302,10 @@ uvicorn dashboard.app:app --reload
 Set `API_BASE` to the base URL of your Azure Functions (defaults to
 `http://localhost:7071/api`). If `AUTH_TOKEN` is provided the dashboard will use
 it for outgoing requests; otherwise use the `/login` page to obtain a token.
+Visit `/tasks` to view task status and container logs.
+
+Container logs now include each bash command executed by the agent along with
+its output, allowing you to watch task progress in near real-time.
 
 
 ## Worker Agents

@@ -50,26 +50,27 @@ async def authenticate_user(request: Request) -> Optional[str]:
     return None
 
 
-@fastapi_app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    """Authentication middleware for all Chainlit routes."""
-    # Allow health checks and static assets
-    if request.url.path in ["/health", "/dashboard"] or request.url.path.startswith("/static"):
-        return await call_next(request)
-    
-    # Check authentication
-    username = await authenticate_user(request)
-    if not username:
-        # Redirect to auth gateway
-        redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={request.url}"
-        return RedirectResponse(url=redirect_url)
-    
-    # Store username in request state for use in Chainlit handlers
-    request.state.username = username
-    
-    # For Chainlit WebSocket connections, we need to handle auth differently
-    response = await call_next(request)
-    return response
+if hasattr(fastapi_app, "middleware"):
+    @fastapi_app.middleware("http")
+    async def auth_middleware(request: Request, call_next):
+        """Authentication middleware for all Chainlit routes."""
+        # Allow health checks and static assets
+        if request.url.path in ["/health", "/dashboard"] or request.url.path.startswith("/static"):
+            return await call_next(request)
+
+        # Check authentication
+        username = await authenticate_user(request)
+        if not username:
+            # Redirect to auth gateway
+            redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={request.url}"
+            return RedirectResponse(url=redirect_url)
+
+        # Store username in request state for use in Chainlit handlers
+        request.state.username = username
+
+        # For Chainlit WebSocket connections, we need to handle auth differently
+        response = await call_next(request)
+        return response
 
 
 @cl.on_chat_start

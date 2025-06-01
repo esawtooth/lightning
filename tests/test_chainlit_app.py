@@ -15,6 +15,7 @@ def load_chainlit_app(monkeypatch, capture):
         return func
 
     def on_chat_start(func):
+        handlers['start'] = func
         return func
 
     class Msg:
@@ -29,6 +30,7 @@ def load_chainlit_app(monkeypatch, capture):
     cl_mod.Message = Msg
     def mount(path, app, **kw):
         pass
+
     def middleware(typ):
         def wrapper(func):
             return func
@@ -120,6 +122,10 @@ def load_chainlit_app(monkeypatch, capture):
         return types.SimpleNamespace(status_code=200, text='')
     req_mod.post = post
     monkeypatch.setitem(sys.modules, 'requests', req_mod)
+
+    dash_mod = types.ModuleType('dashboard.app')
+    dash_mod.app = object()
+    monkeypatch.setitem(sys.modules, 'dashboard.app', dash_mod)
 
     # Load module
     spec = importlib.util.spec_from_file_location(

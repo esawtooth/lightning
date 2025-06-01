@@ -11,7 +11,7 @@ def test_echo_agent_registry():
     assert result == 'hi\nthere'
 
 
-def test_openai_shell_agent(monkeypatch):
+def test_openai_shell_agent(monkeypatch, capsys):
     assert 'openai-shell' in AGENT_REGISTRY
     agent = AGENT_REGISTRY['openai-shell']
 
@@ -42,11 +42,17 @@ def test_openai_shell_agent(monkeypatch):
 
     openai_stub = types.SimpleNamespace(ChatCompletion=ChatStub)
     monkeypatch.setitem(sys.modules, 'openai', openai_stub)
-    monkeypatch.setattr(subprocess, 'run', lambda cmd, shell=False, capture_output=False, text=False: types.SimpleNamespace(stdout='hello\n'))
+    def stub_run(cmd, shell=False, capture_output=False, text=False):
+        captured['cmd'] = cmd
+        return types.SimpleNamespace(stdout='hello\n', stderr='')
+    monkeypatch.setattr(subprocess, 'run', stub_run)
     monkeypatch.setenv('OPENAI_API_KEY', 'sk')
     monkeypatch.setenv('OPENAI_MODEL', 'model-test')
 
     result = agent.run('say hello')
+    out = capsys.readouterr().out
+    assert '$ echo hello' in out
+    assert 'hello' in out
     assert 'hello' in result
     assert captured['model'] == 'model-test'
     assert captured['tools'][0]['function']['name'] == 'bash'
