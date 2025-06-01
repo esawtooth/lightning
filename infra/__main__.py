@@ -197,7 +197,6 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
             web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
             web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
-            web.NameValuePairArgs(name="WEBSITE_RUN_FROM_PACKAGE", value="1"),  # Enable ZIP deployment
             web.NameValuePairArgs(name="COSMOS_CONNECTION", value=cosmos_connection_string),
             web.NameValuePairArgs(name="COSMOS_DATABASE", value="lightning"),
             web.NameValuePairArgs(name="SCHEDULE_CONTAINER", value="schedules"),
