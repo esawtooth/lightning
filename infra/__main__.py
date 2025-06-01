@@ -6,6 +6,7 @@ from pulumi_azure_native import (
     web,
     authorization,
     containerinstance,
+    containerregistry,
 )
 
 # Cosmos DB resources live in a separate module
@@ -16,7 +17,8 @@ config = pulumi.Config()
 location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
-worker_image = config.get("workerImage") or "worker-task"
+# Worker image will be configured by GitHub Actions or default to ACR image
+worker_image = config.get("workerImage") or pulumi.Output.concat("lightningacr.azurecr.io/worker-task:latest")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -53,6 +55,27 @@ storage_account = storage.StorageAccount(
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     kind=storage.Kind.STORAGE_V2,
 )
+
+# Azure Container Registry
+acr = containerregistry.Registry(
+    "lightning-acr",
+    resource_group_name=resource_group.name,
+    registry_name="lightningacr",
+    location=resource_group.location,
+    sku=containerregistry.SkuArgs(name="Basic"),
+    admin_user_enabled=True,
+)
+
+# Get ACR credentials
+acr_credentials = containerregistry.list_registry_credentials_output(
+    resource_group_name=resource_group.name,
+    registry_name=acr.name,
+)
+
+# Export ACR details
+pulumi.export("acrLoginServer", acr.login_server)
+pulumi.export("acrUsername", acr_credentials.username)
+pulumi.export("acrPassword", acr_credentials.passwords[0].value)
 
 # Cosmos DB account and database
 cosmos_account = cosmosdb.DatabaseAccount(
@@ -201,7 +224,7 @@ pulumi.export(
 
 # Container group hosting the Chainlit app and dashboard
 
-ui_image = config.get("uiImage") or "chainlit-dashboard"
+ui_image = config.get("uiImage") or pulumi.Output.concat("lightningacr.azurecr.io/chainlit-client:latest")
 
 ui_container = containerinstance.ContainerGroup(
     "chat-ui",

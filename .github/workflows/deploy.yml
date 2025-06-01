@@ -13,18 +13,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Log in to Azure Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ secrets.ACR_REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+          az acr login --name lightningacr
+        env:
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
       - name: Build and push worker image
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./Dockerfile.worker
           push: true
-          tags: ${{ secrets.ACR_REGISTRY }}/worker-task:${{ github.sha }},${{ secrets.ACR_REGISTRY }}/worker-task:latest
+          tags: lightningacr.azurecr.io/worker-task:${{ github.sha }},lightningacr.azurecr.io/worker-task:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push chainlit client image
@@ -33,7 +35,7 @@ jobs:
           context: .
           file: ./chat_client/Dockerfile
           push: true
-          tags: ${{ secrets.ACR_REGISTRY }}/chainlit-client:${{ github.sha }},${{ secrets.ACR_REGISTRY }}/chainlit-client:latest
+          tags: lightningacr.azurecr.io/chainlit-client:${{ github.sha }},lightningacr.azurecr.io/chainlit-client:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -60,12 +62,12 @@ jobs:
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
-        run: pulumi config set workerImage "${{ secrets.ACR_REGISTRY }}/worker-task:${{ github.sha }}"
+        run: pulumi config set workerImage "lightningacr.azurecr.io/worker-task:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
-        run: pulumi config set uiImage "${{ secrets.ACR_REGISTRY }}/chainlit-client:${{ github.sha }}"
+        run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
