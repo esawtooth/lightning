@@ -21,7 +21,7 @@ location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
 # Worker image will be configured by GitHub Actions or default to ACR image
-worker_image = config.get("workerImage") or pulumi.Output.concat("lightningacr.azurecr.io/worker-task:latest")
+worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 
 # Resource group
 resource_group = resources.ResourceGroup(
