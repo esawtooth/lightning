@@ -5,9 +5,11 @@ from pulumi_azure_native import (
     storage,
     web,
     authorization,
-    documentdb,
-    containerinstance
+    containerinstance,
 )
+
+# Cosmos DB resources live in a separate module
+import pulumi_azure_native.documentdb as documentdb
 from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 
 config = pulumi.Config()
