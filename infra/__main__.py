@@ -183,7 +183,7 @@ client_config = get_client_config()
 subscription_id = client_config.subscription_id
 
 func_app = web.WebApp(
-    "event-function",
+    "event-function-linux",
     resource_group_name=resource_group.name,
     server_farm_id=app_service_plan.id,
     kind="FunctionApp",
