@@ -70,7 +70,14 @@ def load_user_auth(monkeypatch, store, token_capture):
         token_capture['key'] = key
         return f"token-{payload['sub']}"
 
+    def decode(token, key, algorithms=None):
+        if not token.startswith('token-'):
+            raise Exception('bad token')
+        sub = token.split('-', 1)[1]
+        return {'sub': sub, 'role': 'user', 'status': 'approved', 'exp': 0}
+
     jwt_mod.encode = encode
+    jwt_mod.decode = decode
 
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
     monkeypatch.setitem(sys.modules, 'azure.functions', func_mod)
@@ -165,4 +172,35 @@ def test_register_weak_password(monkeypatch):
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 400
+
+
+def test_refresh_success(monkeypatch):
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
+    os.environ['JWT_SIGNING_KEY'] = 'k'
+    store = {}
+    cap = {}
+    mod, Request = load_user_auth(monkeypatch, store, cap)
+
+    req = Request()
+    req.route_params = {'action': 'refresh'}
+    req.headers = {'Authorization': 'Bearer token-alice'}
+    resp = mod.main(req)
+    assert resp.status_code == 200
+    assert json.loads(resp.body)['token'] == 'token-alice'
+
+
+def test_refresh_invalid_token(monkeypatch):
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
+    os.environ['JWT_SIGNING_KEY'] = 'k'
+    store = {}
+    cap = {}
+    mod, Request = load_user_auth(monkeypatch, store, cap)
+
+    req = Request()
+    req.route_params = {'action': 'refresh'}
+    req.headers = {'Authorization': 'Bearer bad'}
+    resp = mod.main(req)
+    assert resp.status_code == 401
 

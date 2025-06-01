@@ -262,6 +262,35 @@ def _verify_admin(auth_header: str) -> str:
     return username
 
 
+def _refresh_token(auth_header: str) -> func.HttpResponse:
+    """Refresh a valid JWT and return one with an updated exp claim."""
+    if not JWT_SIGNING_KEY:
+        return func.HttpResponse("Server error", status_code=500)
+
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return func.HttpResponse("Unauthorized", status_code=401)
+
+    token = auth_header.split(" ", 1)[1]
+    try:
+        claims = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
+    except Exception:
+        return func.HttpResponse("Unauthorized", status_code=401)
+
+    new_payload = {
+        "sub": claims.get("sub"),
+        "role": claims.get("role", "user"),
+        "status": claims.get("status", "approved"),
+        "exp": datetime.utcnow() + timedelta(hours=1),
+    }
+
+    new_token = jwt.encode(new_payload, JWT_SIGNING_KEY, algorithm="HS256")
+    return func.HttpResponse(
+        json.dumps({"token": new_token, "role": new_payload["role"]}),
+        status_code=200,
+        mimetype="application/json",
+    )
+
+
 def main(req: func.HttpRequest) -> func.HttpResponse:
     try:
         data = req.get_json() if req.get_body() else {}
@@ -277,6 +306,9 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return _login(data)
     elif action == "status":
         return _get_user_info(data)
+    elif action == "refresh":
+        auth_header = req.headers.get("Authorization", "")
+        return _refresh_token(auth_header)
     
     # Admin endpoints (require admin token)
     elif action in ["approve", "pending"]:
