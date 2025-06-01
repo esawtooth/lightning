@@ -61,3 +61,39 @@ def test_event_parses_z_timezone():
     event = Event.from_dict(data)
     assert event.timestamp.isoformat() == "2023-01-01T00:00:00+00:00"
     assert event.history == []
+
+
+def test_event_invalid_timestamp(monkeypatch):
+    data = {
+        'timestamp': 'bad',
+        'source': 's',
+        'type': 't',
+        'userID': 'u',
+    }
+    with pytest.raises(ValueError):
+        Event.from_dict(data)
+
+
+def test_event_numeric_timestamp(monkeypatch):
+    ts = int(datetime.now().timestamp())
+    data = {
+        'timestamp': ts,
+        'source': 's',
+        'type': 't',
+        'userID': 'u',
+    }
+    event = Event.from_dict(data)
+    assert int(event.timestamp.timestamp()) == ts
+    assert event.history == []
+
+
+def test_event_history_not_list(monkeypatch):
+    data = {
+        'timestamp': datetime.now().isoformat(),
+        'source': 's',
+        'type': 't',
+        'userID': 'u',
+        'history': {},
+    }
+    with pytest.raises(ValueError):
+        Event.from_dict(data)
