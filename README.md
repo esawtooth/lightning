@@ -171,6 +171,8 @@ Pulumi automatically:
 - Creates all Azure resources (Function App, Cosmos DB, Service Bus, etc.)
 - Packages the Azure Functions code
 - Deploys the function code to the Function App
+- Generates a SAS token for the deployment package and appends it to
+  `WEBSITE_RUN_FROM_PACKAGE` so the Function App can download the ZIP
 - Builds and deploys the UI containers
 - Configures all environment variables and connections
 
@@ -200,6 +202,9 @@ messaging:
 - `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
+- `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package including a SAS
+  token. The Function App cannot start without this token. Pulumi populates this
+  value automatically.
 
 Set these values in your deployment environment or in a local `.env` file when
 testing the functions locally.
