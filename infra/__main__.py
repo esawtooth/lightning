@@ -2,6 +2,7 @@ import pulumi
 import os
 import zipfile
 import tempfile
+import atexit
 from pulumi_azure_native import (
     resources,
     servicebus,
@@ -303,9 +304,15 @@ def create_function_package():
     import zipfile
     import tempfile
     import os
-    
-    # Create a temporary ZIP file
-    zip_path = tempfile.mktemp(suffix='.zip')
+    import atexit
+
+    # Create a temporary ZIP file that persists until cleanup
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+
+    # Ensure the temporary file gets removed after deployment
+    atexit.register(lambda: os.path.exists(zip_path) and os.remove(zip_path))
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Walk through the azure-function directory
