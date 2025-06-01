@@ -6,8 +6,46 @@ on:
       - main
 
 jobs:
+  setup-infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+        working-directory: infra
+      - name: Ensure dev stack exists
+        run: pulumi stack select dev --create --non-interactive
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure JWT signing key
+        run: pulumi config set jwtSigningKey "$JWT_SIGNING_KEY" --secret
+        working-directory: infra
+        env:
+          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure OpenAI API key
+        run: pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Deploy baseline stack
+        run: pulumi up --yes
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
   build-images:
     runs-on: ubuntu-latest
+    needs: setup-infrastructure
     steps:
       - uses: actions/checkout@v3
       - name: Set up Docker Buildx
