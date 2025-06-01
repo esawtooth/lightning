@@ -23,6 +23,9 @@ def load_user_auth(monkeypatch, store, token_capture):
                 raise ValueError('no body')
             return json.loads(self._body)
 
+        def get_body(self):
+            return self._body.encode() if isinstance(self._body, str) else self._body
+
     class DummyResponse:
         def __init__(self, body='', status_code=200, mimetype=None):
             self.body = body
@@ -92,12 +95,12 @@ def test_register_success(monkeypatch):
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'alice', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'alice', 'password': 'Password1'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 201
     assert ('alice', 'user') in store
-    assert store[('alice', 'user')]['hash'] != 'pw'
+    assert store[('alice', 'user')]['hash'] != 'Password1'
 
 
 def test_register_duplicate(monkeypatch):
@@ -105,11 +108,11 @@ def test_register_duplicate(monkeypatch):
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashlib.sha256((salt + 'pw').encode()).hexdigest()}}
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashlib.sha256((salt + 'Password1').encode()).hexdigest(), 'status': 'approved'}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'bob', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 409
@@ -120,12 +123,12 @@ def test_login_success(monkeypatch):
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
-    hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
+    hashed = hashlib.sha256((salt + 'Password1').encode()).hexdigest()
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed, 'status': 'approved'}}
     capture = {}
     mod, Request = load_user_auth(monkeypatch, store, capture)
 
-    req = Request(body=json.dumps({'username': 'bob', 'password': 'pw'}))
+    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1'}))
     req.route_params = {'action': 'login'}
     resp = mod.main(req)
     assert resp.status_code == 200
@@ -139,8 +142,8 @@ def test_login_bad_password(monkeypatch):
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = 's'
-    hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
+    hashed = hashlib.sha256((salt + 'Password1').encode()).hexdigest()
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed, 'status': 'approved'}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
@@ -148,4 +151,18 @@ def test_login_bad_password(monkeypatch):
     req.route_params = {'action': 'login'}
     resp = mod.main(req)
     assert resp.status_code == 401
+
+
+def test_register_weak_password(monkeypatch):
+    os.environ['COSMOS_CONNECTION'] = 'c'
+    os.environ['USER_CONTAINER'] = 'users'
+    os.environ['JWT_SIGNING_KEY'] = 'k'
+    store = {}
+    cap = {}
+    mod, Request = load_user_auth(monkeypatch, store, cap)
+
+    req = Request(body=json.dumps({'username': 'weak', 'password': 'short'}))
+    req.route_params = {'action': 'register'}
+    resp = mod.main(req)
+    assert resp.status_code == 400
 
