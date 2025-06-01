@@ -31,6 +31,22 @@ app = FastAPI(title="Lightning Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 templates = Jinja2Templates(directory="templates")
 
+
+@app.middleware("http")
+async def _refresh_cookie(request: Request, call_next):
+    response = await call_next(request)
+    new_token = getattr(request.state, "new_token", None)
+    if new_token:
+        response.set_cookie(
+            key="auth_token",
+            value=new_token,
+            max_age=3600,
+            httponly=True,
+            secure=True,
+            samesite="lax",
+        )
+    return response
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -94,6 +110,26 @@ async def get_current_user(request: Request) -> Optional[str]:
     if token:
         username = verify_token(token)
         if username:
+            # Refresh the token if it expires within 5 minutes
+            try:
+                payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
+                exp_ts = payload.get("exp", 0)
+                if exp_ts - time.time() < 300 and AUTH_API_URL:
+                    try:
+                        resp = requests.post(
+                            f"{AUTH_API_URL}/refresh",
+                            headers={"Authorization": f"Bearer {token}"},
+                            timeout=5,
+                        )
+                        if resp.status_code == 200:
+                            new_token = resp.json().get("token")
+                            if new_token:
+                                request.state.new_token = new_token
+                                token = new_token
+                    except requests.RequestException as e:
+                        logger.error(f"Token refresh failed: {e}")
+            except Exception:
+                pass
             request.session["username"] = username
             return username
     

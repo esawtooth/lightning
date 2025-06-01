@@ -81,6 +81,20 @@ curl -X POST \
 The returned token should be provided in the `Authorization` header when calling
 the other API endpoints.
 
+### POST /api/refresh
+
+Send the current token in the `Authorization` header to obtain a new JWT with a
+fresh expiration time:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <token>" \
+  https://<function-app>.azurewebsites.net/api/refresh
+```
+
+If the token is valid a new token is returned. Invalid or expired tokens result
+in a `401` response.
+
 ## Python library
 
 The `events` package provides a dataclass `Event` that can be used to structure events before they are sent to the API or processed downstream.
