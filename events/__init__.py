@@ -87,21 +87,26 @@ class WorkerTaskEvent(Event):
     """Event describing a task to run against a user's repository."""
 
     commands: List[str] = field(default_factory=list)
+    task: Optional[str] = None
     repo_url: Optional[str] = None
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "WorkerTaskEvent":
         base = Event.from_dict(data)
-        cmds = base.metadata.get("commands")
-        if not cmds:
-            raise ValueError("metadata.commands required")
+        cmds = base.metadata.get("commands") or []
+        task = base.metadata.get("task")
+        if not cmds and not task:
+            raise ValueError("metadata.commands or metadata.task required")
         repo = base.metadata.get("repo_url")
-        return cls(**asdict(base), commands=cmds, repo_url=repo)
+        return cls(**asdict(base), commands=cmds, task=task, repo_url=repo)
 
     def to_dict(self) -> Dict[str, Any]:
         d = super().to_dict()
         meta = dict(d.get("metadata", {}))
-        meta["commands"] = self.commands
+        if self.commands:
+            meta["commands"] = self.commands
+        if self.task is not None:
+            meta["task"] = self.task
         if self.repo_url is not None:
             meta["repo_url"] = self.repo_url
         d["metadata"] = meta
