@@ -6,8 +6,9 @@ import jwt
 import logging
 import requests
 import chainlit as cl
-from fastapi import HTTPException, Request, Depends
+from fastapi import HTTPException, Depends
 from fastapi.responses import RedirectResponse
+from starlette.requests import Request
 from chainlit.server import app as fastapi_app
 from dashboard.app import app as dashboard_app
 
@@ -15,6 +16,7 @@ EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL", "http://localhost:8000")
+NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
 
 
@@ -155,8 +157,24 @@ async def health_check():
 
 
 @fastapi_app.post("/notify")
-async def notify(payload: dict):
+async def notify(request: Request, payload: dict):
     """Forward a message to the current Chainlit session."""
+    # Authorization via session or bearer token
+    auth_header = request.headers.get("Authorization")
+    authorized = False
+    if auth_header:
+        if NOTIFY_TOKEN and auth_header == f"Bearer {NOTIFY_TOKEN}":
+            authorized = True
+        elif auth_header.startswith("Bearer ") and verify_user_token(auth_header.split(" ", 1)[1]):
+            authorized = True
+    else:
+        user = await authenticate_user(request)
+        if user:
+            authorized = True
+
+    if not authorized:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
     user_id = payload.get("user_id")
     message = payload.get("message")
     if not message:
