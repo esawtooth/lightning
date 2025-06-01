@@ -1,4 +1,4 @@
-import sys, os, types, subprocess
+import sys, os, types, subprocess, pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agents import AGENT_REGISTRY
@@ -50,3 +50,26 @@ def test_openai_shell_agent(monkeypatch):
     assert 'hello' in result
     assert captured['model'] == 'model-test'
     assert captured['tools'][0]['function']['name'] == 'bash'
+
+
+def test_openai_shell_missing_api_key(monkeypatch):
+    agent = AGENT_REGISTRY['openai-shell']
+    openai_stub = types.SimpleNamespace(ChatCompletion=types.SimpleNamespace(create=lambda **k: {"choices": []}))
+    monkeypatch.setitem(sys.modules, 'openai', openai_stub)
+    monkeypatch.delenv('OPENAI_API_KEY', raising=False)
+    with pytest.raises(RuntimeError):
+        agent.run('cmd')
+
+
+def test_openai_shell_missing_library(monkeypatch):
+    agent = AGENT_REGISTRY['openai-shell']
+    monkeypatch.setenv('OPENAI_API_KEY', 'sk')
+    import builtins as _builtins
+    orig_import = _builtins.__import__
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == 'openai':
+            raise ModuleNotFoundError
+        return orig_import(name, globals, locals, fromlist, level)
+    monkeypatch.setattr(_builtins, '__import__', fake_import)
+    with pytest.raises(RuntimeError):
+        agent.run('cmd')

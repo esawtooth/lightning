@@ -123,8 +123,17 @@ def test_login_success(monkeypatch):
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
     salt = '$2b$12$abcdefghijklmnopqrstuv'
-    hashed = crypt.crypt('pw', salt)
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
+    hashed = crypt.crypt('Password1', salt)
+    store = {
+        ('bob', 'user'): {
+            'pk': 'bob',
+            'id': 'user',
+            'salt': salt,
+            'hash': hashed,
+            'status': 'approved',
+            'role': 'user',
+        }
+    }
     capture = {}
     mod, Request = load_user_auth(monkeypatch, store, capture)
 

@@ -14,6 +14,9 @@ def load_chainlit_app(monkeypatch, capture):
         handlers['handler'] = func
         return func
 
+    def on_chat_start(func):
+        return func
+
     class Msg:
         def __init__(self, content, author='user'):
             self.content = content
@@ -22,10 +25,20 @@ def load_chainlit_app(monkeypatch, capture):
             capture.setdefault('sent', []).append(self)
 
     cl_mod.on_message = on_message
+    cl_mod.on_chat_start = on_chat_start
     cl_mod.Message = Msg
     def mount(path, app, **kw):
         pass
-    app_obj = types.SimpleNamespace(post=lambda path: (lambda f: f), mount=mount)
+    def middleware(typ):
+        def wrapper(func):
+            return func
+        return wrapper
+    app_obj = types.SimpleNamespace(
+        post=lambda path: (lambda f: f),
+        get=lambda path: (lambda f: f),
+        mount=mount,
+        middleware=middleware,
+    )
     cl_mod.server = types.SimpleNamespace(app=app_obj)
     monkeypatch.setitem(sys.modules, 'chainlit', cl_mod)
     monkeypatch.setitem(sys.modules, 'chainlit.server', types.SimpleNamespace(app=app_obj))
@@ -77,6 +90,13 @@ def load_chainlit_app(monkeypatch, capture):
     monkeypatch.setitem(sys.modules, 'fastapi.templating', templating_mod)
     monkeypatch.setitem(sys.modules, 'fastapi.responses', responses_mod)
     monkeypatch.setitem(sys.modules, 'fastapi.staticfiles', staticfiles_mod)
+    # Stub dashboard module
+    dashboard_mod = types.ModuleType('dashboard')
+    dashboard_app_mod = types.ModuleType('dashboard.app')
+    dashboard_app_mod.app = types.SimpleNamespace()
+    dashboard_mod.app = dashboard_app_mod.app
+    monkeypatch.setitem(sys.modules, 'dashboard', dashboard_mod)
+    monkeypatch.setitem(sys.modules, 'dashboard.app', dashboard_app_mod)
     # Stub pydantic
     pydantic_mod = types.ModuleType('pydantic')
     class BaseModel:
