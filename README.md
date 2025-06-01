@@ -1,4 +1,4 @@
-# lightening
+# lightning
 
 Event based AI
 
