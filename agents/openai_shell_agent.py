@@ -2,6 +2,7 @@ from typing import List, Union
 import os
 import subprocess
 import json
+import sys
 
 from . import Agent, register
 
@@ -52,7 +53,7 @@ class OpenAIShellAgent(Agent):
             )
             tool_calls = response["choices"][0]["message"].get("tool_calls")
             if tool_calls:
-                args_json = tool_calls[0]["function"].get("arguments", "{}");
+                args_json = tool_calls[0]["function"].get("arguments", "{}")
                 try:
                     args = json.loads(args_json)
                     cmd = args.get("command", "")
@@ -61,6 +62,11 @@ class OpenAIShellAgent(Agent):
             else:
                 cmd = response["choices"][0]["message"].get("content", "")
 
+            print(f"$ {cmd}", flush=True)
             proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if proc.stdout:
+                print(proc.stdout, flush=True)
+            if proc.stderr:
+                print(proc.stderr, file=sys.stderr, flush=True)
             outputs.append(proc.stdout)
         return "".join(outputs)
