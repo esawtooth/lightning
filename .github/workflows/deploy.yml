@@ -16,16 +16,16 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
         working-directory: infra
+      - name: Ensure dev stack exists
+        run: pulumi stack select dev --create --non-interactive
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure OpenAI key
         run: pulumi config set openaiApiKey "$OPENAI_API_KEY" --secret
         working-directory: infra
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Ensure dev stack exists
-        run: pulumi stack select dev --create --non-interactive
-        working-directory: infra
-        env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - uses: pulumi/actions@v3
         with:
