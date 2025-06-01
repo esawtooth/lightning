@@ -2,6 +2,7 @@ import pulumi
 import os
 import zipfile
 import tempfile
+import datetime
 import atexit
 from pulumi_azure_native import (
     resources,
@@ -349,13 +350,34 @@ function_blob = storage.Blob(
     source=pulumi.FileAsset(function_zip_path),
 )
 
-# Get the blob URL for the function package with SAS token
+# Generate a SAS token for the ZIP blob so the Function App can access it
+sas_start = datetime.datetime.utcnow().isoformat() + "Z"
+sas_expiry = (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat() + "Z"
+
+package_sas = storage.list_storage_account_service_sas_output(
+    account_name=storage_account.name,
+    resource_group_name=resource_group.name,
+    protocols="https",
+    shared_access_start_time=sas_start,
+    shared_access_expiry_time=sas_expiry,
+    permissions="r",
+    canonicalized_resource=pulumi.Output.concat(
+        "/blob/",
+        storage_account.name,
+        "/",
+        deployment_container.name,
+        "/function-package.zip",
+    ),
+    resource="b",
+)
+
 function_package_url = pulumi.Output.concat(
     "https://",
     storage_account.name,
     ".blob.core.windows.net/",
     deployment_container.name,
-    "/function-package.zip"
+    "/function-package.zip?",
+    package_sas.service_sas_token,
 )
 
 # Deploy the function package using WebAppApplicationSettings
