@@ -3,7 +3,7 @@ import sys
 import json
 import types
 import importlib.util
-import hashlib
+import crypt
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -22,6 +22,9 @@ def load_user_auth(monkeypatch, store, token_capture):
             if self._body is None:
                 raise ValueError('no body')
             return json.loads(self._body)
+
+        def get_body(self):
+            return self._body or b''
 
     class DummyResponse:
         def __init__(self, body='', status_code=200, mimetype=None):
@@ -104,8 +107,8 @@ def test_register_duplicate(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = 's'
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashlib.sha256((salt + 'pw').encode()).hexdigest()}}
+    salt = '$2b$12$abcdefghijklmnopqrstuv'
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': crypt.crypt('pw', salt)}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
@@ -119,8 +122,8 @@ def test_login_success(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = 's'
-    hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
+    salt = '$2b$12$abcdefghijklmnopqrstuv'
+    hashed = crypt.crypt('pw', salt)
     store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     capture = {}
     mod, Request = load_user_auth(monkeypatch, store, capture)
@@ -138,8 +141,8 @@ def test_login_bad_password(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = 's'
-    hashed = hashlib.sha256((salt + 'pw').encode()).hexdigest()
+    salt = '$2b$12$abcdefghijklmnopqrstuv'
+    hashed = crypt.crypt('pw', salt)
     store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)

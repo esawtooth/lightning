@@ -1,7 +1,6 @@
 import json
 import os
-import hashlib
-import secrets
+import crypt
 from datetime import datetime, timedelta
 
 import azure.functions as func
@@ -21,7 +20,8 @@ _container = _db.create_container_if_not_exists(
 
 
 def _hash_password(password: str, salt: str) -> str:
-    return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    """Hash the password using bcrypt via the `crypt` module."""
+    return crypt.crypt(password, salt)
 
 
 def _register(data: dict) -> func.HttpResponse:
@@ -36,7 +36,7 @@ def _register(data: dict) -> func.HttpResponse:
     except Exception:
         pass
     
-    salt = secrets.token_hex(16)
+    salt = crypt.mksalt(crypt.METHOD_BLOWFISH)
     hashed = _hash_password(password, salt)
     
     # New users are placed on waitlist by default

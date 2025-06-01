@@ -6,8 +6,7 @@ This script manually promotes a user to admin status in the database.
 
 import os
 import json
-import hashlib
-import secrets
+import crypt
 from datetime import datetime
 from azure.cosmos import CosmosClient, PartitionKey
 
@@ -38,8 +37,8 @@ def log_warning(message):
     log(f"⚠️  {message}", Colors.YELLOW)
 
 def _hash_password(password: str, salt: str) -> str:
-    """Hash password with salt using SHA-256."""
-    return hashlib.sha256((password + salt).encode()).hexdigest()
+    """Hash password using bcrypt via the `crypt` module."""
+    return crypt.crypt(password, salt)
 
 def create_admin_user():
     """Create or promote a user to admin status."""
@@ -101,7 +100,7 @@ def create_admin_user():
             log(f"Creating new admin user '{username}'...")
             
             # Generate salt and hash password
-            salt = secrets.token_hex(16)
+            salt = crypt.mksalt(crypt.METHOD_BLOWFISH)
             password_hash = _hash_password(password, salt)
             
             # Create user entity
