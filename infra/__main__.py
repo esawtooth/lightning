@@ -27,8 +27,8 @@ worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task
 
 # Resource group
 resource_group = resources.ResourceGroup(
-    "lightning",
-    resource_group_name="lightning",
+    "lightning_dev",
+    resource_group_name="lightning_dev",
     location=location,
 )
 
