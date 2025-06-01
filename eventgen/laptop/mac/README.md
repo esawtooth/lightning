@@ -1,9 +1,19 @@
 # macOS
 
-Placeholders for utilities that collect system information on macOS machines. Example ideas:
+This folder contains utilities that emit laptop status information as `Event` objects.
 
-- Battery percentage via `pmset`.
-- Current Wi‑Fi network.
-- Disk usage and uptime.
+`tracker.py` gathers several metrics using built-in macOS tools and outputs each
+measurement as a JSON encoded event. It currently collects:
 
-The scripts should package these metrics into `Event` objects for the platform.
+- **laptop.in_use** – idle time in seconds and whether the machine is considered
+  active (idle less than five minutes).
+- **laptop.battery** – battery percentage and charging status from `pmset`.
+- **laptop.location** – latitude and longitude via `CoreLocationCLI` when
+  available.
+- **laptop.program** – name of the frontmost application using AppleScript.
+
+Run the script directly to print the events:
+
+```bash
+python tracker.py
+```
