@@ -4,14 +4,29 @@ WORKDIR /app
 
 # Copy the chat client code and dependencies
 COPY chat_client/chainlit_app.py ./chainlit_app.py
+COPY chat_client/auth_app.py ./auth_app.py
+COPY chat_client/templates/ ./templates/
+COPY chat_client/start.sh ./start.sh
 COPY events/ ./events/
 COPY dashboard/ ./dashboard/
 
 # Install Python dependencies
-RUN pip install --no-cache-dir chainlit fastapi uvicorn requests jinja2
+RUN pip install --no-cache-dir \
+    chainlit \
+    fastapi \
+    uvicorn \
+    requests \
+    jinja2 \
+    python-multipart \
+    python-jose[cryptography] \
+    PyJWT \
+    itsdangerous
 
-# Expose the port
-EXPOSE 8000
+# Make startup script executable
+RUN chmod +x ./start.sh
 
-# Run the Chainlit app
-CMD ["bash", "-c", "chainlit run chainlit_app.py --host 0.0.0.0 --port 8000"]
+# Expose ports for both services
+EXPOSE 8000 8001
+
+# Run the multi-service startup script
+CMD ["./start.sh"]
