@@ -254,8 +254,18 @@ ui_container = containerinstance.ContainerGroup(
                     ),
                 ),
                 containerinstance.EnvironmentVariableArgs(
-                    name="AUTH_TOKEN",
-                    value=jwt_signing_key,  # Use the JWT signing key as the auth token
+                    name="AUTH_API_URL",
+                    value=pulumi.Output.concat(
+                        "https://", func_app.default_host_name, "/api/auth"
+                    ),
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="JWT_SIGNING_KEY",
+                    value=jwt_signing_key,
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="SESSION_SECRET",
+                    value=jwt_signing_key,  # Use same key for session encryption
                 ),
             ],
             resources=containerinstance.ResourceRequirementsArgs(
