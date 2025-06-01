@@ -32,16 +32,7 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Deploy baseline stack
-        run: pulumi up --yes
-        working-directory: infra
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-          ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
-          ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      # Removed the duplicate pulumi up - only deploy in the final job
 
   build-images:
     runs-on: ubuntu-latest
@@ -99,6 +90,11 @@ jobs:
         env:
           JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure OpenAI API key
+        run: pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
         run: pulumi config set workerImage "lightningacr.azurecr.io/worker-task:${{ github.sha }}"
         working-directory: infra
@@ -106,11 +102,6 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
         run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:${{ github.sha }}"
-        working-directory: infra
-        env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Configure OpenAI API key
-        run: pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
