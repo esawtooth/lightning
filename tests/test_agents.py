@@ -1,4 +1,4 @@
-import sys, os, types
+import sys, os, types, subprocess
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agents import AGENT_REGISTRY
@@ -19,16 +19,34 @@ def test_openai_shell_agent(monkeypatch):
 
     class ChatStub:
         @staticmethod
-        def create(messages=None, model=None):
+        def create(messages=None, model=None, tools=None, tool_choice=None):
             captured['messages'] = messages
             captured['model'] = model
-            return {"choices": [{"message": {"content": "echo hello"}}]}
+            captured['tools'] = tools
+            captured['tool_choice'] = tool_choice
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "arguments": '{"command": "echo hello"}'
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
 
     openai_stub = types.SimpleNamespace(ChatCompletion=ChatStub)
     monkeypatch.setitem(sys.modules, 'openai', openai_stub)
+    monkeypatch.setattr(subprocess, 'run', lambda cmd, shell=False, capture_output=False, text=False: types.SimpleNamespace(stdout='hello\n'))
     monkeypatch.setenv('OPENAI_API_KEY', 'sk')
     monkeypatch.setenv('OPENAI_MODEL', 'model-test')
 
     result = agent.run(['say hello'])
     assert 'hello' in result
     assert captured['model'] == 'model-test'
+    assert captured['tools'][0]['function']['name'] == 'bash'
