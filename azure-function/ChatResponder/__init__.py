@@ -54,6 +54,7 @@ def main(msg: func.ServiceBusMessage) -> None:
         type="llm.chat.response",
         user_id=event.user_id,
         metadata={"reply": reply},
+        history=event.history + [event.to_dict()],
     )
 
     message = ServiceBusMessage(json.dumps(out_event.to_dict()))

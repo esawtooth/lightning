@@ -31,10 +31,11 @@ def test_worker_task_round_trip():
     event = WorkerTaskEvent.from_dict(data)
     assert event.commands == cmds
     assert event.repo_url == "https://example.com/repo.git"
+    assert event.history == []
     out = event.to_dict()
     assert out["metadata"]["commands"] == cmds
     assert out["metadata"]["repo_url"] == "https://example.com/repo.git"
-
+    assert out["history"] == []
 
 def test_worker_task_with_task():
     now = datetime.now()

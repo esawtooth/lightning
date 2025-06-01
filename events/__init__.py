@@ -12,6 +12,7 @@ class Event:
     user_id: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     id: Optional[str] = None
+    history: List[Dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Event":
@@ -35,6 +36,10 @@ class Event:
             timestamp = datetime.fromtimestamp(ts)
         else:
             raise ValueError("invalid timestamp")
+        history = data.get("history", [])
+        if not isinstance(history, list):
+            raise ValueError("history must be a list")
+
         return cls(
             timestamp=timestamp,
             source=data["source"],
@@ -42,6 +47,7 @@ class Event:
             user_id=data["userID"],
             metadata=data.get("metadata", {}),
             id=data.get("id") or uuid.uuid4().hex,
+            history=history,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -52,6 +58,7 @@ class Event:
             "userID": self.user_id,
             "metadata": self.metadata,
             "id": self.id,
+            "history": self.history,
         }
 
 
