@@ -156,11 +156,15 @@ assistant reply:
 
 ### Deployment
 
-1. Deploy the infrastructure with Pulumi:
+1. Deploy the infrastructure with Pulumi. Set the required configuration
+   values for the OpenAI key and JWT signing key. The NOTIFY_URL used by the
+   functions is derived automatically from the Chainlit container's address:
 
    ```bash
    cd infra
    pip install -r requirements.txt
+   pulumi config set openaiApiKey <key> --secret
+   pulumi config set jwtSigningKey <secret> --secret
    pulumi up
    ```
 
@@ -193,7 +197,8 @@ messaging:
   namespace.
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
 - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
-  to the chat client.
+  to the chat client. Pulumi sets this automatically based on the Chainlit
+  container address.
 - `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
 - `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
 - `COSMOS_DATABASE` &mdash; database name (defaults to `lightning`).

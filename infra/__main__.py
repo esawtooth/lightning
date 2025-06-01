@@ -13,6 +13,7 @@ from pulumi_azure_native.authorization import get_client_config, RoleAssignment
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
+jwt_signing_key = config.require_secret("jwtSigningKey")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -175,7 +176,8 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
             web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
             web.NameValuePairArgs(name="ACI_REGION", value=location),
-            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key)
+            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
+            web.NameValuePairArgs(name="JWT_SIGNING_KEY", value=jwt_signing_key)
         ]
     ),
 )
@@ -236,3 +238,12 @@ ui_container = containerinstance.ContainerGroup(
 )
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+
+# Wire the functions back to the Chainlit UI once the container address is known
+notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
+web.WebAppApplicationSettings(
+    "function-settings",
+    name=func_app.name,
+    resource_group_name=resource_group.name,
+    properties={"NOTIFY_URL": notify_url},
+)
