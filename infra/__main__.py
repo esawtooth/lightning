@@ -253,6 +253,10 @@ ui_container = containerinstance.ContainerGroup(
                         "https://", func_app.default_host_name, "/api"
                     ),
                 ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="AUTH_TOKEN",
+                    value=jwt_signing_key,  # Use the JWT signing key as the auth token
+                ),
             ],
             resources=containerinstance.ResourceRequirementsArgs(
                 requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
