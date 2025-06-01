@@ -1,4 +1,4 @@
-import sys, os, types, subprocess, pytest
+import sys, os, types, subprocess, pytest, json
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agents import AGENT_REGISTRY
@@ -79,3 +79,38 @@ def test_openai_shell_missing_library(monkeypatch):
     monkeypatch.setattr(_builtins, '__import__', fake_import)
     with pytest.raises(RuntimeError):
         agent.run('cmd')
+
+
+def test_openai_shell_policy_violation(monkeypatch, tmp_path):
+    agent = AGENT_REGISTRY['openai-shell']
+
+    class ChatStub:
+        @staticmethod
+        def create(messages=None, model=None, tools=None, tool_choice=None):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "tool_calls": [
+                                {
+                                    "function": {
+                                        "arguments": '{"command": "curl http://x"}'
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+
+    openai_stub = types.SimpleNamespace(ChatCompletion=ChatStub)
+    monkeypatch.setitem(sys.modules, 'openai', openai_stub)
+    monkeypatch.setenv('OPENAI_API_KEY', 'sk')
+    policy = {"blocked_patterns": ["curl"]}
+    policy_file = tmp_path / "pol.json"
+    policy_file.write_text(json.dumps(policy))
+    monkeypatch.setenv('SAFETY_POLICY_FILE', str(policy_file))
+
+    with pytest.raises(RuntimeError):
+        agent.run('fetch')
+

@@ -4,6 +4,8 @@ import subprocess
 import json
 import sys
 
+from policy import PolicyViolationError, get_policy_prompt, validate_command
+
 from . import Agent, register
 
 
@@ -43,10 +45,16 @@ class OpenAIShellAgent(Agent):
         else:
             instructions = commands
 
+        system_prompt = get_policy_prompt()
+
         outputs = []
         for instruction in instructions:
+            messages = []
+            if system_prompt:
+                messages.append({"role": "system", "content": system_prompt})
+            messages.append({"role": "user", "content": instruction})
             response = openai.ChatCompletion.create(
-                messages=[{"role": "user", "content": instruction}],
+                messages=messages,
                 model=model,
                 tools=[bash_tool],
                 tool_choice={"type": "function", "function": {"name": "bash"}},
@@ -61,6 +69,11 @@ class OpenAIShellAgent(Agent):
                     cmd = ""
             else:
                 cmd = response["choices"][0]["message"].get("content", "")
+
+            try:
+                validate_command(cmd)
+            except PolicyViolationError as e:
+                raise RuntimeError(f"Policy violation: {e}") from e
 
             print(f"$ {cmd}", flush=True)
             proc = subprocess.run(cmd, shell=True, capture_output=True, text=True)
