@@ -71,5 +71,7 @@ def test_llmchat_round_trip():
     }
     event = LLMChatEvent.from_dict(data)
     assert event.messages == msgs
+    assert event.history == []
     out = event.to_dict()
     assert out["metadata"]["messages"] == msgs
+    assert out["history"] == []

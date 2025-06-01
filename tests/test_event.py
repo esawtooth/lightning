@@ -28,8 +28,10 @@ def test_event_round_trip():
     }
     event = Event.from_dict(data)
     assert event.user_id == "u1"
+    assert event.history == []
     out = event.to_dict()
     assert out["userID"] == "u1"
+    assert out["history"] == []
 
 
 def test_event_auto_generates_id():
@@ -41,10 +43,12 @@ def test_event_auto_generates_id():
     }
     event = Event.from_dict(data)
     assert event.id is not None
+    assert event.history == []
     # id should be a 32 character hex string
     assert isinstance(event.id, str) and len(event.id) == 32
     out = event.to_dict()
     assert out["id"] == event.id
+    assert out["history"] == []
 
 
 def test_event_parses_z_timezone():
@@ -56,3 +60,4 @@ def test_event_parses_z_timezone():
     }
     event = Event.from_dict(data)
     assert event.timestamp.isoformat() == "2023-01-01T00:00:00+00:00"
+    assert event.history == []

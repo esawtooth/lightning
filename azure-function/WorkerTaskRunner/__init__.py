@@ -100,6 +100,7 @@ def main(msg: func.ServiceBusMessage) -> None:
         type="worker.task.result",
         user_id=event.user_id,
         metadata={"result": result},
+        history=event.history + [event.to_dict()],
     )
 
     message = ServiceBusMessage(json.dumps(out_event.to_dict()))
