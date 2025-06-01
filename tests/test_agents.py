@@ -46,7 +46,7 @@ def test_openai_shell_agent(monkeypatch):
     monkeypatch.setenv('OPENAI_API_KEY', 'sk')
     monkeypatch.setenv('OPENAI_MODEL', 'model-test')
 
-    result = agent.run(['say hello'])
+    result = agent.run('say hello')
     assert 'hello' in result
     assert captured['model'] == 'model-test'
     assert captured['tools'][0]['function']['name'] == 'bash'

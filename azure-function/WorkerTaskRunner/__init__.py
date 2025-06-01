@@ -75,6 +75,7 @@ def main(msg: func.ServiceBusMessage) -> None:
             EnvironmentVariable(name="SERVICEBUS_CONNECTION", value=SERVICEBUS_CONN or ""),
             EnvironmentVariable(name="SERVICEBUS_QUEUE", value=SERVICEBUS_QUEUE or ""),
             EnvironmentVariable(name="WORKER_EVENT", value=json.dumps(event.to_dict())),
+            EnvironmentVariable(name="OPENAI_API_KEY", value=os.environ.get("OPENAI_API_KEY", "")),
         ]
         container = Container(
             name="worker",

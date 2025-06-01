@@ -1,0 +1,17 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy the agents folder and events module
+COPY agents/ ./agents/
+COPY events/ ./events/
+COPY worker.py ./
+
+# Create a requirements.txt for the worker container
+COPY requirements-worker.txt ./requirements.txt
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set the default command to run the worker
+CMD ["python", "worker.py"]

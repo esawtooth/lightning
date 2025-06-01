@@ -36,3 +36,17 @@ def test_worker_task_round_trip():
     assert out["metadata"]["commands"] == cmds
     assert out["metadata"]["repo_url"] == "https://example.com/repo.git"
     assert out["history"] == []
+
+def test_worker_task_with_task():
+    now = datetime.now()
+    data = {
+        "timestamp": now.isoformat(),
+        "source": "s",
+        "type": "worker.task",
+        "userID": "u1",
+        "metadata": {"task": "run tests"},
+    }
+    event = WorkerTaskEvent.from_dict(data)
+    assert event.task == "run tests"
+    out = event.to_dict()
+    assert out["metadata"]["task"] == "run tests"
