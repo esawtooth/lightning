@@ -3,6 +3,7 @@ import os
 import zipfile
 import tempfile
 import datetime
+import atexit
 from pulumi_azure_native import (
     resources,
     servicebus,
@@ -22,7 +23,7 @@ location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
 # Worker image will be configured by GitHub Actions or default to ACR image
-worker_image = config.get("workerImage") or pulumi.Output.concat("lightningacr.azurecr.io/worker-task:latest")
+worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -198,7 +199,6 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
             web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
             web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
-            web.NameValuePairArgs(name="WEBSITE_RUN_FROM_PACKAGE", value="1"),  # Enable ZIP deployment
             web.NameValuePairArgs(name="COSMOS_CONNECTION", value=cosmos_connection_string),
             web.NameValuePairArgs(name="COSMOS_DATABASE", value="lightning"),
             web.NameValuePairArgs(name="SCHEDULE_CONTAINER", value="schedules"),
@@ -304,9 +304,15 @@ def create_function_package():
     import zipfile
     import tempfile
     import os
-    
-    # Create a temporary ZIP file
-    zip_path = tempfile.mktemp(suffix='.zip')
+    import atexit
+
+    # Create a temporary ZIP file that persists until cleanup
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    zip_path = tmp.name
+    tmp.close()
+
+    # Ensure the temporary file gets removed after deployment
+    atexit.register(lambda: os.path.exists(zip_path) and os.remove(zip_path))
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
         # Walk through the azure-function directory

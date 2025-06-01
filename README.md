@@ -5,6 +5,7 @@ Event based AI
 ## Event API
 
 Deploying the infrastructure will create an Azure Function that exposes an HTTP endpoint for queuing events.
+The HTTP triggers use anonymous authorization so no Function key is required. Authenticate only with a bearer token.
 
 ### POST /api/events
 

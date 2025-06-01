@@ -1,7 +1,6 @@
 import json
 import os
-import hashlib
-import secrets
+import crypt
 from datetime import datetime, timedelta
 
 import azure.functions as func
@@ -21,7 +20,16 @@ _container = _db.create_container_if_not_exists(
 
 
 def _hash_password(password: str, salt: str) -> str:
-    return hashlib.sha256((salt + password).encode("utf-8")).hexdigest()
+    """Hash the password using bcrypt via the `crypt` module."""
+    return crypt.crypt(password, salt)
+
+
+def _is_strong_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    return has_letter and has_digit
 
 
 def _register(data: dict) -> func.HttpResponse:
@@ -30,13 +38,19 @@ def _register(data: dict) -> func.HttpResponse:
     email = data.get("email", "")
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
+
+    if not _is_strong_password(password):
+        return func.HttpResponse(
+            "Password must be at least 8 characters and include letters and numbers",
+            status_code=400,
+        )
     try:
         existing_user = _container.read_item("user", partition_key=username)
         return func.HttpResponse("Username exists", status_code=409)
     except Exception:
         pass
     
-    salt = secrets.token_hex(16)
+    salt = crypt.mksalt(crypt.METHOD_BLOWFISH)
     hashed = _hash_password(password, salt)
     
     # New users are placed on waitlist by default
