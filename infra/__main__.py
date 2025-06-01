@@ -16,6 +16,7 @@ config = pulumi.Config()
 location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
+worker_image = config.get("workerImage") or "worker-task"
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -179,6 +180,7 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
             web.NameValuePairArgs(name="ACI_REGION", value=location),
             web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
+            web.NameValuePairArgs(name="WORKER_IMAGE", value=worker_image),
             web.NameValuePairArgs(name="JWT_SIGNING_KEY", value=jwt_signing_key)
         ]
     ),
