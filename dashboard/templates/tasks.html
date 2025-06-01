@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tasks</title>
+    <script>
+        async function loadTasks() {
+            const resp = await fetch('/tasks.json');
+            if (resp.status !== 200) {
+                document.getElementById('error').textContent = 'Failed to load tasks';
+                return;
+            }
+            const tasks = await resp.json();
+            const tbody = document.getElementById('tasks-body');
+            tbody.innerHTML = '';
+            tasks.forEach(t => {
+                const row = document.createElement('tr');
+                row.innerHTML = `<td>${t.id}</td><td>${t.status}</td><td><button onclick="showLogs('${t.id}')">view</button></td>`;
+                tbody.appendChild(row);
+            });
+        }
+        let logInterval;
+        async function showLogs(id) {
+            if (logInterval) {
+                clearInterval(logInterval);
+            }
+            async function fetchLogs() {
+                const resp = await fetch('/tasks/' + id + '.json');
+                if (resp.status === 200) {
+                    const data = await resp.json();
+                    document.getElementById('logs').textContent = data.logs || 'No logs';
+                }
+            }
+            await fetchLogs();
+            logInterval = setInterval(fetchLogs, 3000);
+        }
+        window.onload = loadTasks;
+    </script>
+</head>
+<body>
+    <h1>Task Monitor</h1>
+    <p id="error" style="color:red"></p>
+    <table border="1">
+        <thead><tr><th>ID</th><th>Status</th><th>Logs</th></tr></thead>
+        <tbody id="tasks-body"></tbody>
+    </table>
+    <pre id="logs" style="background:#f0f0f0;padding:1em;"></pre>
+</body>
+</html>

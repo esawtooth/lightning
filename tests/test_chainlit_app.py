@@ -14,6 +14,10 @@ def load_chainlit_app(monkeypatch, capture):
         handlers['handler'] = func
         return func
 
+    def on_chat_start(func):
+        handlers['start'] = func
+        return func
+
     class Msg:
         def __init__(self, content, author='user'):
             self.content = content
@@ -22,10 +26,11 @@ def load_chainlit_app(monkeypatch, capture):
             capture.setdefault('sent', []).append(self)
 
     cl_mod.on_message = on_message
+    cl_mod.on_chat_start = on_chat_start
     cl_mod.Message = Msg
     def mount(path, app, **kw):
         pass
-    app_obj = types.SimpleNamespace(post=lambda path: (lambda f: f), mount=mount)
+    app_obj = types.SimpleNamespace(post=lambda path: (lambda f: f), get=lambda path:(lambda f: f), mount=mount)
     cl_mod.server = types.SimpleNamespace(app=app_obj)
     monkeypatch.setitem(sys.modules, 'chainlit', cl_mod)
     monkeypatch.setitem(sys.modules, 'chainlit.server', types.SimpleNamespace(app=app_obj))
@@ -100,6 +105,10 @@ def load_chainlit_app(monkeypatch, capture):
         return types.SimpleNamespace(status_code=200, text='')
     req_mod.post = post
     monkeypatch.setitem(sys.modules, 'requests', req_mod)
+
+    dash_mod = types.ModuleType('dashboard.app')
+    dash_mod.app = object()
+    monkeypatch.setitem(sys.modules, 'dashboard.app', dash_mod)
 
     # Load module
     spec = importlib.util.spec_from_file_location(

@@ -42,6 +42,7 @@ Lightning OS comprises the following integrated subsystems:
 
 * Central hub for task monitoring, workflow status, notifications, and analytics.
 * Displays real-time updates, historical activities, and user interaction logs.
+* Monitors worker tasks including container command history and captured output.
 
 ### Activity Feed
 
