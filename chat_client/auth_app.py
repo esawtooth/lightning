@@ -6,6 +6,9 @@ Users must authenticate before accessing the Chainlit chat interface.
 
 import os
 import logging
+import secrets
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -30,6 +33,44 @@ templates = Jinja2Templates(directory="templates")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Simple in-memory rate limiting
+RATE_LIMIT_WINDOW = 60  # seconds
+RATE_LIMIT_MAX = 10
+_rate_limit: dict[str, deque] = defaultdict(deque)
+
+CSRF_SESSION_KEY = "csrf_token"
+
+
+def _is_rate_limited(ip: str) -> bool:
+    now = time.time()
+    window = _rate_limit[ip]
+    while window and window[0] < now - RATE_LIMIT_WINDOW:
+        window.popleft()
+    if len(window) >= RATE_LIMIT_MAX:
+        return True
+    window.append(now)
+    return False
+
+
+def _generate_csrf_token(request: Request) -> str:
+    token = secrets.token_hex(16)
+    request.session[CSRF_SESSION_KEY] = token
+    return token
+
+
+def _verify_csrf(request: Request, token: str) -> None:
+    expected = request.session.get(CSRF_SESSION_KEY)
+    if not expected or expected != token:
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
+
+
+def _is_strong_password(password: str) -> bool:
+    if len(password) < 8:
+        return False
+    has_letter = any(c.isalpha() for c in password)
+    has_digit = any(c.isdigit() for c in password)
+    return has_letter and has_digit
 
 
 def verify_token(token: str) -> Optional[str]:
@@ -64,10 +105,13 @@ async def login_page(request: Request, username: Optional[str] = Depends(get_cur
     """Display login page or redirect to chat if already authenticated."""
     if username:
         return RedirectResponse(url="/chat", status_code=302)
-    
+
+    csrf_token = _generate_csrf_token(request)
+
     return templates.TemplateResponse("login.html", {
         "request": request,
-        "error": request.query_params.get("error")
+        "error": request.query_params.get("error"),
+        "csrf_token": csrf_token,
     })
 
 
@@ -75,11 +119,18 @@ async def login_page(request: Request, username: Optional[str] = Depends(get_cur
 async def login(
     request: Request,
     username: str = Form(...),
-    password: str = Form(...)
+    password: str = Form(...),
+    csrf_token: str = Form(default="")
 ):
     """Handle user login."""
     if not AUTH_API_URL:
         raise HTTPException(status_code=500, detail="Authentication service not configured")
+
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    _verify_csrf(request, csrf_token)
     
     try:
         # Call Azure Function auth endpoint
@@ -137,9 +188,11 @@ async def login(
 @app.get("/register", response_class=HTMLResponse)
 async def register_page(request: Request):
     """Display registration page."""
+    csrf_token = _generate_csrf_token(request)
     return templates.TemplateResponse("register.html", {
         "request": request,
-        "error": request.query_params.get("error")
+        "error": request.query_params.get("error"),
+        "csrf_token": csrf_token,
     })
 
 
@@ -149,16 +202,23 @@ async def register(
     username: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
-    email: str = Form(default="")
+    email: str = Form(default=""),
+    csrf_token: str = Form(default="")
 ):
     """Handle user registration."""
     if not AUTH_API_URL:
         raise HTTPException(status_code=500, detail="Authentication service not configured")
+
+    client_ip = request.client.host if request.client else "unknown"
+    if _is_rate_limited(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    _verify_csrf(request, csrf_token)
     
     if password != confirm_password:
         return RedirectResponse(url="/register?error=password_mismatch", status_code=302)
     
-    if len(password) < 6:
+    if not _is_strong_password(password):
         return RedirectResponse(url="/register?error=password_too_short", status_code=302)
     
     try:

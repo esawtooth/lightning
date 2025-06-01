@@ -170,9 +170,10 @@ python test_auth_flow.py
 - **Admin Verification**: Token-based admin endpoint protection
 
 ### Input Validation
-- **Password Requirements**: Minimum 6 characters
+- **Password Requirements**: Minimum 8 characters with letters and numbers
 - **Email Validation**: Optional but validated if provided
 - **CSRF Protection**: Session-based request validation
+- **Rate Limiting**: Basic per-IP throttling
 
 ## Monitoring & Logging
 
