@@ -115,6 +115,15 @@ jobs:
           ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      - name: Install Azure CLI
+        run: |
+          curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+      - name: Login to Azure
+        run: |
+          echo "🔐 Logging into Azure CLI..."
+          az login --service-principal -u ${{ secrets.ARM_CLIENT_ID }} -p ${{ secrets.ARM_CLIENT_SECRET }} --tenant ${{ secrets.ARM_TENANT_ID }}
+          az account set --subscription ${{ secrets.ARM_SUBSCRIPTION_ID }}
+          echo "✅ Azure CLI authentication successful"
       - name: Deploy Azure Functions
         run: |
           echo "📦 Installing Azure Functions Core Tools..."
@@ -124,10 +133,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install azure-functions-core-tools-4
           
-          echo "🚀 Deploying Azure Functions..."
+          echo "🔍 Finding Function App name..."
+          FUNCTION_APP_NAME=$(az functionapp list --resource-group lightning --query '[0].name' --output tsv)
+          echo "📋 Function App name: $FUNCTION_APP_NAME"
+          
+          if [ -z "$FUNCTION_APP_NAME" ]; then
+            echo "❌ No Function App found in resource group 'lightning'"
+            exit 1
+          fi
+          
+          echo "🚀 Deploying Azure Functions to $FUNCTION_APP_NAME..."
           cd azure-function
-          func azure functionapp publish event-functioncbc23983 --python
-        env:
-          AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
-          AZURE_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
-          AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+          func azure functionapp publish "$FUNCTION_APP_NAME" --python
