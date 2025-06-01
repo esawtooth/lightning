@@ -209,13 +209,14 @@ func_app = web.WebApp(
     ),
 )
 
-aci_role = RoleAssignment(
-    "aci-contributor",
-    principal_id=func_app.identity.principal_id,
-    principal_type="ServicePrincipal",
-    role_definition_id=f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
-    scope=resource_group.id,
-)
+# TODO: Role assignment requires higher privileges - commenting out for now
+# aci_role = RoleAssignment(
+#     "aci-contributor",
+#     principal_id=func_app.identity.principal_id,
+#     principal_type="ServicePrincipal",
+#     role_definition_id=f"/subscriptions/{subscription_id}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c",
+#     scope=resource_group.id,
+# )
 
 pulumi.export(
     "functionEndpoint",
@@ -256,6 +257,13 @@ ui_container = containerinstance.ContainerGroup(
             resources=containerinstance.ResourceRequirementsArgs(
                 requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
             ),
+        )
+    ],
+    image_registry_credentials=[
+        containerinstance.ImageRegistryCredentialArgs(
+            server=acr.login_server,
+            username=acr_credentials.username,
+            password=acr_credentials.passwords[0].value,
         )
     ],
     ip_address=containerinstance.IpAddressArgs(
