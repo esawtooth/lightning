@@ -156,31 +156,26 @@ assistant reply:
 
 ### Deployment
 
-1. Deploy the infrastructure with Pulumi. Set the required configuration
-   values for the OpenAI key and JWT signing key. The NOTIFY_URL used by the
-   functions is derived automatically from the Chainlit container's address:
+Deploy the entire infrastructure and application code with Pulumi. Set the required configuration
+values for the OpenAI key and JWT signing key:
 
-   ```bash
-   cd infra
-   pip install -r requirements.txt
-   pulumi config set openaiApiKey <key> --secret
-   pulumi config set jwtSigningKey <secret> --secret
-   pulumi up
-   ```
+```bash
+cd infra
+pip install -r requirements.txt
+pulumi config set openaiApiKey <key> --secret
+pulumi config set jwtSigningKey <secret> --secret
+pulumi up
+```
 
-2. Publish the functions to Azure:
-
-   ```bash
- cd ../azure-function
-  func azure functionapp publish event-function
-  ```
+Pulumi automatically:
+- Creates all Azure resources (Function App, Cosmos DB, Service Bus, etc.)
+- Packages the Azure Functions code
+- Deploys the function code to the Function App
+- Builds and deploys the UI containers
+- Configures all environment variables and connections
 
 The stack also provisions a container instance running the Chainlit UI and
 dashboard. Pulumi exports the container's public URL as `uiUrl`.
-
-If deploying manually, ensure `OPENAI_API_KEY` is configured on the Function App
-before publishing. The GitHub Actions workflow reads the `OPENAI_API_KEY` secret
-and sets this application setting automatically when running Pulumi.
 
 ## Function Configuration
 

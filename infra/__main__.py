@@ -1,4 +1,7 @@
 import pulumi
+import os
+import zipfile
+import tempfile
 from pulumi_azure_native import (
     resources,
     servicebus,
@@ -194,6 +197,7 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
             web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
             web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
+            web.NameValuePairArgs(name="WEBSITE_RUN_FROM_PACKAGE", value="1"),  # Enable ZIP deployment
             web.NameValuePairArgs(name="COSMOS_CONNECTION", value=cosmos_connection_string),
             web.NameValuePairArgs(name="COSMOS_DATABASE", value="lightning"),
             web.NameValuePairArgs(name="SCHEDULE_CONTAINER", value="schedules"),
@@ -292,9 +296,69 @@ pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqd
 
 # Wire the functions back to the Chainlit UI once the container address is known
 notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
+
+# Function to create and upload Function App package
+def create_function_package():
+    """Create a ZIP package of the Azure Functions code"""
+    import zipfile
+    import tempfile
+    import os
+    
+    # Create a temporary ZIP file
+    zip_path = tempfile.mktemp(suffix='.zip')
+    
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # Walk through the azure-function directory
+        for root, dirs, files in os.walk('../azure-function'):
+            for file in files:
+                file_path = os.path.join(root, file)
+                # Skip __pycache__ directories and .pyc files
+                if '__pycache__' not in file_path and not file_path.endswith('.pyc'):
+                    # Get the relative path from azure-function directory
+                    arcname = os.path.relpath(file_path, '../azure-function')
+                    zipf.write(file_path, arcname)
+    
+    return zip_path
+
+# Create the function package
+function_zip_path = create_function_package()
+
+# Create a container for function deployments
+deployment_container = storage.BlobContainer(
+    "deployments",
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+    container_name="deployments",
+    public_access=storage.PublicAccess.NONE,
+)
+
+# Upload the ZIP package to blob storage for deployment
+function_blob = storage.Blob(
+    "function-package",
+    resource_group_name=resource_group.name,
+    account_name=storage_account.name,
+    container_name=deployment_container.name,
+    blob_name="function-package.zip",
+    type=storage.BlobType.BLOCK,
+    source=pulumi.FileAsset(function_zip_path),
+)
+
+# Get the blob URL for the function package with SAS token
+function_package_url = pulumi.Output.concat(
+    "https://",
+    storage_account.name,
+    ".blob.core.windows.net/",
+    deployment_container.name,
+    "/function-package.zip"
+)
+
+# Deploy the function package using WebAppApplicationSettings
 web.WebAppApplicationSettings(
     "function-settings",
     name=func_app.name,
     resource_group_name=resource_group.name,
-    properties={"NOTIFY_URL": notify_url},
+    properties={
+        "NOTIFY_URL": notify_url,
+        "WEBSITE_RUN_FROM_PACKAGE": function_package_url,
+    },
 )
