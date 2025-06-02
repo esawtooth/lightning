@@ -119,9 +119,10 @@ uses OpenAI's chat API to generate replies to incoming `LLMChatEvent` messages.
 
 ### Configuration
 
-The function requires the following application settings:
+- The function requires the following application settings:
 
-- `SERVICEBUS_CONNECTION` – connection string for the queue.
+- `SERVICEBUS_CONNECTION` – connection string for the Service Bus namespace
+  (do **not** include the `EntityPath` property).
 - `SERVICEBUS_QUEUE` – name of the queue containing chat events.
 - `OPENAI_API_KEY` – API key used by the `openai` library.
 - `OPENAI_MODEL` – model name passed to OpenAI. Defaults to `gpt-3.5-turbo`.
@@ -246,7 +247,7 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "FUNCTIONS_WORKER_RUNTIME": "python",
     "OPENAI_API_KEY": "sk-...",
     "OPENAI_MODEL": "gpt-3.5-turbo",
-    "SERVICEBUS_CONNECTION": "<connection-string>",
+    "SERVICEBUS_CONNECTION": "<namespace-connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
     "NOTIFY_URL": "http://localhost:8000/notify",
     "JWT_SIGNING_KEY": "secret",
@@ -265,7 +266,7 @@ Functions Core Tools) or through a `.env` file in the repository root.
 ```env
 OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-3.5-turbo
-SERVICEBUS_CONNECTION=<connection-string>
+SERVICEBUS_CONNECTION=<namespace-connection-string>
 SERVICEBUS_QUEUE=chat-events
 NOTIFY_URL=http://localhost:8000/notify
 JWT_SIGNING_KEY=secret
