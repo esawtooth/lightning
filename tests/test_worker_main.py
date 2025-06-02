@@ -37,3 +37,32 @@ def test_worker_main_runs_agent(monkeypatch, capsys):
     assert exit_code == 0
     assert "ok" in captured.out
 
+
+def test_worker_main_policy_violation(monkeypatch, capsys):
+    from agents import AGENT_REGISTRY, Agent
+    from policy import PolicyViolationError
+
+    class BadAgent(Agent):
+        name = "openai-shell"
+        def run(self, commands):
+            raise PolicyViolationError("blocked")
+
+    AGENT_REGISTRY["openai-shell"] = BadAgent()
+
+    event = WorkerTaskEvent(
+        timestamp=datetime.utcnow(),
+        source="t",
+        type="worker.task",
+        user_id="u1",
+        metadata={},
+        task="oops",
+    )
+    os.environ["WORKER_EVENT"] = json.dumps(event.to_dict())
+
+    module = importlib.import_module("worker")
+    exit_code = module.main()
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "Policy violation" in captured.err
+
+
