@@ -12,11 +12,17 @@
             const tasks = await resp.json();
             const tbody = document.getElementById('tasks-body');
             tbody.innerHTML = '';
+            let total = 0;
             tasks.forEach(t => {
                 const row = document.createElement('tr');
-                row.innerHTML = `<td>${t.id}</td><td>${t.status}</td><td><button onclick="showLogs('${t.id}')">view</button></td>`;
+                const info = t.cost || {};
+                const cost = info.cost ? Number(info.cost) : 0;
+                total += cost;
+                const costDisplay = cost ? '$' + cost.toFixed(4) : '';
+                row.innerHTML = `<td>${t.id}</td><td>${t.status}</td><td>${costDisplay}</td><td><button onclick="showLogs('${t.id}')">view</button></td>`;
                 tbody.appendChild(row);
             });
+            document.getElementById('total-cost').textContent = '$' + total.toFixed(4);
         }
         let logInterval;
         async function showLogs(id) {
@@ -40,9 +46,10 @@
     <h1>Task Monitor</h1>
     <p id="error" style="color:red"></p>
     <table border="1">
-        <thead><tr><th>ID</th><th>Status</th><th>Logs</th></tr></thead>
+        <thead><tr><th>ID</th><th>Status</th><th>Cost</th><th>Logs</th></tr></thead>
         <tbody id="tasks-body"></tbody>
     </table>
+    <p>Total cost: <span id="total-cost">$0.0000</span></p>
     <pre id="logs" style="background:#f0f0f0;padding:1em;"></pre>
 </body>
 </html>

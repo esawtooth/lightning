@@ -37,6 +37,7 @@ def test_worker_task_round_trip():
     assert out["metadata"]["repo_url"] == "https://example.com/repo.git"
     assert out["history"] == []
 
+
 def test_worker_task_with_task():
     now = datetime.now()
     data = {
@@ -50,3 +51,18 @@ def test_worker_task_with_task():
     assert event.task == "run tests"
     out = event.to_dict()
     assert out["metadata"]["task"] == "run tests"
+
+
+def test_worker_task_with_cost():
+    now = datetime.now()
+    data = {
+        "timestamp": now.isoformat(),
+        "source": "s",
+        "type": "worker.task",
+        "userID": "u1",
+        "metadata": {"commands": ["echo"], "cost": {"cost": 0.5, "tokens": 5}},
+    }
+    event = WorkerTaskEvent.from_dict(data)
+    assert event.cost["cost"] == 0.5
+    out = event.to_dict()
+    assert out["metadata"]["cost"]["tokens"] == 5

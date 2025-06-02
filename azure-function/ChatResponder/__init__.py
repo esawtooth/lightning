@@ -43,6 +43,7 @@ def main(msg: func.ServiceBusMessage) -> None:
             model=OPENAI_MODEL,
         )
         reply = response["choices"][0]["message"]["content"]
+        usage = response.get("usage")
         logging.info("Assistant reply: %s", reply)
     except Exception as e:
         logging.error("ChatCompletion failed: %s", e)
@@ -53,7 +54,7 @@ def main(msg: func.ServiceBusMessage) -> None:
         source="ChatResponder",
         type="llm.chat.response",
         user_id=event.user_id,
-        metadata={"reply": reply},
+        metadata={"reply": reply, "usage": usage},
         history=event.history + [event.to_dict()],
     )
 
@@ -67,4 +68,3 @@ def main(msg: func.ServiceBusMessage) -> None:
                 sender.send_messages(message)
     except Exception as e:
         logging.error("Failed to publish response: %s", e)
-
