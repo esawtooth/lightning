@@ -189,18 +189,16 @@ app_service_plan = web.AppServicePlan(
 )
 
 # Authorization rule to send messages
-send_rule = servicebus.QueueAuthorizationRule(
+send_rule = servicebus.NamespaceAuthorizationRule(
     "send-rule",
     resource_group_name=resource_group.name,
     namespace_name=namespace.name,
-    queue_name=queue.name,
     authorization_rule_name="send",
     rights=["Send"],
 )
 
-send_keys = servicebus.list_queue_keys_output(
+send_keys = servicebus.list_namespace_keys_output(
     authorization_rule_name=send_rule.name,
-    queue_name=queue.name,
     namespace_name=namespace.name,
     resource_group_name=resource_group.name,
 )
