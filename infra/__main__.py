@@ -194,7 +194,7 @@ func_app = web.WebApp(
     kind="FunctionApp",
     identity=web.ManagedServiceIdentityArgs(type=web.ManagedServiceIdentityType.SYSTEM_ASSIGNED),
     site_config=web.SiteConfigArgs(
-        linux_fx_version="Python|3.9",  # Specify Linux Python runtime
+        linux_fx_version="Python|3.10",  # Updated to Python 3.10 runtime
         app_settings=[
             web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
             web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
