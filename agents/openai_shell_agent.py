@@ -44,6 +44,7 @@ class OpenAIShellAgent(Agent):
             instructions = commands
 
         outputs = []
+        total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
         for instruction in instructions:
             response = openai.ChatCompletion.create(
                 messages=[{"role": "user", "content": instruction}],
@@ -51,6 +52,11 @@ class OpenAIShellAgent(Agent):
                 tools=[bash_tool],
                 tool_choice={"type": "function", "function": {"name": "bash"}},
             )
+            usage = response.get("usage")
+            if usage:
+                for k, v in usage.items():
+                    if isinstance(v, int):
+                        total_usage[k] = total_usage.get(k, 0) + v
             tool_calls = response["choices"][0]["message"].get("tool_calls")
             if tool_calls:
                 args_json = tool_calls[0]["function"].get("arguments", "{}")
@@ -69,4 +75,5 @@ class OpenAIShellAgent(Agent):
             if proc.stderr:
                 print(proc.stderr, file=sys.stderr, flush=True)
             outputs.append(proc.stdout)
+        self.last_usage = total_usage
         return "".join(outputs)
