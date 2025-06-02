@@ -232,71 +232,74 @@ pulumi.export(
 
 # Container group hosting the Chainlit app and dashboard
 
-ui_image = config.get("uiImage") or pulumi.Output.concat("lightningacr.azurecr.io/chainlit-client:latest")
+ui_image = config.get("uiImage")
 
-ui_container = containerinstance.ContainerGroup(
-    "chat-ui",
-    resource_group_name=resource_group.name,
-    container_group_name="chat-ui",
-    location=resource_group.location,
-    os_type="Linux",
-    containers=[
-        containerinstance.ContainerArgs(
-            name="chat-ui",
-            image=ui_image,
-            ports=[
-                containerinstance.ContainerPortArgs(port=8000),
-            ],
-            environment_variables=[
-                containerinstance.EnvironmentVariableArgs(
-                    name="EVENT_API_URL",
-                    value=pulumi.Output.concat(
-                        "https://", func_app.default_host_name, "/api/events"
+if ui_image:
+    ui_container = containerinstance.ContainerGroup(
+        "chat-ui",
+        resource_group_name=resource_group.name,
+        container_group_name="chat-ui",
+        location=resource_group.location,
+        os_type="Linux",
+        containers=[
+            containerinstance.ContainerArgs(
+                name="chat-ui",
+                image=ui_image,
+                ports=[containerinstance.ContainerPortArgs(port=8000)],
+                environment_variables=[
+                    containerinstance.EnvironmentVariableArgs(
+                        name="EVENT_API_URL",
+                        value=pulumi.Output.concat(
+                            "https://", func_app.default_host_name, "/api/events"
+                        ),
                     ),
-                ),
-                containerinstance.EnvironmentVariableArgs(
-                    name="API_BASE",
-                    value=pulumi.Output.concat(
-                        "https://", func_app.default_host_name, "/api"
+                    containerinstance.EnvironmentVariableArgs(
+                        name="API_BASE",
+                        value=pulumi.Output.concat(
+                            "https://", func_app.default_host_name, "/api"
+                        ),
                     ),
-                ),
-                containerinstance.EnvironmentVariableArgs(
-                    name="AUTH_API_URL",
-                    value=pulumi.Output.concat(
-                        "https://", func_app.default_host_name, "/api/auth"
+                    containerinstance.EnvironmentVariableArgs(
+                        name="AUTH_API_URL",
+                        value=pulumi.Output.concat(
+                            "https://", func_app.default_host_name, "/api/auth"
+                        ),
                     ),
+                    containerinstance.EnvironmentVariableArgs(
+                        name="JWT_SIGNING_KEY",
+                        value=jwt_signing_key,
+                    ),
+                    containerinstance.EnvironmentVariableArgs(
+                        name="SESSION_SECRET",
+                        value=jwt_signing_key,  # Use same key for session encryption
+                    ),
+                ],
+                resources=containerinstance.ResourceRequirementsArgs(
+                    requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
                 ),
-                containerinstance.EnvironmentVariableArgs(
-                    name="JWT_SIGNING_KEY",
-                    value=jwt_signing_key,
-                ),
-                containerinstance.EnvironmentVariableArgs(
-                    name="SESSION_SECRET",
-                    value=jwt_signing_key,  # Use same key for session encryption
-                ),
-            ],
-            resources=containerinstance.ResourceRequirementsArgs(
-                requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
-            ),
-        )
-    ],
-    image_registry_credentials=[
-        containerinstance.ImageRegistryCredentialArgs(
-            server=acr.login_server,
-            username=acr_credentials.username,
-            password=acr_credentials.passwords[0].value,
-        )
-    ],
-    ip_address=containerinstance.IpAddressArgs(
-        ports=[containerinstance.PortArgs(protocol="TCP", port=8000)],
-        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-    ),
-)
+            )
+        ],
+        image_registry_credentials=[
+            containerinstance.ImageRegistryCredentialArgs(
+                server=acr.login_server,
+                username=acr_credentials.username,
+                password=acr_credentials.passwords[0].value,
+            )
+        ],
+        ip_address=containerinstance.IpAddressArgs(
+            ports=[containerinstance.PortArgs(protocol="TCP", port=8000)],
+            type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+        ),
+    )
 
-pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+    pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
 
-# Wire the functions back to the Chainlit UI once the container address is known
-notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
+    # Wire the functions back to the Chainlit UI once the container address is known
+    notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
+else:
+    # Skip deploying the UI when no image is provided (e.g., during baseline deployment)
+    notify_url = ""
+    pulumi.export("uiUrl", "")
 
 # Function to create and upload Function App package
 def create_function_package():
