@@ -2,6 +2,8 @@ import json
 import os
 import sys
 
+from policy import PolicyViolationError
+
 from agents import AGENT_REGISTRY
 from events import WorkerTaskEvent
 
@@ -24,10 +26,14 @@ def main() -> int:
         print(f"Unknown agent: {agent_name}", file=sys.stderr)
         return 1
 
-    if event.task:
-        result = agent.run(event.task)
-    else:
-        result = agent.run(event.commands)
+    try:
+        if event.task:
+            result = agent.run(event.task)
+        else:
+            result = agent.run(event.commands)
+    except PolicyViolationError as e:
+        print(f"Policy violation: {e}", file=sys.stderr)
+        return 1
 
     if result:
         print(result)

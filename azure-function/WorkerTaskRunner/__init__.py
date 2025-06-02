@@ -95,6 +95,10 @@ def main(msg: func.ServiceBusMessage) -> None:
             EnvironmentVariable(name="WORKER_EVENT", value=json.dumps(event.to_dict())),
             EnvironmentVariable(name="TASK_ID", value=task_id),
             EnvironmentVariable(name="OPENAI_API_KEY", value=os.environ.get("OPENAI_API_KEY", "")),
+            EnvironmentVariable(name="COSMOS_CONNECTION", value=COSMOS_CONN or ""),
+            EnvironmentVariable(name="COSMOS_DATABASE", value=COSMOS_DB or ""),
+            EnvironmentVariable(name="POLICY_CONTAINER", value=os.environ.get("POLICY_CONTAINER", "policies")),
+            EnvironmentVariable(name="USER_ID", value=event.user_id),
         ]
         container = Container(
             name="worker",
