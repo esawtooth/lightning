@@ -48,7 +48,6 @@ workspace = operationalinsights.Workspace(
 app_insights = applicationinsights.Component(
     "lightning-ai",
     resource_group_name=resource_group.name,
-    resource_name="lightning-ai",
     kind="web",
     application_type="web",
     workspace_resource_id=workspace.id,
