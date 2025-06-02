@@ -12,6 +12,8 @@ from pulumi_azure_native import (
     authorization,
     containerinstance,
     containerregistry,
+    operationalinsights,
+    insights,
 )
 
 # Cosmos DB resources live in a separate module
@@ -30,6 +32,26 @@ resource_group = resources.ResourceGroup(
     "lightning_dev-1",
     resource_group_name="lightning_dev-1",
     location=location,
+)
+
+# Log Analytics Workspace for Application Insights
+workspace = operationalinsights.Workspace(
+    "log-workspace",
+    resource_group_name=resource_group.name,
+    workspace_name="lightning-logs",
+    location=resource_group.location,
+    sku=operationalinsights.WorkspaceSkuArgs(name="PerGB2018"),
+    retention_in_days=30,
+)
+
+# Application Insights instance
+app_insights = insights.Component(
+    "lightning-ai",
+    resource_group_name=resource_group.name,
+    resource_name="lightning-ai",
+    kind="web",
+    application_type="web",
+    workspace_resource_id=workspace.id,
 )
 
 # Service Bus namespace and queue
@@ -52,6 +74,7 @@ queue = servicebus.Queue(
 pulumi.export("resourceGroupName", resource_group.name)
 pulumi.export("serviceBusNamespaceName", namespace.name)
 pulumi.export("queueName", queue.name)
+pulumi.export("appInsightsKey", app_insights.instrumentation_key)
 
 # Storage account for Function App
 storage_account = storage.StorageAccount(
@@ -211,7 +234,11 @@ func_app = web.WebApp(
             web.NameValuePairArgs(name="ACI_REGION", value=location),
             web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
             web.NameValuePairArgs(name="WORKER_IMAGE", value=worker_image),
-            web.NameValuePairArgs(name="JWT_SIGNING_KEY", value=jwt_signing_key)
+            web.NameValuePairArgs(name="JWT_SIGNING_KEY", value=jwt_signing_key),
+            web.NameValuePairArgs(
+                name="APPINSIGHTS_INSTRUMENTATIONKEY",
+                value=app_insights.instrumentation_key,
+            ),
         ]
     ),
 )
@@ -272,6 +299,10 @@ if ui_image:
                     containerinstance.EnvironmentVariableArgs(
                         name="SESSION_SECRET",
                         value=jwt_signing_key,  # Use same key for session encryption
+                    ),
+                    containerinstance.EnvironmentVariableArgs(
+                        name="APPINSIGHTS_INSTRUMENTATIONKEY",
+                        value=app_insights.instrumentation_key,
                     ),
                 ],
                 resources=containerinstance.ResourceRequirementsArgs(
