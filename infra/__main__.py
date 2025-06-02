@@ -13,7 +13,7 @@ from pulumi_azure_native import (
     containerinstance,
     containerregistry,
     operationalinsights,
-    insights,
+    applicationinsights,
 )
 
 # Cosmos DB resources live in a separate module
@@ -45,7 +45,7 @@ workspace = operationalinsights.Workspace(
 )
 
 # Application Insights instance
-app_insights = insights.Component(
+app_insights = applicationinsights.Component(
     "lightning-ai",
     resource_group_name=resource_group.name,
     resource_name="lightning-ai",
