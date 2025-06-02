@@ -9,6 +9,7 @@ COPY chat_client/templates/ ./templates/
 COPY chat_client/start.sh ./start.sh
 COPY events/ ./events/
 COPY dashboard/ ./dashboard/
+COPY common/ ./common/
 
 # Install Python dependencies
 RUN pip install --no-cache-dir \
