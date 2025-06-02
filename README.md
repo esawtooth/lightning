@@ -191,6 +191,10 @@ Pulumi automatically:
 - Builds and deploys the UI containers
 - Configures all environment variables and connections
 
+The Function App uses the **Python 3.10** runtime. If you deployed an older
+stack running Python 3.9 you may see a deprecation warning in the Azure portal.
+Redeploy with the updated Pulumi script to upgrade the runtime.
+
 The stack also provisions a container instance running the Chainlit UI and
 dashboard. Pulumi exports the container's public URL as `uiUrl`.
 
@@ -290,6 +294,16 @@ Set `EVENT_API_URL` to `http://localhost:7071/api/events` so the client sends
 events to your local Function App. Provide your bearer token in the
 `AUTH_TOKEN` environment variable so the client can authenticate with the Event
 API.
+
+### Azure CLI function test
+
+Use `scripts/test_azure_functions.sh` to verify that your Function App is
+running and that the `UserAuth` endpoints respond correctly. The script requires
+the Azure CLI to be installed and authenticated.
+
+```bash
+bash scripts/test_azure_functions.sh <resource-group> <function-app-name>
+```
 
 ## Chainlit client
 
