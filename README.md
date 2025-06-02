@@ -218,6 +218,7 @@ messaging:
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
 - `TASK_CONTAINER` &mdash; container storing worker task records. Defaults to `tasks`.
+- `APPINSIGHTS_INSTRUMENTATIONKEY` &mdash; instrumentation key for Application Insights. Pulumi sets this automatically.
 - `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package including a SAS
   token. The Function App cannot start without this token. Pulumi populates this
   value automatically.
