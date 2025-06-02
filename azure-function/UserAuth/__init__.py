@@ -1,6 +1,7 @@
 import json
 import os
-import crypt
+import hashlib
+import secrets
 from datetime import datetime, timedelta
 
 import azure.functions as func
@@ -19,9 +20,25 @@ _container = _db.create_container_if_not_exists(
 )
 
 
-def _hash_password(password: str, salt: str) -> str:
-    """Hash the password using bcrypt via the `crypt` module."""
-    return crypt.crypt(password, salt)
+def _hash_password(password: str, salt: bytes = None) -> tuple[str, str]:
+    """Hash the password using PBKDF2. Returns (hash, salt)"""
+    if salt is None:
+        salt = secrets.token_bytes(32)
+    elif isinstance(salt, str):
+        salt = bytes.fromhex(salt)
+    
+    password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt, 100000)
+    return password_hash.hex(), salt.hex()
+
+
+def _verify_password(password: str, hashed: str, salt: str) -> bool:
+    """Verify a password against its hash."""
+    try:
+        salt_bytes = bytes.fromhex(salt)
+        password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt_bytes, 100000)
+        return password_hash.hex() == hashed
+    except Exception:
+        return False
 
 
 def _is_strong_password(password: str) -> bool:
@@ -50,8 +67,7 @@ def _register(data: dict) -> func.HttpResponse:
     except Exception:
         pass
     
-    salt = crypt.mksalt(crypt.METHOD_BLOWFISH)
-    hashed = _hash_password(password, salt)
+    hashed, salt = _hash_password(password)
     
     # New users are placed on waitlist by default
     entity = {
@@ -86,11 +102,9 @@ def _login(data: dict) -> func.HttpResponse:
     except Exception:
         return func.HttpResponse("Unauthorized", status_code=401)
     
-    expected = _hash_password(password, entity.get("salt", ""))
-    if expected != entity.get("hash"):
-        fallback = crypt.crypt("pw", entity.get("salt", ""))
-        if not (entity.get("hash") == fallback and password == "Password1"):
-            return func.HttpResponse("Unauthorized", status_code=401)
+    # Verify password using PBKDF2
+    if not _verify_password(password, entity.get("hash", ""), entity.get("salt", "")):
+        return func.HttpResponse("Unauthorized", status_code=401)
     
     # Check if user is approved
     user_status = entity.get("status", "approved")
