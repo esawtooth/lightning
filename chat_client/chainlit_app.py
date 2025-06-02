@@ -12,6 +12,13 @@ from starlette.requests import Request
 from chainlit.server import app as fastapi_app
 from dashboard.app import app as dashboard_app
 
+SESSION_MAP: dict[str, cl.Session] = {}
+
+
+def get_session_by_user(user_id: str):
+    """Return the Chainlit session for the given user, if any."""
+    return SESSION_MAP.get(user_id)
+
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
@@ -76,19 +83,35 @@ if hasattr(fastapi_app, "middleware"):
 @cl.on_chat_start
 async def start():
     """Initialize chat session with user context."""
-    # Try to get user from various sources
-    user = "User"  # Default fallback
-    
-    # The username will be available through Chainlit's session context
+    username = None
+
+    # Try to get from the authenticated request
     try:
-        # Get from Chainlit session if available
-        if hasattr(cl.context, 'session') and cl.context.session:
-            user = getattr(cl.context.session, 'username', user)
-    except:
+        username = getattr(getattr(cl.context, "request", None).state, "username", None)
+    except Exception:
+        username = None
+
+    # Fallback to any existing session username
+    if not username:
+        try:
+            if hasattr(cl.context, "session") and cl.context.session:
+                username = getattr(cl.context.session, "username", None)
+        except Exception:
+            username = None
+
+    if not username:
+        username = "User"
+
+    # Attach username to the session and store it globally
+    try:
+        if hasattr(cl.context, "session") and cl.context.session:
+            cl.context.session.username = username
+            SESSION_MAP[username] = cl.context.session
+    except Exception:
         pass
     
     welcome_message = f"""
-🌟 **Welcome to Lightning Chat, {user}!**
+🌟 **Welcome to Lightning Chat, {username}!**
 
 I'm your AI assistant, ready to help you with:
 - Answering questions
@@ -103,6 +126,14 @@ What would you like to explore today?
         content=welcome_message,
         author="Assistant"
     ).send()
+
+
+@cl.on_chat_end
+async def end():
+    """Cleanup session when the user disconnects."""
+    username = getattr(getattr(cl.context, "session", None), "username", None)
+    if username:
+        SESSION_MAP.pop(username, None)
 
 
 @cl.on_message
@@ -181,7 +212,13 @@ async def notify(request: Request, payload: dict):
     if not message:
         raise HTTPException(status_code=400, detail="message required")
 
-    await cl.Message(content=message, author=user_id or "assistant").send()
+    session = get_session_by_user(user_id) if user_id else None
+    if user_id and session is None:
+        raise HTTPException(status_code=404, detail="No active session")
+
+    await cl.Message(content=message, author=user_id or "assistant").send(
+        session_id=session.id if session else None
+    )
     return {"status": "ok"}
 
 # Expose the dashboard under /dashboard on the Chainlit FastAPI app

@@ -3,6 +3,7 @@ import sys
 import types
 import importlib.util
 import asyncio
+import pytest
 
 
 def load_chainlit_app(monkeypatch, capture):
@@ -18,16 +19,30 @@ def load_chainlit_app(monkeypatch, capture):
         handlers['start'] = func
         return func
 
+    def on_chat_end(func):
+        handlers['end'] = func
+        return func
+
     class Msg:
         def __init__(self, content, author='user'):
             self.content = content
             self.author = author
-        async def send(self):
+            self.session_id = None
+        async def send(self, session_id=None):
+            self.session_id = session_id
             capture.setdefault('sent', []).append(self)
+
+    class Session:
+        def __init__(self, id):
+            self.id = id
+            self.username = None
 
     cl_mod.on_message = on_message
     cl_mod.on_chat_start = on_chat_start
+    cl_mod.on_chat_end = on_chat_end
     cl_mod.Message = Msg
+    cl_mod.Session = Session
+    cl_mod.context = types.SimpleNamespace(session=None, request=None)
     def mount(path, app, **kw):
         pass
 
@@ -160,5 +175,30 @@ def test_missing_token(monkeypatch):
     handler, module = load_chainlit_app(monkeypatch, capture)
     asyncio.run(run_handler(handler))
     assert capture['sent'][0].content == 'AUTH_TOKEN not configured'
+
+
+def test_notify_correct_user(monkeypatch):
+    monkeypatch.setenv('NOTIFY_TOKEN', 'tok')
+    capture = {}
+    handler, module = load_chainlit_app(monkeypatch, capture)
+
+    cl = sys.modules['chainlit']
+
+    # First user session
+    cl.context.session = cl.Session('s1')
+    cl.context.request = types.SimpleNamespace(state=types.SimpleNamespace(username='u1'))
+    asyncio.run(module.start())
+
+    # Second user session
+    cl.context.session = cl.Session('s2')
+    cl.context.request = types.SimpleNamespace(state=types.SimpleNamespace(username='u2'))
+    asyncio.run(module.start())
+
+    req = types.SimpleNamespace(headers={'Authorization': 'Bearer tok'})
+    asyncio.run(module.notify(req, {'user_id': 'u2', 'message': 'hi'}))
+    assert capture['sent'][-1].session_id == 's2'
+
+    with pytest.raises(sys.modules['fastapi'].HTTPException):
+        asyncio.run(module.notify(req, {'user_id': 'missing', 'message': 'hi'}))
 
 
