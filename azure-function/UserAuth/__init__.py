@@ -3,6 +3,7 @@ import os
 import hashlib
 import secrets
 from datetime import datetime, timedelta
+import logging
 
 import azure.functions as func
 from azure.cosmos import CosmosClient, PartitionKey
@@ -38,6 +39,7 @@ def _verify_password(password: str, hashed: str, salt: str) -> bool:
         password_hash = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt_bytes, 100000)
         return password_hash.hex() == hashed
     except Exception:
+        logging.exception("Exception during password verification")
         return False
 
 
@@ -53,10 +55,12 @@ def _register(data: dict) -> func.HttpResponse:
     username = data.get("username")
     password = data.get("password")
     email = data.get("email", "")
+    logging.info("Register attempt: username=%s, email=%s", username, email)
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
 
     if not _is_strong_password(password):
+        logging.warning("Weak password provided for username=%s", username)
         return func.HttpResponse(
             "Password must be at least 8 characters and include letters and numbers",
             status_code=400,
@@ -65,6 +69,7 @@ def _register(data: dict) -> func.HttpResponse:
         existing_user = _container.read_item("user", partition_key=username)
         return func.HttpResponse("Username exists", status_code=409)
     except Exception:
+        logging.exception("Error checking existing user: username=%s", username)
         pass
     
     hashed, salt = _hash_password(password)
@@ -84,6 +89,7 @@ def _register(data: dict) -> func.HttpResponse:
     }
     
     _container.upsert_item(entity)
+    logging.info("User registered and added to waitlist: username=%s", username)
     
     return func.HttpResponse(
         json.dumps({"message": "Registration successful. You are now on the waitlist for approval."}),
@@ -95,15 +101,19 @@ def _register(data: dict) -> func.HttpResponse:
 def _login(data: dict) -> func.HttpResponse:
     username = data.get("username")
     password = data.get("password")
+    logging.info("Login attempt: username=%s", username)
     if not username or not password:
         return func.HttpResponse("Missing credentials", status_code=400)
     try:
         entity = _container.read_item("user", partition_key=username)
     except Exception:
+        logging.warning("Login failed: user not found - username=%s", username)
+        logging.exception("Exception during user lookup")
         return func.HttpResponse("Unauthorized", status_code=401)
     
     # Verify password using PBKDF2
     if not _verify_password(password, entity.get("hash", ""), entity.get("salt", "")):
+        logging.warning("Login failed: invalid password for username=%s", username)
         return func.HttpResponse("Unauthorized", status_code=401)
     
     # Check if user is approved
@@ -136,6 +146,7 @@ def _login(data: dict) -> func.HttpResponse:
         "exp": datetime.utcnow() + timedelta(hours=1)
     }
     token = jwt.encode(payload, JWT_SIGNING_KEY, algorithm="HS256")
+    logging.info("Login successful: username=%s", username)
     
     return func.HttpResponse(
         json.dumps({"token": token, "role": user_role}),
@@ -162,6 +173,7 @@ def _approve_user(data: dict, admin_username: str) -> func.HttpResponse:
     try:
         entity = _container.read_item("user", partition_key=lookup_key)
     except Exception:
+        logging.exception("Exception during user lookup for approval: user=%s", lookup_key)
         return func.HttpResponse("User not found", status_code=404)
     
     # Update user status
@@ -222,6 +234,7 @@ def _list_pending_users(admin_username: str) -> func.HttpResponse:
             mimetype="application/json"
         )
     except Exception as e:
+        logging.exception("Exception fetching users")
         return func.HttpResponse(f"Error fetching users: {str(e)}", status_code=500)
 
 
@@ -249,6 +262,7 @@ def _get_user_info(data: dict) -> func.HttpResponse:
             mimetype="application/json"
         )
     except Exception:
+        logging.exception("Exception fetching user info: username=%s", username)
         return func.HttpResponse("User not found", status_code=404)
 
 
@@ -264,6 +278,7 @@ def _verify_admin(auth_header: str) -> str:
     try:
         claims = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
     except Exception as e:
+        logging.exception("Exception decoding admin token")
         raise ValueError("Invalid token") from e
 
     username = claims.get("sub")
@@ -290,6 +305,7 @@ def _refresh_token(auth_header: str) -> func.HttpResponse:
     try:
         claims = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
     except Exception:
+        logging.exception("Exception decoding token during refresh")
         return func.HttpResponse("Unauthorized", status_code=401)
 
     new_payload = {
@@ -341,5 +357,8 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
             return func.HttpResponse(str(e), status_code=403)
         except RuntimeError as e:
             return func.HttpResponse(str(e), status_code=500)
-    
-    return func.HttpResponse("Not found", status_code=404)
+    try:
+        return func.HttpResponse("Not found", status_code=404)
+    except Exception as e:
+        logging.exception("Unhandled exception during request routing")
+        return func.HttpResponse("Internal server error", status_code=500)
