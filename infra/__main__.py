@@ -195,24 +195,7 @@ func_app = web.WebApp(
     identity=web.ManagedServiceIdentityArgs(type=web.ManagedServiceIdentityType.SYSTEM_ASSIGNED),
     site_config=web.SiteConfigArgs(
         linux_fx_version="Python|3.10",  # Updated to Python 3.10 runtime
-        app_settings=[
-            web.NameValuePairArgs(name="AzureWebJobsStorage", value=storage_connection_string),
-            web.NameValuePairArgs(name="FUNCTIONS_EXTENSION_VERSION", value="~4"),
-            web.NameValuePairArgs(name="FUNCTIONS_WORKER_RUNTIME", value="python"),
-            web.NameValuePairArgs(name="COSMOS_CONNECTION", value=cosmos_connection_string),
-            web.NameValuePairArgs(name="COSMOS_DATABASE", value="lightning"),
-            web.NameValuePairArgs(name="SCHEDULE_CONTAINER", value="schedules"),
-            web.NameValuePairArgs(name="SERVICEBUS_CONNECTION", value=send_keys.primary_connection_string),
-            web.NameValuePairArgs(name="SERVICEBUS_QUEUE", value=queue.name),
-            web.NameValuePairArgs(name="REPO_CONTAINER", value="repos"),
-            web.NameValuePairArgs(name="USER_CONTAINER", value="users"),
-            web.NameValuePairArgs(name="ACI_RESOURCE_GROUP", value=resource_group.name),
-            web.NameValuePairArgs(name="ACI_SUBSCRIPTION_ID", value=subscription_id),
-            web.NameValuePairArgs(name="ACI_REGION", value=location),
-            web.NameValuePairArgs(name="OPENAI_API_KEY", value=openai_api_key),
-            web.NameValuePairArgs(name="WORKER_IMAGE", value=worker_image),
-            web.NameValuePairArgs(name="JWT_SIGNING_KEY", value=jwt_signing_key)
-        ]
+        # App settings will be configured separately via WebAppApplicationSettings
     ),
 )
 
@@ -384,12 +367,31 @@ function_package_url = pulumi.Output.concat(
 )
 
 # Deploy the function package using WebAppApplicationSettings
+# Combine all app settings including the package URL and notify URL
+all_app_settings = {
+    "AzureWebJobsStorage": storage_connection_string,
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "COSMOS_CONNECTION": cosmos_connection_string,
+    "COSMOS_DATABASE": "lightning",
+    "SCHEDULE_CONTAINER": "schedules",
+    "SERVICEBUS_CONNECTION": send_keys.primary_connection_string,
+    "SERVICEBUS_QUEUE": queue.name,
+    "REPO_CONTAINER": "repos",
+    "USER_CONTAINER": "users",
+    "ACI_RESOURCE_GROUP": resource_group.name,
+    "ACI_SUBSCRIPTION_ID": subscription_id,
+    "ACI_REGION": location,
+    "OPENAI_API_KEY": openai_api_key,
+    "WORKER_IMAGE": worker_image,
+    "JWT_SIGNING_KEY": jwt_signing_key,
+    "NOTIFY_URL": notify_url,
+    "WEBSITE_RUN_FROM_PACKAGE": function_package_url,
+}
+
 web.WebAppApplicationSettings(
     "function-settings",
     name=func_app.name,
     resource_group_name=resource_group.name,
-    properties={
-        "NOTIFY_URL": notify_url,
-        "WEBSITE_RUN_FROM_PACKAGE": function_package_url,
-    },
+    properties=all_app_settings,
 )
