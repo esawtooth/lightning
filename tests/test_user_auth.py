@@ -4,6 +4,7 @@ import json
 import types
 import importlib.util
 import crypt
+import hashlib
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -114,8 +115,9 @@ def test_register_duplicate(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = '$2b$12$abcdefghijklmnopqrstuv'
-    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': crypt.crypt('pw', salt)}}
+    salt = '00' * 32
+    hashed = hashlib.pbkdf2_hmac('sha256', b'pw', bytes.fromhex(salt), 100000).hex()
+    store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
@@ -129,8 +131,8 @@ def test_login_success(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = '$2b$12$abcdefghijklmnopqrstuv'
-    hashed = crypt.crypt('Password1', salt)
+    salt = '00' * 32
+    hashed = hashlib.pbkdf2_hmac('sha256', b'Password1', bytes.fromhex(salt), 100000).hex()
     store = {
         ('bob', 'user'): {
             'pk': 'bob',
@@ -157,8 +159,8 @@ def test_login_bad_password(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
-    salt = '$2b$12$abcdefghijklmnopqrstuv'
-    hashed = crypt.crypt('pw', salt)
+    salt = '00' * 32
+    hashed = hashlib.pbkdf2_hmac('sha256', b'pw', bytes.fromhex(salt), 100000).hex()
     store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
