@@ -4,6 +4,7 @@ import zipfile
 import tempfile
 import datetime
 import atexit
+import uuid
 from pulumi_azure_native import (
     resources,
     servicebus,
@@ -360,34 +361,27 @@ function_blob = storage.Blob(
     source=pulumi.FileAsset(function_zip_path),
 )
 
-# Generate a SAS token for the ZIP blob so the Function App can access it
-sas_start = datetime.datetime.utcnow().isoformat() + "Z"
-sas_expiry = (datetime.datetime.utcnow() + datetime.timedelta(days=1)).isoformat() + "Z"
-
-package_sas = storage.list_storage_account_service_sas_output(
-    account_name=storage_account.name,
-    resource_group_name=resource_group.name,
-    protocols="https",
-    shared_access_start_time=sas_start,
-    shared_access_expiry_time=sas_expiry,
-    permissions="r",
-    canonicalized_resource=pulumi.Output.concat(
-        "/blob/",
-        storage_account.name,
-        "/",
-        deployment_container.name,
-        "/function-package.zip",
-    ),
-    resource="b",
+# Build the URL to the deployment package without a SAS token
+function_package_url = pulumi.Output.format(
+    "https://{0}.blob.core.windows.net/{1}/function-package.zip",
+    storage_account.name,
+    deployment_container.name,
 )
 
-function_package_url = pulumi.Output.concat(
-    "https://",
-    storage_account.name,
-    ".blob.core.windows.net/",
-    deployment_container.name,
-    "/function-package.zip?",
-    package_sas.service_sas_token,
+# Grant the Function App's managed identity read access to the package
+storage_blob_reader_role_id = "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"
+RoleAssignment(
+    "function-package-reader",
+    principal_id=func_app.identity.principal_id,
+    principal_type="ServicePrincipal",
+    role_definition_id=pulumi.Output.concat(
+        "/subscriptions/",
+        subscription_id,
+        "/providers/Microsoft.Authorization/roleDefinitions/",
+        storage_blob_reader_role_id,
+    ),
+    scope=storage_account.id,
+    role_assignment_name=str(uuid.uuid4()),
 )
 
 # Deploy the function package using WebAppApplicationSettings
