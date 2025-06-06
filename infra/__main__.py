@@ -236,10 +236,9 @@ pulumi.export(
 
 # Container group hosting the Chainlit app and dashboard
 
-ui_image = config.get("uiImage")
+ui_image = config.require("uiImage")
 
-if ui_image:
-    ui_container = containerinstance.ContainerGroup(
+ui_container = containerinstance.ContainerGroup(
         "chat-ui",
         resource_group_name=resource_group.name,
         container_group_name="chat-ui",
@@ -300,14 +299,10 @@ if ui_image:
         ),
     )
 
-    pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
 
-    # Wire the functions back to the Chainlit UI once the container address is known
-    notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
-else:
-    # Skip deploying the UI when no image is provided (e.g., during baseline deployment)
-    notify_url = ""
-    pulumi.export("uiUrl", "")
+# Wire the functions back to the Chainlit UI once the container address is known
+notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
 
 # Function to create and upload Function App package
 def create_function_package():
