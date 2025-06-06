@@ -332,7 +332,23 @@ def create_function_package():
     site_packages = os.path.join(build_dir, ".python_packages", "lib", "site-packages")
     os.makedirs(site_packages, exist_ok=True)
     subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "-r", "../azure-function/requirements.txt", "--target", site_packages]
+        [
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "-r",
+            "../azure-function/requirements.txt",
+            "--target",
+            site_packages,
+            "--platform",
+            "manylinux2014_x86_64",
+            "--implementation",
+            "cp",
+            "--python-version",
+            "3.10",
+            "--only-binary=:all:",
+        ]
     )
 
     # Create a temporary ZIP file that persists until cleanup
