@@ -7,3 +7,4 @@ croniter
 azure-identity
 azure-mgmt-containerinstance
 pyjwt
+cryptography==41.0.7
