@@ -321,14 +321,25 @@ def create_function_package():
     atexit.register(lambda: os.path.exists(zip_path) and os.remove(zip_path))
     
     with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Walk through the azure-function directory
+        # Include the azure-function directory
         for root, dirs, files in os.walk('../azure-function'):
             for file in files:
                 file_path = os.path.join(root, file)
                 # Skip __pycache__ directories and .pyc files
                 if '__pycache__' not in file_path and not file_path.endswith('.pyc'):
-                    # Get the relative path from azure-function directory
                     arcname = os.path.relpath(file_path, '../azure-function')
+                    zipf.write(file_path, arcname)
+
+        # Also include supporting packages located at the repository root
+        for package in ('../events', '../common'):
+            if not os.path.isdir(package):
+                continue
+            for root, dirs, files in os.walk(package):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    if '__pycache__' in file_path or file.endswith('.pyc'):
+                        continue
+                    arcname = os.path.join(os.path.basename(package), os.path.relpath(file_path, package))
                     zipf.write(file_path, arcname)
     
     return zip_path
