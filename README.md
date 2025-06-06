@@ -173,13 +173,15 @@ assistant reply:
 ### Deployment
 
 Deploy the entire infrastructure and application code with Pulumi. Set the required configuration
-values for the OpenAI key and JWT signing key:
+values for the OpenAI key, JWT signing key and container images:
 
 ```bash
 cd infra
 pip install -r requirements.txt
 pulumi config set openaiApiKey <key> --secret
 pulumi config set jwtSigningKey <secret> --secret
+pulumi config set uiImage lightningacr.azurecr.io/chainlit-client:<tag>
+pulumi config set workerImage lightningacr.azurecr.io/worker-task:<tag>
 pulumi up
 ```
 
