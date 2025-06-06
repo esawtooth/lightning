@@ -32,6 +32,16 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure worker image
+        run: pulumi config set workerImage "lightningacr.azurecr.io/worker-task:latest"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure UI image
+        run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:latest"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Deploy baseline infrastructure
         run: pulumi up --yes
         working-directory: infra
