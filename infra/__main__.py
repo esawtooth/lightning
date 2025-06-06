@@ -45,6 +45,12 @@ workspace = operationalinsights.Workspace(
     retention_in_days=30,
 )
 
+# Fetch Log Analytics workspace keys for container diagnostics
+workspace_keys = operationalinsights.get_shared_keys_output(
+    resource_group_name=resource_group.name,
+    workspace_name=workspace.name,
+)
+
 # Application Insights instance
 app_insights = applicationinsights.Component(
     "lightning-ai",
@@ -296,6 +302,14 @@ ui_container = containerinstance.ContainerGroup(
         ip_address=containerinstance.IpAddressArgs(
             ports=[containerinstance.PortArgs(protocol="TCP", port=8000)],
             type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+        ),
+        diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+            log_analytics=containerinstance.LogAnalyticsArgs(
+                workspace_id=workspace.customer_id,
+                workspace_key=workspace_keys.primary_shared_key,
+                workspace_resource_id=workspace.id,
+                log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,
+            )
         ),
     )
 
