@@ -25,6 +25,7 @@ import uvicorn
 AUTH_API_URL = os.environ.get("AUTH_API_URL", "")  # Azure Function auth endpoint
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY", "")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "your-secret-key-change-in-production")
+CHAINLIT_PORT = os.environ.get("CHAINLIT_PORT", "8001")
 
 # Setup
 app = FastAPI(title="Lightning Chat Authentication")
@@ -96,6 +97,18 @@ def verify_token(token: str) -> Optional[str]:
     except Exception as e:
         logger.warning(f"Invalid token: {e}")
         return None
+
+
+def _resolve_chainlit_url(request: Request) -> str:
+    """Return the URL of the Chainlit service based on the request."""
+    configured = os.environ.get("CHAINLIT_URL")
+    if configured:
+        return configured
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
+    host = host.split(":")[0]
+    return f"{scheme}://{host}:{CHAINLIT_PORT}"
 
 
 async def get_current_user(request: Request) -> Optional[str]:
@@ -292,9 +305,8 @@ async def chat_redirect(request: Request, username: Optional[str] = Depends(get_
     """Redirect to Chainlit chat interface if authenticated."""
     if not username:
         return RedirectResponse(url="/", status_code=302)
-    
-    # In Docker, redirect to Chainlit service on port 8001
-    chainlit_url = os.environ.get("CHAINLIT_URL", "http://localhost:8001")
+
+    chainlit_url = _resolve_chainlit_url(request)
     return RedirectResponse(url=chainlit_url, status_code=302)
 
 
