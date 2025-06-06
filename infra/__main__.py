@@ -306,42 +306,50 @@ notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify"
 
 # Function to create and upload Function App package
 def create_function_package():
-    """Create a ZIP package of the Azure Functions code"""
+    """Create a ZIP package of the Azure Functions code with its dependencies."""
     import zipfile
     import tempfile
     import os
     import atexit
+    import shutil
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    build_dir = tempfile.mkdtemp(prefix="func-build-")
+    atexit.register(lambda: shutil.rmtree(build_dir, ignore_errors=True))
+
+    # Copy the function source code
+    shutil.copytree("../azure-function", build_dir, dirs_exist_ok=True)
+
+    # Copy supporting packages used by the functions
+    for package in ("../events", "../common"):
+        if os.path.isdir(package):
+            dest = os.path.join(build_dir, os.path.basename(package))
+            shutil.copytree(package, dest, dirs_exist_ok=True)
+
+    # Install Python dependencies into .python_packages
+    site_packages = os.path.join(build_dir, ".python_packages", "lib", "site-packages")
+    os.makedirs(site_packages, exist_ok=True)
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "-r", "../azure-function/requirements.txt", "--target", site_packages]
+    )
 
     # Create a temporary ZIP file that persists until cleanup
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix='.zip')
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
     zip_path = tmp.name
     tmp.close()
-
-    # Ensure the temporary file gets removed after deployment
     atexit.register(lambda: os.path.exists(zip_path) and os.remove(zip_path))
-    
-    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-        # Include the azure-function directory
-        for root, dirs, files in os.walk('../azure-function'):
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+        for root, dirs, files in os.walk(build_dir):
             for file in files:
                 file_path = os.path.join(root, file)
-                # Skip __pycache__ directories and .pyc files
-                if '__pycache__' not in file_path and not file_path.endswith('.pyc'):
-                    arcname = os.path.relpath(file_path, '../azure-function')
-                    zipf.write(file_path, arcname)
+                if "__pycache__" in file_path or file.endswith(".pyc"):
+                    continue
+                arcname = os.path.relpath(file_path, build_dir)
+                zipf.write(file_path, arcname)
 
-        # Also include supporting packages located at the repository root
-        for package in ('../events', '../common'):
-            if not os.path.isdir(package):
-                continue
-            for root, dirs, files in os.walk(package):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    if '__pycache__' in file_path or file.endswith('.pyc'):
-                        continue
-                    arcname = os.path.join(os.path.basename(package), os.path.relpath(file_path, package))
-                    zipf.write(file_path, arcname)
-    
     return zip_path
 
 # Create the function package
