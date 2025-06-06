@@ -24,6 +24,8 @@ from datetime import datetime, timedelta
 
 import requests
 
+DEFAULT_TIMEOUT = int(os.environ.get("REQUEST_TIMEOUT", "30"))
+
 
 def run(cmd):
     """Run a shell command and return stdout."""
@@ -60,7 +62,7 @@ def register_user(base_url, username, password):
     resp = requests.post(
         f"{base_url}/auth/register",
         json={"username": username, "password": password},
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("REGISTER", resp.status_code)
     if resp.status_code != 201 and resp.status_code != 409:
@@ -73,7 +75,7 @@ def approve_user(base_url, username, admin_token):
         f"{base_url}/auth/approve",
         json={"username": username, "action": "approve"},
         headers=headers,
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("APPROVE", resp.status_code)
     if resp.status_code != 200:
@@ -84,7 +86,7 @@ def login_user(base_url, username, password):
     resp = requests.post(
         f"{base_url}/auth/login",
         json={"username": username, "password": password},
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("LOGIN", resp.status_code)
     if resp.status_code != 200:
@@ -96,7 +98,7 @@ def refresh_token(base_url, token):
     resp = requests.post(
         f"{base_url}/auth/refresh",
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("REFRESH", resp.status_code)
     if resp.status_code != 200:
@@ -115,7 +117,7 @@ def send_event(base_url, token):
         f"{base_url}/events",
         json=event,
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("EVENT", resp.status_code)
     if resp.status_code != 202:
@@ -134,7 +136,7 @@ def schedule_event(base_url, token):
         f"{base_url}/schedule",
         json=payload,
         headers={"Authorization": f"Bearer {token}"},
-        timeout=10,
+        timeout=DEFAULT_TIMEOUT,
     )
     print("SCHEDULE", resp.status_code)
     if resp.status_code != 201:

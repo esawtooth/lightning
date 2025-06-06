@@ -12,12 +12,19 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - name: Install dependencies
         run: pip install -r requirements.txt
         working-directory: infra
       - name: Install function dependencies
-        run: pip install -r azure-function/requirements.txt -t azure-function/.python_packages
+        run: |
+          pip install --upgrade pip
+          pip install -r azure-function/requirements.txt \
+            --target azure-function/.python_packages \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.10 \
+            --only-binary=:all:
       - name: Ensure dev stack exists
         run: pulumi stack select dev --create --non-interactive
         working-directory: infra
@@ -96,12 +103,19 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - name: Install dependencies
         run: pip install -r requirements.txt
         working-directory: infra
       - name: Install function dependencies
-        run: pip install -r azure-function/requirements.txt -t azure-function/.python_packages
+        run: |
+          pip install --upgrade pip
+          pip install -r azure-function/requirements.txt \
+            --target azure-function/.python_packages \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.10 \
+            --only-binary=:all:
       - name: Ensure dev stack exists
         run: pulumi stack select dev --create --non-interactive
         working-directory: infra
