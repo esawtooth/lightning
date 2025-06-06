@@ -11,8 +11,12 @@ from fastapi.responses import RedirectResponse
 from starlette.requests import Request
 from chainlit.server import app as fastapi_app
 from dashboard.app import app as dashboard_app
+from typing import TYPE_CHECKING
 
-SESSION_MAP: dict[str, cl.Session] = {}
+if TYPE_CHECKING:  # Only for type hints, avoid hard dependency for tests
+    from chainlit.session import WebsocketSession
+
+SESSION_MAP: dict[str, 'WebsocketSession'] = {}
 
 
 def get_session_by_user(user_id: str):
