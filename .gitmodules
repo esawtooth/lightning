@@ -1,3 +1,0 @@
-[submodule "agents/codex"]
-	path = agents/codex
-	url = https://github.com/esawtooth/codex.git
