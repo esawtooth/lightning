@@ -97,3 +97,52 @@ async def create_event(event: EventIn, token: str = Depends(_get_token)):
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return {"status": "queued"}
 
+
+@app.get("/notifications", response_class=HTMLResponse)
+async def notifications_page(request: Request):
+    """Render notifications page."""
+    return templates.TemplateResponse("notifications.html", {"request": request})
+
+
+@app.get("/notifications.json")
+async def notifications(token: str = Depends(_get_token)):
+    """Return recent task notifications."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/tasks", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    tasks = resp.json()
+    tasks.sort(key=lambda t: t.get("updated_at", t.get("created_at", "")), reverse=True)
+    notifs = [
+        {
+            "id": t.get("id"),
+            "status": t.get("status"),
+            "updated_at": t.get("updated_at"),
+        }
+        for t in tasks[:20]
+    ]
+    return {"notifications": notifs}
+
+
+@app.get("/analytics.json")
+async def analytics(token: str = Depends(_get_token)):
+    """Return basic analytics derived from tasks."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/tasks", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    tasks = resp.json()
+    total = len(tasks)
+    status_counts: dict[str, int] = {}
+    total_cost = 0.0
+    for t in tasks:
+        status = t.get("status", "unknown")
+        status_counts[status] = status_counts.get(status, 0) + 1
+        cost = t.get("cost", {}).get("cost")
+        if cost is not None:
+            try:
+                total_cost += float(cost)
+            except Exception:
+                pass
+    return {"total": total, "status": status_counts, "cost": total_cost}
+
