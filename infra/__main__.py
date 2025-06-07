@@ -112,6 +112,8 @@ email_domain = communication.Domain(
     resource_group_name=resource_group.name,
     email_service_name=email_service.name,
     domain_name=domain,
+    domain_management=communication.DomainManagement.CUSTOMER_MANAGED,
+    location="global",
     opts=pulumi.ResourceOptions(
         # Import the pre‑existing resource so future `pulumi up` runs are idempotent
         import_=f"/subscriptions/{subscription_id}/resourceGroups/lightning_dev-1/providers/Microsoft.Communication/emailServices/lightning-email/domains/{domain}"
