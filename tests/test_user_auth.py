@@ -66,6 +66,22 @@ def load_user_auth(monkeypatch, store, token_capture):
 
     jwt_mod = types.ModuleType('jwt')
 
+    comm_mod = types.ModuleType('communication')
+    email_mod = types.ModuleType('email')
+
+    class DummyEmailClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def begin_send(self, *a, **k):
+            pass
+
+    email_mod.EmailClient = DummyEmailClient
+    comm_mod.email = email_mod
+    azure_mod.communication = comm_mod
+    monkeypatch.setitem(sys.modules, 'azure.communication', comm_mod)
+    monkeypatch.setitem(sys.modules, 'azure.communication.email', email_mod)
+
     def encode(payload, key, algorithm=None):
         token_capture['payload'] = payload
         token_capture['key'] = key
@@ -99,11 +115,14 @@ def test_register_success(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'alice', 'password': 'Password1'}))
+    req = Request(body=json.dumps({'username': 'alice', 'password': 'Password1', 'email': 'a@example.com'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 201
@@ -115,13 +134,16 @@ def test_register_duplicate(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     salt = '00' * 32
     hashed = hashlib.pbkdf2_hmac('sha256', b'pw', bytes.fromhex(salt), 100000).hex()
     store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'salt': salt, 'hash': hashed}}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1'}))
+    req = Request(body=json.dumps({'username': 'bob', 'password': 'Password1', 'email': 'b@example.com'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 409
@@ -175,11 +197,14 @@ def test_register_weak_password(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {}
     cap = {}
     mod, Request = load_user_auth(monkeypatch, store, cap)
 
-    req = Request(body=json.dumps({'username': 'weak', 'password': 'short'}))
+    req = Request(body=json.dumps({'username': 'weak', 'password': 'short', 'email': 'w@example.com'}))
     req.route_params = {'action': 'register'}
     resp = mod.main(req)
     assert resp.status_code == 400

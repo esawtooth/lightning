@@ -15,6 +15,7 @@ from pulumi_azure_native import (
     containerregistry,
     operationalinsights,
     applicationinsights,
+    communication,
 )
 
 # Cosmos DB resources live in a separate module
@@ -29,6 +30,7 @@ jwt_signing_key = config.require_secret("jwtSigningKey")
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 domain = config.get("domain") or "agentsmith.in"
+acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -79,9 +81,33 @@ queue = servicebus.Queue(
     enable_partitioning=True,
 )
 
+
+# Azure Communication Service and Email Service for sending emails
+communication_service = communication.CommunicationService(
+    "comm-service",
+    resource_group_name=resource_group.name,
+    communication_service_name="lightning-comm",
+    data_location="Global",
+)
+
+# Separate EmailService resource is required for domain management
+email_service = communication.EmailService(
+    "email-service",
+    resource_group_name=resource_group.name,
+    email_service_name="lightning-email",
+    data_location="Global",
+)
+
+comm_keys = communication.list_communication_service_keys_output(
+    resource_group_name=resource_group.name,
+    communication_service_name=communication_service.name,
+)
+
 pulumi.export("resourceGroupName", resource_group.name)
 pulumi.export("serviceBusNamespaceName", namespace.name)
 pulumi.export("queueName", queue.name)
+pulumi.export("communicationConnectionString", comm_keys.primary_connection_string)
+pulumi.export("emailServiceName", email_service.name)
 pulumi.export("appInsightsKey", app_insights.instrumentation_key)
 
 # Storage account for Function App
@@ -488,6 +514,9 @@ all_app_settings = {
     "NOTIFY_URL": notify_url,
     "WEBSITE_RUN_FROM_PACKAGE": function_package_url,
     "APPINSIGHTS_INSTRUMENTATIONKEY": app_insights.instrumentation_key,
+    "ACS_CONNECTION": comm_keys.primary_connection_string,
+    "ACS_SENDER": acs_sender,
+    "VERIFY_BASE_URL": pulumi.Output.concat("https://", func_app.default_host_name),
 }
 
 web.WebAppApplicationSettings(

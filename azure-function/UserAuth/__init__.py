@@ -5,6 +5,8 @@ import secrets
 from datetime import datetime, timedelta
 import logging
 
+from azure.communication.email import EmailClient
+
 import azure.functions as func
 from azure.cosmos import CosmosClient, PartitionKey
 import jwt
@@ -13,6 +15,9 @@ COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
 USER_CONTAINER = os.environ.get("USER_CONTAINER", "users")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
+ACS_CONNECTION = os.environ.get("ACS_CONNECTION")
+ACS_SENDER = os.environ.get("ACS_SENDER")
+VERIFY_BASE_URL = os.environ.get("VERIFY_BASE_URL")
 
 _client = CosmosClient.from_connection_string(COSMOS_CONN)
 _db = _client.create_database_if_not_exists(COSMOS_DB)
@@ -51,12 +56,48 @@ def _is_strong_password(password: str) -> bool:
     return has_letter and has_digit
 
 
+def _send_verification_email(username: str, email: str, token: str) -> None:
+    """Send a verification email using Azure Communication Services."""
+    if not (ACS_CONNECTION and ACS_SENDER and VERIFY_BASE_URL):
+        logging.warning("Email service not fully configured")
+        return
+    try:
+        client = EmailClient.from_connection_string(ACS_CONNECTION)
+        link = f"{VERIFY_BASE_URL}/api/auth/verify?username={username}&token={token}"
+        message = {
+            "senderAddress": ACS_SENDER,
+            "content": {
+                "subject": "Verify your email",
+                "plainText": f"Please verify your email by visiting {link}"
+            },
+            "recipients": {"to": [{"address": email}]},
+        }
+        client.begin_send(message)
+    except Exception:
+        logging.exception("Failed to send verification email")
+
+
+def _verify_email(username: str, token: str) -> func.HttpResponse:
+    if not username or not token:
+        return func.HttpResponse("Invalid verification", status_code=400)
+    try:
+        entity = _container.read_item("user", partition_key=username)
+    except Exception:
+        return func.HttpResponse("User not found", status_code=404)
+    if entity.get("verification_token") != token:
+        return func.HttpResponse("Invalid token", status_code=400)
+    entity["email_verified"] = True
+    entity.pop("verification_token", None)
+    _container.upsert_item(entity)
+    return func.HttpResponse("Email verified", status_code=200)
+
+
 def _register(data: dict) -> func.HttpResponse:
     username = data.get("username")
     password = data.get("password")
     email = data.get("email", "")
     logging.info("Register attempt: username=%s, email=%s", username, email)
-    if not username or not password:
+    if not username or not password or not email:
         return func.HttpResponse("Missing credentials", status_code=400)
 
     if not _is_strong_password(password):
@@ -73,7 +114,9 @@ def _register(data: dict) -> func.HttpResponse:
         pass
     
     hashed, salt = _hash_password(password)
-    
+
+    token = secrets.token_urlsafe(16)
+
     # New users are placed on waitlist by default
     entity = {
         "id": "user",
@@ -81,20 +124,23 @@ def _register(data: dict) -> func.HttpResponse:
         "hash": hashed,
         "salt": salt,
         "email": email,
+        "email_verified": False,
+        "verification_token": token,
         "status": "waitlist",  # waitlist, approved, rejected
         "role": "user",  # user, admin
         "created_at": datetime.utcnow().isoformat(),
         "approved_at": None,
         "approved_by": None
     }
-    
+
     _container.upsert_item(entity)
     logging.info("User registered and added to waitlist: username=%s", username)
+    _send_verification_email(username, email, token)
     
     return func.HttpResponse(
-        json.dumps({"message": "Registration successful. You are now on the waitlist for approval."}),
+        json.dumps({"message": "Registration successful. Check your email to verify your address."}),
         status_code=201,
-        mimetype="application/json"
+        mimetype="application/json",
     )
 
 
@@ -341,6 +387,10 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     elif action == "refresh":
         auth_header = req.headers.get("Authorization", "")
         return _refresh_token(auth_header)
+    elif action == "verify":
+        username = req.params.get("username")
+        token = req.params.get("token")
+        return _verify_email(username, token)
     
     # Admin endpoints (require admin token)
     elif action in ["approve", "pending"]:
