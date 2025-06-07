@@ -68,7 +68,7 @@ aad_sp = azuread.ServicePrincipal(
 
 aad_secret = azuread.ApplicationPassword(
     "lightning-secret",
-    application_object_id=aad_app.object_id,
+    application_id=aad_app.id,
     end_date_relative="8760h",
 )
 
