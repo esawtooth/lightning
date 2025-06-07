@@ -251,7 +251,7 @@ async def register(
     username: str = Form(...),
     password: str = Form(...),
     confirm_password: str = Form(...),
-    email: str = Form(default=""),
+    email: str = Form(...),
     csrf_token: str = Form(default="")
 ):
     """Handle user registration."""
@@ -266,9 +266,12 @@ async def register(
     
     if password != confirm_password:
         return RedirectResponse(url="/register?error=password_mismatch", status_code=302)
-    
+
     if not _is_strong_password(password):
         return RedirectResponse(url="/register?error=password_too_short", status_code=302)
+
+    if not email:
+        return RedirectResponse(url="/register?error=email_required", status_code=302)
     
     try:
         # Call Azure Function auth endpoint

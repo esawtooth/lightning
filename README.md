@@ -186,8 +186,8 @@ pulumi config set domain agentsmith.in
 pulumi up
 ```
 
-Pulumi automatically:
-- Creates all Azure resources (Function App, Cosmos DB, Service Bus, etc.)
+ Pulumi automatically:
+ - Creates all Azure resources (Function App, Cosmos DB, Service Bus, Communication Service, Email Service, etc.)
 - Packages the Azure Functions code
 - Deploys the function code to the Function App
 - Grants the Function App's managed identity read access to the deployment
@@ -233,6 +233,10 @@ messaging:
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
 - `TASK_CONTAINER` &mdash; container storing worker task records. Defaults to `tasks`.
+- `ACS_CONNECTION` &mdash; connection string for Azure Communication Services email.
+- This connection string is retrieved from the Communication Service, while an additional Email Service resource handles domains.
+- `ACS_SENDER` &mdash; default sender email address for verification messages. Defaults to `no-reply@<domain>` where `<domain>` comes from the Pulumi `domain` config (set in the GitHub workflow).
+- `VERIFY_BASE_URL` &mdash; base URL used to generate verification links.
 - `APPINSIGHTS_INSTRUMENTATIONKEY` &mdash; instrumentation key for Application Insights. Pulumi sets this automatically.
 - `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package. Pulumi grants
   the Function App's managed identity read access so the app can download the
