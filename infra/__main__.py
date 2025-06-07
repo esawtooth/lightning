@@ -27,6 +27,10 @@ config = pulumi.Config()
 location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
+# Database credentials for the PostgreSQL container
+postgres_user = config.get("postgresUser") or "gitea"
+postgres_password = config.require_secret("postgresPassword")
+postgres_db = config.get("postgresDb") or "gitea"
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 domain = config.get("domain") or "agentsmith.in"
@@ -144,6 +148,35 @@ storage_account = storage.StorageAccount(
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     kind=storage.Kind.STORAGE_V2,
 )
+
+# Separate storage account for Git repositories and database volumes
+repo_storage_account = storage.StorageAccount(
+    "giteasa",
+    resource_group_name=resource_group.name,
+    sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
+    kind=storage.Kind.STORAGE_V2,
+)
+
+# File shares used by Gitea and PostgreSQL containers
+gitea_share = storage.FileShare(
+    "gitea-share",
+    account_name=repo_storage_account.name,
+    resource_group_name=resource_group.name,
+    share_name="gitea",
+)
+
+postgres_share = storage.FileShare(
+    "postgres-share",
+    account_name=repo_storage_account.name,
+    resource_group_name=resource_group.name,
+    share_name="postgres",
+)
+
+repo_storage_keys = storage.list_storage_account_keys_output(
+    resource_group_name=resource_group.name,
+    account_name=repo_storage_account.name,
+)
+repo_primary_key = repo_storage_keys.keys[0].value
 
 # Azure Container Registry
 acr = containerregistry.Registry(
@@ -420,6 +453,14 @@ http {
     )
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+pulumi.export(
+    "giteaUrl",
+    gitea_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"),
+)
+pulumi.export(
+    "postgresFqdn",
+    postgres_container.ip_address.apply(lambda ip: ip.fqdn),
+)
 
 if domain:
     pulumi.export("uiDomain", pulumi.Output.concat("https://", domain))
@@ -500,6 +541,107 @@ if domain:
     create_verification_record("dkim2-verification", email_domain.verification_records.d_kim2)
     create_verification_record("dmarc-verification", email_domain.verification_records.d_marc)
     create_verification_record("spf-verification", email_domain.verification_records.s_pf)
+
+# PostgreSQL container for Gitea
+postgres_container = containerinstance.ContainerGroup(
+    "postgres",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="postgres",
+            image="postgres:15-alpine",
+            ports=[containerinstance.ContainerPortArgs(port=5432)],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", secure_value=postgres_password),
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
+            ),
+            volume_mounts=[
+                containerinstance.VolumeMountArgs(name="postgres-data", mount_path="/var/lib/postgresql/data")
+            ],
+        )
+    ],
+    volumes=[
+        containerinstance.VolumeArgs(
+            name="postgres-data",
+            azure_file=containerinstance.AzureFileVolumeArgs(
+                share_name=postgres_share.name,
+                storage_account_name=repo_storage_account.name,
+                storage_account_key=repo_primary_key,
+            ),
+        )
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+        log_analytics=containerinstance.LogAnalyticsArgs(
+            workspace_id=workspace.customer_id,
+            workspace_key=workspace_keys.primary_shared_key,
+            workspace_resource_id=workspace.id,
+        )
+    ),
+)
+
+# Gitea container using the PostgreSQL database
+gitea_container = containerinstance.ContainerGroup(
+    "gitea",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="gitea",
+            image="gitea/gitea:1.21-rootless",
+            ports=[containerinstance.ContainerPortArgs(port=3000)],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__DB_TYPE", value="postgres"),
+                containerinstance.EnvironmentVariableArgs(
+                    name="GITEA__database__HOST",
+                    value=postgres_container.ip_address.apply(lambda ip: f"{ip.ip}:5432"),
+                ),
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__NAME", value=postgres_db),
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__USER", value=postgres_user),
+                containerinstance.EnvironmentVariableArgs(
+                    name="GITEA__database__PASSWD", secure_value=postgres_password
+                ),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
+            ),
+            volume_mounts=[
+                containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data")
+            ],
+        )
+    ],
+    volumes=[
+        containerinstance.VolumeArgs(
+            name="gitea-data",
+            azure_file=containerinstance.AzureFileVolumeArgs(
+                share_name=gitea_share.name,
+                storage_account_name=repo_storage_account.name,
+                storage_account_key=repo_primary_key,
+            ),
+        )
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+        log_analytics=containerinstance.LogAnalyticsArgs(
+            workspace_id=workspace.customer_id,
+            workspace_key=workspace_keys.primary_shared_key,
+            workspace_resource_id=workspace.id,
+        )
+    ),
+)
 
 # Wire the functions back to the Chainlit UI once the container address is known
 notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
