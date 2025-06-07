@@ -134,7 +134,7 @@ def get_failed_job_logs(run_info):
                     print("-" * 40)
                     # Print last 100 lines to avoid overwhelming output
                     log_lines = logs.split('\n')
-                    if len(log_lines) > 100:
+                    if len(log_lines) > 200:
                         print(f"... (showing last 100 lines of {len(log_lines)} total lines)")
                         logs = '\n'.join(log_lines[-100:])
                     print(logs)

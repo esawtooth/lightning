@@ -63,7 +63,7 @@ aad_app = azuread.Application(
 
 aad_sp = azuread.ServicePrincipal(
     "lightning-sp",
-    application_id=aad_app.application_id,
+    client_id=aad_app.client_id,
 )
 
 aad_secret = azuread.ApplicationPassword(
@@ -72,7 +72,7 @@ aad_secret = azuread.ApplicationPassword(
     end_date_relative="8760h",
 )
 
-pulumi.export("aadClientId", aad_app.application_id)
+pulumi.export("aadClientId", aad_app.client_id)
 pulumi.export("aadClientSecret", aad_secret.value)
 pulumi.export("aadTenantId", aad_tenant_id)
 
