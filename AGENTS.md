@@ -14,6 +14,10 @@ az login --service-principal \
 
 az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 
+If you need az, you will first need to install the cli using:
+
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
 ## Firecrawl utilities
 
 Two helper scripts are available in the project root:
@@ -23,5 +27,4 @@ Two helper scripts are available in the project root:
 * **get_url.py** – scrape a URL and output markdown. Usage:
   `./get_url.py <url>`
 
-Both scripts use the built-in API key `fc-7ba58ac8f0f3489e98c339da3cdb3d73` and require the
-`firecrawl-py` package which is listed in `requirements-worker.txt`.
+Both scripts require the `firecrawl-py` package which is listed in `requirements-worker.txt`.

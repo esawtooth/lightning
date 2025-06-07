@@ -18,6 +18,7 @@ from pulumi_azure_native import (
     communication,
     keyvault,
 )
+import pulumi_azuread as azuread
 
 from pulumi_random import RandomPassword
 from azure.identity import DefaultAzureCredential
@@ -32,7 +33,9 @@ from pulumi_azure_native import dns
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
 openai_api_key = config.require_secret("openaiApiKey")
-jwt_signing_key = config.require_secret("jwtSigningKey")
+aad_client_id = config.require_secret("aadClientId")
+aad_client_secret = config.require_secret("aadClientSecret")
+aad_tenant_id = config.require("aadTenantId")
 # Database credentials for the PostgreSQL container
 postgres_user = config.get("postgresUser") or "gitea"
 postgres_db = config.get("postgresDb") or "gitea"
@@ -48,6 +51,30 @@ acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 # Fetch subscription ID early so it can be used anywhere below
 client_config = get_client_config()
 subscription_id = client_config.subscription_id
+
+# Azure Entra ID application used for authentication
+aad_app = azuread.Application(
+    "lightning-app",
+    display_name="Lightning Chat",
+    web=azuread.ApplicationWebArgs(
+        redirect_uris=[pulumi.Output.concat("https://", domain, "/auth/callback")],
+    ),
+)
+
+aad_sp = azuread.ServicePrincipal(
+    "lightning-sp",
+    application_id=aad_app.application_id,
+)
+
+aad_secret = azuread.ApplicationPassword(
+    "lightning-secret",
+    application_object_id=aad_app.object_id,
+    end_date_relative="8760h",
+)
+
+pulumi.export("aadClientId", aad_app.application_id)
+pulumi.export("aadClientSecret", aad_secret.value)
+pulumi.export("aadTenantId", aad_tenant_id)
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -414,18 +441,20 @@ ui_container = containerinstance.ContainerGroup(
                         ),
                     ),
                     containerinstance.EnvironmentVariableArgs(
-                        name="AUTH_API_URL",
-                        value=pulumi.Output.concat(
-                            "https://", func_app.default_host_name, "/api/auth"
-                        ),
+                        name="AAD_CLIENT_ID",
+                        value=aad_client_id,
                     ),
                     containerinstance.EnvironmentVariableArgs(
-                        name="JWT_SIGNING_KEY",
-                        value=jwt_signing_key,
+                        name="AAD_TENANT_ID",
+                        value=aad_tenant_id,
+                    ),
+                    containerinstance.EnvironmentVariableArgs(
+                        name="AAD_CLIENT_SECRET",
+                        value=aad_client_secret,
                     ),
                     containerinstance.EnvironmentVariableArgs(
                         name="SESSION_SECRET",
-                        value=jwt_signing_key,  # Use same key for session encryption
+                        value=aad_client_secret,
                     ),
                     containerinstance.EnvironmentVariableArgs(
                         name="APPINSIGHTS_INSTRUMENTATIONKEY",
@@ -787,7 +816,9 @@ all_app_settings = {
     "ACI_REGION": location,
     "OPENAI_API_KEY": openai_api_key,
     "WORKER_IMAGE": worker_image,
-    "JWT_SIGNING_KEY": jwt_signing_key,
+    "AAD_CLIENT_ID": aad_client_id,
+    "AAD_CLIENT_SECRET": aad_client_secret,
+    "AAD_TENANT_ID": aad_tenant_id,
     "NOTIFY_URL": notify_url,
     "WEBSITE_RUN_FROM_PACKAGE": function_package_url,
     "APPINSIGHTS_INSTRUMENTATIONKEY": app_insights.instrumentation_key,

@@ -1,24 +1,18 @@
 # Lightning Chat - Authentication Gateway
 
-This directory contains the enhanced Lightning Chat client with authentication.
+This directory contains the Lightning Chat client secured with Azure Entra ID.
 
 ## Architecture
 
-The chat client exposes a single gateway service:
-
-1. **Gateway on Port 443**
-   - Routes `/auth` to the authentication endpoints
-   - Routes `/chat` to the Chainlit interface
-   - Handles user sessions and JWT verification
-   - Provides a single HTTPS endpoint for the UI
+The chat client exposes a gateway service on port 443 that handles the OAuth
+flow with Azure Entra ID and proxies the Chainlit interface.
 
 ## Features
 
 ### 🔐 Authentication
-- User registration with password validation
-- Secure login with JWT tokens
-- Session management with secure cookies
-- Automatic redirection for unauthenticated users
+Users authenticate using the Microsoft identity platform. The gateway performs
+the OAuth redirect, validates the returned token and stores it in a secure
+cookie.
 
 ### 💬 Chat Interface
 - Beautiful Chainlit-powered chat UI
@@ -34,10 +28,11 @@ The chat client exposes a single gateway service:
 
 ## Environment Variables
 
-Required:
+Required environment variables:
 ```bash
-AUTH_API_URL=https://your-function-app.azurewebsites.net/api/auth
-JWT_SIGNING_KEY=your-secret-signing-key
+AAD_CLIENT_ID=<app-id>
+AAD_TENANT_ID=<tenant-id>
+AAD_CLIENT_SECRET=<client-secret>
 ```
 
 Optional:
@@ -58,25 +53,25 @@ pip install -r requirements.txt
 ### Quick Start
 ```bash
 # Set environment variables
-export AUTH_API_URL="https://your-function-app.azurewebsites.net/api/auth"
-export JWT_SIGNING_KEY="your-secret-key"
+export AAD_CLIENT_ID="<app-id>"
+export AAD_TENANT_ID="<tenant-id>"
+export AAD_CLIENT_SECRET="<client-secret>"
 
-# Start both services
+# Start the gateway and chat services
 ./start.sh
 ```
 
 ### Testing
 ```bash
 # Run local development tests
-python ../test_local_auth.py
+pytest ..
 ```
 
 ### Manual Testing
-1. Visit https://localhost/auth
-2. Register a new account
-3. Login with credentials
-4. Access chat interface
-5. Send test messages
+1. Visit https://localhost/auth/login
+2. Authenticate with your Microsoft account
+3. Access the chat interface
+4. Send test messages
 
 ## Docker Deployment
 
@@ -88,8 +83,9 @@ docker build -t lightning-chat .
 ### Run
 ```bash
 docker run -p 443:443 \
-  -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api/auth" \
-  -e JWT_SIGNING_KEY="your-secret-key" \
+  -e AAD_CLIENT_ID="<app-id>" \
+  -e AAD_TENANT_ID="<tenant-id>" \
+  -e AAD_CLIENT_SECRET="<client-secret>" \
   lightning-chat
 ```
 
@@ -153,9 +149,8 @@ Make sure your Azure Function has the UserAuth function deployed and configured.
    - Check Python dependencies are installed
 
 2. **Authentication fails**
-   - Verify AUTH_API_URL is accessible
-   - Check JWT_SIGNING_KEY matches Azure Function
-   - Ensure Azure Function is deployed and running
+   - Verify the Entra ID application configuration
+   - Ensure environment variables are set correctly
 
 3. **Chat not accessible**
    - Confirm authentication is working
