@@ -87,7 +87,7 @@ communication_service = communication.CommunicationService(
     "comm-service",
     resource_group_name=resource_group.name,
     communication_service_name="lightning-comm",
-    data_location="Global",
+    data_location="United States",
     location="global",
 )
 
@@ -96,7 +96,7 @@ email_service = communication.EmailService(
     "email-service",
     resource_group_name=resource_group.name,
     email_service_name="lightning-email",
-    data_location="Global",
+    data_location="United States",
     location="global",
 )
 
