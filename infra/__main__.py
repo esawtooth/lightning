@@ -20,7 +20,6 @@ from pulumi_azure_native import (
 # Cosmos DB resources live in a separate module
 from pulumi_azure_native import cosmosdb
 from pulumi_azure_native.authorization import get_client_config, RoleAssignment
-from godaddy import GoDaddyNameServers
 from pulumi_azure_native import dns
 
 config = pulumi.Config()
@@ -30,8 +29,6 @@ jwt_signing_key = config.require_secret("jwtSigningKey")
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 domain = config.get("domain") or "agentsmith.in"
-godaddy_api_key = config.get_secret("godaddyApiKey")
-godaddy_api_secret = config.get_secret("godaddyApiSecret")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -330,6 +327,7 @@ if domain:
         zone_name=domain,
         location="global",
     )
+    pulumi.export("dnsZoneNameServers", dns_zone.name_servers)
 
     dns.RecordSet(
         "ui-a-record",
@@ -354,16 +352,6 @@ if domain:
         ttl=600,
         cname_record=dns.CnameRecordArgs(cname=func_app.default_host_name),
     )
-
-    if godaddy_api_key and godaddy_api_secret:
-        GoDaddyNameServers(
-            "nameservers",
-            domain=domain,
-            nameservers=dns_zone.name_servers,
-            api_key=godaddy_api_key,
-            api_secret=godaddy_api_secret,
-            customer_id="esawtooth",
-        )
 
 # Wire the functions back to the Chainlit UI once the container address is known
 notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
