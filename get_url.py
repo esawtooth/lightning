@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Fetch and print markdown from a URL using Firecrawl."""
+"""Fetch and print markdown from a URL using Firecrawl.
+
+Set the ``FIRECRAWL_API_KEY`` environment variable with your API key before
+running.
+"""
+import os
 import sys
 from firecrawl import FirecrawlApp
-
-API_KEY = "fc-7ba58ac8f0f3489e98c339da3cdb3d73"
 
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: get_url.py <url>")
+        print("Usage: get_url.py <url> (set FIRECRAWL_API_KEY)")
+        return 1
+    api_key = os.environ.get("FIRECRAWL_API_KEY")
+    if not api_key:
+        print("FIRECRAWL_API_KEY environment variable is not set", file=sys.stderr)
         return 1
     url = sys.argv[1]
-    app = FirecrawlApp(api_key=API_KEY)
+    app = FirecrawlApp(api_key=api_key)
     result = app.scrape_url(url, formats=["markdown"])
     if hasattr(result, "markdown") and result.markdown:
         print(result.markdown)
