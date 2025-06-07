@@ -457,24 +457,42 @@ if domain:
     )
 
     # Create DNS records required to verify the email sending domain
-    def create_verification_record(name: str, record: pulumi.Output):
-        return dns.RecordSet(
-            name,
-            resource_group_name=resource_group.name,
-            zone_name=dns_zone.name,
-            relative_record_set_name=record.apply(lambda r: r.name),
-            record_type=record.apply(lambda r: r.type),
-            ttl=record.apply(lambda r: float(r.ttl)),
-            txt_records=record.apply(
-                lambda r: [dns.TxtRecordArgs(value=[r.value])] if r.type == "TXT" else None
-            ),
-            cname_record=record.apply(
-                lambda r: dns.CnameRecordArgs(cname=r.value) if r.type == "CNAME" else None
-            ),
-            mx_records=record.apply(
-                lambda r: [dns.MxRecordArgs(exchange=r.value, preference=0)] if r.type == "MX" else None
-            ),
-        )
+    def create_verification_record(name: str, record_output: pulumi.Output):
+        """
+        Safely create a DNS verification record only if the Communication
+        Service returns a non‑null verification record.
+
+        Some properties (e.g. DKIM2, DMARC) may be absent until the first
+        verification step finishes, so we guard against `None`.
+        """
+        def _create(r):
+            if r is None:
+                return None  # Nothing to provision yet.
+
+            txt_records = (
+                [dns.TxtRecordArgs(value=[r.value])] if r.type == "TXT" else None
+            )
+            cname_record = (
+                dns.CnameRecordArgs(cname=r.value) if r.type == "CNAME" else None
+            )
+            mx_records = (
+                [dns.MxRecordArgs(exchange=r.value, preference=0)] if r.type == "MX" else None
+            )
+
+            return dns.RecordSet(
+                name,
+                resource_group_name=resource_group.name,
+                zone_name=dns_zone.name,
+                relative_record_set_name=r.name,
+                record_type=r.type,
+                ttl=float(r.ttl),
+                txt_records=txt_records,
+                cname_record=cname_record,
+                mx_records=mx_records,
+            )
+
+        # Apply the creation only when the record materialises
+        return record_output.apply(_create)
 
     create_verification_record("domain-verification", email_domain.verification_records.domain)
     create_verification_record("dkim-verification", email_domain.verification_records.d_kim)
