@@ -362,6 +362,7 @@ if domain:
             nameservers=dns_zone.name_servers,
             api_key=godaddy_api_key,
             api_secret=godaddy_api_secret,
+            customer_id="esawtooth",
         )
 
 # Wire the functions back to the Chainlit UI once the container address is known

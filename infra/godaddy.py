@@ -10,6 +10,7 @@ class GoDaddyNameServerProvider(dynamic.ResourceProvider):
         nameservers = inputs["nameservers"]
         api_key = inputs["apiKey"]
         api_secret = inputs["apiSecret"]
+        customer_id = inputs["customerId"]
 
         headers = {
             "Content-Type": "application/json",
@@ -24,7 +25,9 @@ class GoDaddyNameServerProvider(dynamic.ResourceProvider):
                 "agreementKeys": ["DNRA"],
             },
         }
-        url = f"https://api.godaddy.com/v1/domains/{domain}/nameservers"
+        url = (
+            f"https://api.godaddy.com/v2/customers/{customer_id}/domains/{domain}/nameServers"
+        )
         resp = requests.put(url, headers=headers, data=json.dumps(body))
         resp.raise_for_status()
         return dynamic.CreateResult(domain, inputs)
@@ -35,7 +38,7 @@ class GoDaddyNameServerProvider(dynamic.ResourceProvider):
 
 
 class GoDaddyNameServers(dynamic.Resource):
-    def __init__(self, name, domain, nameservers, api_key, api_secret, opts=None):
+    def __init__(self, name, domain, nameservers, api_key, api_secret, customer_id, opts=None):
         super().__init__(
             GoDaddyNameServerProvider(),
             name,
@@ -44,6 +47,7 @@ class GoDaddyNameServers(dynamic.Resource):
                 "nameservers": nameservers,
                 "apiKey": api_key,
                 "apiSecret": api_secret,
+                "customerId": customer_id,
             },
             opts,
         )
