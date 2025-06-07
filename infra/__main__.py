@@ -433,6 +433,126 @@ pulumi.export(
     pulumi.Output.concat("https://", func_app.default_host_name, "/api/events"),
 )
 
+# PostgreSQL container for Gitea
+postgres_container = containerinstance.ContainerGroup(
+    "postgres",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="postgres",
+            image="postgres:15-alpine",
+            ports=[containerinstance.ContainerPortArgs(port=5432)],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", secure_value=postgres_password),
+                containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
+            ),
+            volume_mounts=[
+                containerinstance.VolumeMountArgs(name="postgres-data", mount_path="/var/lib/postgresql/data")
+            ],
+        )
+    ],
+    volumes=[
+        containerinstance.VolumeArgs(
+            name="postgres-data",
+            azure_file=containerinstance.AzureFileVolumeArgs(
+                share_name=postgres_share.name,
+                storage_account_name=repo_storage_account.name,
+                storage_account_key=repo_primary_key,
+            ),
+        )
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+        log_analytics=containerinstance.LogAnalyticsArgs(
+            workspace_id=workspace.customer_id,
+            workspace_key=workspace_keys.primary_shared_key,
+            workspace_resource_id=workspace.id,
+        )
+    ),
+)
+
+# Gitea container using the PostgreSQL database
+gitea_container = containerinstance.ContainerGroup(
+    "gitea",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="gitea",
+            image="gitea/gitea:1.21-rootless",
+            ports=[containerinstance.ContainerPortArgs(port=3000)],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__DB_TYPE", value="postgres"),
+                containerinstance.EnvironmentVariableArgs(
+                    name="GITEA__database__HOST",
+                    value=postgres_container.ip_address.apply(lambda ip: f"{ip.ip}:5432"),
+                ),
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__NAME", value=postgres_db),
+                containerinstance.EnvironmentVariableArgs(name="GITEA__database__USER", value=postgres_user),
+                containerinstance.EnvironmentVariableArgs(
+                    name="GITEA__database__PASSWD", secure_value=postgres_password
+                ),
+                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
+                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_client_secret),
+                containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
+            ),
+            volume_mounts=[
+                containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data"),
+                containerinstance.VolumeMountArgs(name="gitea-setup", mount_path="/setup", readOnly=True),
+            ],
+            command=[
+                "/bin/sh",
+                "-c",
+                "/setup/setup.sh; /usr/local/bin/docker-entrypoint.sh",
+            ],
+        )
+    ],
+    volumes=[
+        containerinstance.VolumeArgs(
+            name="gitea-data",
+            azure_file=containerinstance.AzureFileVolumeArgs(
+                share_name=gitea_share.name,
+                storage_account_name=repo_storage_account.name,
+                storage_account_key=repo_primary_key,
+            ),
+        ),
+        containerinstance.VolumeArgs(
+            name="gitea-setup",
+            secret={
+                "setup.sh": pulumi.Output.from_input(
+                    "#!/bin/sh\n"
+                    "set -e\n"
+                    "/usr/local/bin/gitea admin auth add-oauth \\\n+  --name AzureAD \\\n+  --provider openidConnect \\\n+  --key $AAD_CLIENT_ID \\\n+  --secret $AAD_CLIENT_SECRET \\\n+  --auto-discover-url https://login.microsoftonline.com/$AAD_TENANT_ID/v2.0/.well-known/openid-configuration \\\n+  --config /data/gitea/conf/app.ini || true\n"
+                ).apply(lambda s: __import__("base64").b64encode(s.encode()).decode()),
+            },
+        ),
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+        log_analytics=containerinstance.LogAnalyticsArgs(
+            workspace_id=workspace.customer_id,
+            workspace_key=workspace_keys.primary_shared_key,
+            workspace_resource_id=workspace.id,
+        )
+    ),
+)
+
 # Container group hosting the Chainlit app and dashboard
 
 ui_image = config.require("uiImage")
@@ -603,126 +723,6 @@ if domain:
     create_verification_record("dkim2-verification", email_domain.verification_records.d_kim2)
     create_verification_record("dmarc-verification", email_domain.verification_records.d_marc)
     create_verification_record("spf-verification", email_domain.verification_records.s_pf)
-
-# PostgreSQL container for Gitea
-postgres_container = containerinstance.ContainerGroup(
-    "postgres",
-    resource_group_name=resource_group.name,
-    location=resource_group.location,
-    os_type="Linux",
-    containers=[
-        containerinstance.ContainerArgs(
-            name="postgres",
-            image="postgres:15-alpine",
-            ports=[containerinstance.ContainerPortArgs(port=5432)],
-            environment_variables=[
-                containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
-                containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", secure_value=postgres_password),
-                containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
-            ],
-            resources=containerinstance.ResourceRequirementsArgs(
-                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
-            ),
-            volume_mounts=[
-                containerinstance.VolumeMountArgs(name="postgres-data", mount_path="/var/lib/postgresql/data")
-            ],
-        )
-    ],
-    volumes=[
-        containerinstance.VolumeArgs(
-            name="postgres-data",
-            azure_file=containerinstance.AzureFileVolumeArgs(
-                share_name=postgres_share.name,
-                storage_account_name=repo_storage_account.name,
-                storage_account_key=repo_primary_key,
-            ),
-        )
-    ],
-    ip_address=containerinstance.IpAddressArgs(
-        ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
-        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-    ),
-    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
-        log_analytics=containerinstance.LogAnalyticsArgs(
-            workspace_id=workspace.customer_id,
-            workspace_key=workspace_keys.primary_shared_key,
-            workspace_resource_id=workspace.id,
-        )
-    ),
-)
-
-# Gitea container using the PostgreSQL database
-gitea_container = containerinstance.ContainerGroup(
-    "gitea",
-    resource_group_name=resource_group.name,
-    location=resource_group.location,
-    os_type="Linux",
-    containers=[
-        containerinstance.ContainerArgs(
-            name="gitea",
-            image="gitea/gitea:1.21-rootless",
-            ports=[containerinstance.ContainerPortArgs(port=3000)],
-            environment_variables=[
-                containerinstance.EnvironmentVariableArgs(name="GITEA__database__DB_TYPE", value="postgres"),
-                containerinstance.EnvironmentVariableArgs(
-                    name="GITEA__database__HOST",
-                    value=postgres_container.ip_address.apply(lambda ip: f"{ip.ip}:5432"),
-                ),
-                containerinstance.EnvironmentVariableArgs(name="GITEA__database__NAME", value=postgres_db),
-                containerinstance.EnvironmentVariableArgs(name="GITEA__database__USER", value=postgres_user),
-                containerinstance.EnvironmentVariableArgs(
-                    name="GITEA__database__PASSWD", secure_value=postgres_password
-                ),
-                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
-                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_client_secret),
-                containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
-            ],
-            resources=containerinstance.ResourceRequirementsArgs(
-                requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
-            ),
-            volume_mounts=[
-                containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data"),
-                containerinstance.VolumeMountArgs(name="gitea-setup", mount_path="/setup", readOnly=True),
-            ],
-            command=[
-                "/bin/sh",
-                "-c",
-                "/setup/setup.sh; /usr/local/bin/docker-entrypoint.sh",
-            ],
-        )
-    ],
-    volumes=[
-        containerinstance.VolumeArgs(
-            name="gitea-data",
-            azure_file=containerinstance.AzureFileVolumeArgs(
-                share_name=gitea_share.name,
-                storage_account_name=repo_storage_account.name,
-                storage_account_key=repo_primary_key,
-            ),
-        ),
-        containerinstance.VolumeArgs(
-            name="gitea-setup",
-            secret={
-                "setup.sh": pulumi.Output.from_input(
-                    "#!/bin/sh\n"
-                    "set -e\n"
-                    "/usr/local/bin/gitea admin auth add-oauth \\\n+  --name AzureAD \\\n+  --provider openidConnect \\\n+  --key $AAD_CLIENT_ID \\\n+  --secret $AAD_CLIENT_SECRET \\\n+  --auto-discover-url https://login.microsoftonline.com/$AAD_TENANT_ID/v2.0/.well-known/openid-configuration \\\n+  --config /data/gitea/conf/app.ini || true\n"
-                ).apply(lambda s: __import__("base64").b64encode(s.encode()).decode()),
-            },
-        ),
-    ],
-    ip_address=containerinstance.IpAddressArgs(
-        ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
-        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-    ),
-    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
-        log_analytics=containerinstance.LogAnalyticsArgs(
-            workspace_id=workspace.customer_id,
-            workspace_key=workspace_keys.primary_shared_key,
-            workspace_resource_id=workspace.id,
-        )
-    ),
-)
 
 # Export URLs that depend on the containers defined above
 pulumi.export(
