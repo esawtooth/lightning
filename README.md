@@ -221,6 +221,9 @@ messaging:
   Set as the `GODADDY_API_KEY` secret for GitHub Actions.
 - `GODADDY_API_SECRET` &mdash; API secret paired with the key.
   Set as the `GODADDY_API_SECRET` secret for GitHub Actions.
+- `GODADDY_CUSTOMER_ID` &mdash; customer identifier used when calling the GoDaddy
+  v2 API for domain updates. The Pulumi deployment currently defaults to
+  `esawtooth` if not specified.
 - `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI
   (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
