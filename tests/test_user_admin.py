@@ -67,6 +67,22 @@ def load_user_auth(monkeypatch, store, jwt_claims=None, token_capture=None):
 
     jwt_mod = types.ModuleType('jwt')
 
+    comm_mod = types.ModuleType('communication')
+    email_mod = types.ModuleType('email')
+
+    class DummyEmailClient:
+        def __init__(self, *a, **k):
+            pass
+
+        def begin_send(self, *a, **k):
+            pass
+
+    email_mod.EmailClient = DummyEmailClient
+    comm_mod.email = email_mod
+    azure_mod.communication = comm_mod
+    monkeypatch.setitem(sys.modules, 'azure.communication', comm_mod)
+    monkeypatch.setitem(sys.modules, 'azure.communication.email', email_mod)
+
     def encode(payload, key, algorithm=None):
         if token_capture is not None:
             token_capture['payload'] = payload
@@ -100,6 +116,9 @@ def test_approve_user(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {('alice', 'user'): {'pk': 'alice', 'id': 'user', 'status': 'waitlist'}}
     mod, _ = load_user_auth(monkeypatch, store)
 
@@ -115,6 +134,9 @@ def test_reject_user(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {('bob', 'user'): {'pk': 'bob', 'id': 'user', 'status': 'waitlist'}}
     mod, _ = load_user_auth(monkeypatch, store)
 
@@ -128,6 +150,9 @@ def test_list_pending_users(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {
         ('a', 'user'): {'pk': 'a', 'id': 'user', 'status': 'waitlist'},
         ('b', 'user'): {'pk': 'b', 'id': 'user', 'status': 'approved'},
@@ -152,6 +177,9 @@ def test_approve_requires_admin(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {('d', 'user'): {'pk': 'd', 'id': 'user', 'status': 'waitlist'}}
     claims = {'sub': 'd', 'role': 'user'}
     mod, Request = load_user_auth(monkeypatch, store, jwt_claims=claims)
@@ -167,6 +195,9 @@ def test_pending_requires_admin(monkeypatch):
     os.environ['COSMOS_CONNECTION'] = 'c'
     os.environ['USER_CONTAINER'] = 'users'
     os.environ['JWT_SIGNING_KEY'] = 'k'
+    os.environ['ACS_CONNECTION'] = 'conn'
+    os.environ['ACS_SENDER'] = 'from@example.com'
+    os.environ['VERIFY_BASE_URL'] = 'http://test'
     store = {}
     claims = {'sub': 'd', 'role': 'user'}
     mod, Request = load_user_auth(monkeypatch, store, jwt_claims=claims)
