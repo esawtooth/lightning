@@ -16,7 +16,10 @@ from pulumi_azure_native import (
     operationalinsights,
     applicationinsights,
     communication,
+    keyvault,
 )
+
+from pulumi_random import RandomPassword
 
 # Cosmos DB resources live in a separate module
 from pulumi_azure_native import cosmosdb
@@ -29,7 +32,8 @@ openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
 # Database credentials for the PostgreSQL container
 postgres_user = config.get("postgresUser") or "gitea"
-postgres_password = config.require_secret("postgresPassword")
+postgres_password_secret = RandomPassword("postgres-password", length=16, special=True)
+postgres_password = postgres_password_secret.result
 postgres_db = config.get("postgresDb") or "gitea"
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
@@ -45,6 +49,34 @@ resource_group = resources.ResourceGroup(
     "lightning_dev-1",
     resource_group_name="lightning_dev-1",
     location=location,
+)
+
+# Key Vault to store secrets
+vault = keyvault.Vault(
+    "vault",
+    resource_group_name=resource_group.name,
+    vault_name="lightning-vault",
+    location=resource_group.location,
+    properties=keyvault.VaultPropertiesArgs(
+        tenant_id=client_config.tenant_id,
+        sku=keyvault.SkuArgs(name=keyvault.SkuName.STANDARD, family="A"),
+        access_policies=[
+            keyvault.AccessPolicyEntryArgs(
+                tenant_id=client_config.tenant_id,
+                object_id=client_config.object_id,
+                permissions=keyvault.PermissionsArgs(secrets=["get", "set", "list"]),
+            )
+        ],
+    ),
+)
+
+# Store generated password in the vault
+postgres_password_secret_res = keyvault.Secret(
+    "postgres-password-secret",
+    resource_group_name=resource_group.name,
+    vault_name=vault.name,
+    secret_name="postgresPassword",
+    properties=keyvault.SecretPropertiesArgs(value=postgres_password_secret.result),
 )
 
 # Log Analytics Workspace for Application Insights
