@@ -32,6 +32,10 @@ worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task
 domain = config.get("domain") or "agentsmith.in"
 acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 
+# Fetch subscription ID early so it can be used anywhere below
+client_config = get_client_config()
+subscription_id = client_config.subscription_id
+
 # Resource group
 resource_group = resources.ResourceGroup(
     "lightning_dev-1",
@@ -258,10 +262,8 @@ send_keys = servicebus.list_namespace_keys_output(
     resource_group_name=resource_group.name,
 )
 
+#
 # Function App
-client_config = get_client_config()
-subscription_id = client_config.subscription_id
-
 func_app = web.WebApp(
     "event-function-linux",
     resource_group_name=resource_group.name,
