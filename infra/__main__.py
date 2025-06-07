@@ -88,6 +88,7 @@ communication_service = communication.CommunicationService(
     resource_group_name=resource_group.name,
     communication_service_name="lightning-comm",
     data_location="Global",
+    location="global",
 )
 
 # Separate EmailService resource is required for domain management
@@ -96,6 +97,7 @@ email_service = communication.EmailService(
     resource_group_name=resource_group.name,
     email_service_name="lightning-email",
     data_location="Global",
+    location="global",
 )
 
 comm_keys = communication.list_communication_service_keys_output(
