@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Notifications</title>
+    <script>
+        async function loadNotifications() {
+            const resp = await fetch('/notifications.json');
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const list = document.getElementById('notifications');
+            list.innerHTML = '';
+            (data.notifications || []).forEach(n => {
+                const li = document.createElement('li');
+                li.textContent = `${n.id}: ${n.status}`;
+                list.appendChild(li);
+            });
+        }
+        window.onload = function() { loadNotifications(); setInterval(loadNotifications, 5000); };
+    </script>
+</head>
+<body>
+    <h1>Notifications</h1>
+    <ul id="notifications"></ul>
+</body>
+</html>

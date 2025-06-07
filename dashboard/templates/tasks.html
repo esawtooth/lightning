@@ -43,6 +43,21 @@
         }
 
         let logInterval;
+        function parseHistory(text) {
+            const lines = text.split(/\r?\n/);
+            const history = [];
+            let current = null;
+            lines.forEach(line => {
+                if (line.startsWith('$ ')) {
+                    if (current) history.push(current);
+                    current = {cmd: line.slice(2), output: ''};
+                } else if (current) {
+                    current.output += line + '\n';
+                }
+            });
+            if (current) history.push(current);
+            return history;
+        }
         async function showLogs(id) {
             if (logInterval) {
                 clearInterval(logInterval);
@@ -51,9 +66,16 @@
                 const resp = await fetch('/tasks/' + id + '.json');
                 if (resp.status === 200) {
                     const data = await resp.json();
-                    const el = document.getElementById('logs');
-                    el.textContent = data.logs || 'No logs';
-                    el.scrollTop = el.scrollHeight;
+                    const logs = data.logs || '';
+                    document.getElementById('logs').textContent = logs || 'No logs';
+                    const history = parseHistory(logs);
+                    const container = document.getElementById('history');
+                    container.innerHTML = '';
+                    history.forEach(h => {
+                        const div = document.createElement('div');
+                        div.innerHTML = `<b>$ ${h.cmd}</b><pre>${h.output}</pre>`;
+                        container.appendChild(div);
+                    });
                 }
             }
             await fetchLogs();
@@ -89,6 +111,7 @@
         <tbody id="tasks-body"></tbody>
     </table>
     <p>Total cost: <span id="total-cost">$0.0000</span></p>
-    <pre id="logs"></pre>
+    <pre id="logs" style="background:#f0f0f0;padding:1em;"></pre>
+    <div id="history"></div>
 </body>
 </html>

@@ -1,8 +1,46 @@
 <!DOCTYPE html>
 <html>
-<head><title>Dashboard</title></head>
+<head>
+    <title>Lightning Dashboard</title>
+    <script>
+        async function loadAnalytics() {
+            const resp = await fetch('/analytics.json');
+            if (resp.ok) {
+                const data = await resp.json();
+                document.getElementById('total-tasks').textContent = data.total;
+                document.getElementById('total-cost').textContent = '$' + data.cost.toFixed(4);
+                const status = data.status || {};
+                document.getElementById('pending-count').textContent = status.pending || 0;
+                document.getElementById('started-count').textContent = status.started || 0;
+                document.getElementById('error-count').textContent = status.error || 0;
+            }
+        }
+        async function loadFeed() {
+            const resp = await fetch('/notifications.json');
+            if (resp.ok) {
+                const data = await resp.json();
+                const list = document.getElementById('activity-feed');
+                list.innerHTML = '';
+                (data.notifications || []).forEach(n => {
+                    const li = document.createElement('li');
+                    li.textContent = `${n.id}: ${n.status}`;
+                    list.appendChild(li);
+                });
+            }
+        }
+        function refresh() { loadAnalytics(); loadFeed(); }
+        window.onload = function() { refresh(); setInterval(refresh, 5000); };
+    </script>
+</head>
 <body>
-<h1>Lightening Dashboard</h1>
-<p>Welcome to the dashboard.</p>
+    <h1>Lightning Dashboard</h1>
+    <div id="analytics">
+        <p>Total tasks: <span id="total-tasks">0</span></p>
+        <p>Pending: <span id="pending-count">0</span> | Started: <span id="started-count">0</span> | Error: <span id="error-count">0</span></p>
+        <p>Total cost: <span id="total-cost">$0.0000</span></p>
+    </div>
+    <h2>Activity Feed</h2>
+    <ul id="activity-feed"></ul>
+    <p><a href="/tasks">View Task Details</a></p>
 </body>
 </html>
