@@ -153,3 +153,10 @@ def main(msg: func.ServiceBusMessage) -> None:
         sender = _sb_client.get_queue_sender(queue_name=SERVICEBUS_QUEUE)
         with sender:
             sender.send_messages(message)
+        if _aci_client and task_entity.get("container_group"):
+            try:
+                _aci_client.container_groups.begin_delete(
+                    ACI_RESOURCE_GROUP, task_entity["container_group"]
+                )
+            except Exception as e:
+                logging.error("Failed to delete container group: %s", e)
