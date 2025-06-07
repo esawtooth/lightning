@@ -277,7 +277,6 @@ ui_image = config.require("uiImage")
 ui_container = containerinstance.ContainerGroup(
         "chat-ui",
         resource_group_name=resource_group.name,
-        container_group_name="chat-ui",
         location=resource_group.location,
         os_type="Linux",
         containers=[
