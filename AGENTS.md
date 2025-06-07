@@ -27,4 +27,8 @@ Two helper scripts are available in the project root:
 * **get_url.py** – scrape a URL and output markdown. Usage:
   `./get_url.py <url>`
 
-Both scripts require the `firecrawl-py` package which is listed in `requirements-worker.txt`.
+Set your API key in the ``FIRECRAWL_API_KEY`` environment variable before
+running either script.
+
+Both scripts require the `firecrawl-py` package which is listed in
+`requirements-worker.txt`.

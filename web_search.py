@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
-"""Simple script to search the web using Firecrawl."""
+"""Simple script to search the web using Firecrawl.
+
+Set the ``FIRECRAWL_API_KEY`` environment variable with your API key before
+running.
+"""
+import os
 import sys
 from firecrawl import FirecrawlApp
-
-API_KEY = "fc-7ba58ac8f0f3489e98c339da3cdb3d73"
 
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: web_search.py <query>")
+        print("Usage: web_search.py <query> (set FIRECRAWL_API_KEY)")
+        return 1
+    api_key = os.environ.get("FIRECRAWL_API_KEY")
+    if not api_key:
+        print("FIRECRAWL_API_KEY environment variable is not set", file=sys.stderr)
         return 1
     query = " ".join(sys.argv[1:])
-    app = FirecrawlApp(api_key=API_KEY)
+    app = FirecrawlApp(api_key=api_key)
     result = app.search(query, limit=5)
     for idx, item in enumerate(result.data, start=1):
         title = item.get("title", "")
