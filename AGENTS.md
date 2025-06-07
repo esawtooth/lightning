@@ -13,3 +13,15 @@ az login --service-principal \
   --tenant "$AZURE_TENANT_ID"
 
 az account set --subscription "$AZURE_SUBSCRIPTION_ID"
+
+## Firecrawl utilities
+
+Two helper scripts are available in the project root:
+
+* **web_search.py** – search the web using Firecrawl. Usage:
+  `./web_search.py <query>`
+* **get_url.py** – scrape a URL and output markdown. Usage:
+  `./get_url.py <url>`
+
+Both scripts use the built-in API key `fc-7ba58ac8f0f3489e98c339da3cdb3d73` and require the
+`firecrawl-py` package which is listed in `requirements-worker.txt`.

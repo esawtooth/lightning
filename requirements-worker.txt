@@ -3,3 +3,4 @@ openai>=1.0.0
 
 # Additional dependencies that might be needed by agents
 requests
+firecrawl-py>=1.0.0
