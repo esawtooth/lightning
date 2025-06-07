@@ -517,14 +517,6 @@ ui_container = containerinstance.ContainerGroup(
     )
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
-pulumi.export(
-    "giteaUrl",
-    gitea_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"),
-)
-pulumi.export(
-    "postgresFqdn",
-    postgres_container.ip_address.apply(lambda ip: ip.fqdn),
-)
 
 if domain:
     pulumi.export("uiDomain", pulumi.Output.concat("https://", domain))
@@ -724,6 +716,16 @@ gitea_container = containerinstance.ContainerGroup(
             workspace_resource_id=workspace.id,
         )
     ),
+)
+
+# Export URLs that depend on the containers defined above
+pulumi.export(
+    "giteaUrl",
+    gitea_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"),
+)
+pulumi.export(
+    "postgresFqdn",
+    postgres_container.ip_address.apply(lambda ip: ip.fqdn),
 )
 
 # Wire the functions back to the Chainlit UI once the container address is known
