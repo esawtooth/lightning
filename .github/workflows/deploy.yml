@@ -30,11 +30,16 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Configure JWT signing key
-        run: pulumi config set jwtSigningKey "$JWT_SIGNING_KEY" --secret
+      - name: Configure Entra ID
+        run: |
+          pulumi config set aadClientId "$AAD_CLIENT_ID" --secret
+          pulumi config set aadClientSecret "$AAD_CLIENT_SECRET" --secret
+          pulumi config set aadTenantId "$AAD_TENANT_ID"
         working-directory: infra
         env:
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          AAD_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AAD_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AAD_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure OpenAI API key
         run: pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
@@ -136,11 +141,16 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-      - name: Configure JWT signing key
-        run: pulumi config set jwtSigningKey "$JWT_SIGNING_KEY" --secret
+      - name: Configure Entra ID
+        run: |
+          pulumi config set aadClientId "$AAD_CLIENT_ID" --secret
+          pulumi config set aadClientSecret "$AAD_CLIENT_SECRET" --secret
+          pulumi config set aadTenantId "$AAD_TENANT_ID"
         working-directory: infra
         env:
-          JWT_SIGNING_KEY: ${{ secrets.JWT_SIGNING_KEY }}
+          AAD_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AAD_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AAD_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure OpenAI API key
         run: pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret

@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-import jwt
+from common.jwt_utils import verify_token
 import logging
 import requests
 import chainlit as cl
@@ -25,7 +25,6 @@ def get_session_by_user(user_id: str):
 
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
-JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
 NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
@@ -33,20 +32,11 @@ NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
 
 def verify_user_token(token: str) -> Optional[str]:
-    """Verify JWT token and return username if valid."""
-    if not JWT_SIGNING_KEY:
-        logging.error("JWT_SIGNING_KEY not configured")
-        return None
-    
     try:
-        payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
-        if username and payload.get("exp", 0) > datetime.utcnow().timestamp():
-            return username
-    except jwt.InvalidTokenError as e:
+        return verify_token(token)
+    except Exception as e:
         logging.warning(f"Invalid token: {e}")
-    
-    return None
+        return None
 
 
 def _resolve_request_url(request: Request) -> str:

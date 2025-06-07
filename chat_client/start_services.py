@@ -37,14 +37,15 @@ def main():
     print("=" * 50)
     
     # Check required environment variables
-    required_vars = ["AUTH_API_URL", "JWT_SIGNING_KEY"]
+    required_vars = ["AAD_CLIENT_ID", "AAD_TENANT_ID", "AAD_CLIENT_SECRET"]
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     
     if missing_vars:
         print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
         print("\nRequired environment variables:")
-        print("- AUTH_API_URL: URL of the Azure Function auth endpoint")
-        print("- JWT_SIGNING_KEY: Secret key for JWT token verification")
+        print("- AAD_CLIENT_ID: Entra ID application ID")
+        print("- AAD_TENANT_ID: Entra ID tenant ID")
+        print("- AAD_CLIENT_SECRET: Client secret for the application")
         sys.exit(1)
     
     # Set up signal handlers
