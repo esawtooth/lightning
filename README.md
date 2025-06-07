@@ -334,6 +334,10 @@ Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
 Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
 forward messages back to the client.
 
+If your authentication gateway runs on a different host, set
+`AUTH_GATEWAY_URL` accordingly. When unset, the URL is inferred from the
+request's forwarded headers.
+
 ## Dashboard
 
 A simple FastAPI dashboard is located in the `dashboard/` directory. It allows

@@ -202,3 +202,15 @@ def test_notify_correct_user(monkeypatch):
         asyncio.run(module.notify(req, {'user_id': 'missing', 'message': 'hi'}))
 
 
+def test_resolve_gateway_fallback(monkeypatch):
+    monkeypatch.delenv('AUTH_GATEWAY_URL', raising=False)
+    capture = {}
+    _, module = load_chainlit_app(monkeypatch, capture)
+
+    request = types.SimpleNamespace(
+        headers={'x-forwarded-proto': 'https', 'x-forwarded-host': 'agentsmith.in'},
+        url=types.SimpleNamespace(scheme='https', hostname='agentsmith.in')
+    )
+    assert module._resolve_gateway_url(request) == 'https://agentsmith.in'
+
+

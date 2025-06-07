@@ -38,12 +38,14 @@ async def _refresh_cookie(request: Request, call_next):
     response = await call_next(request)
     new_token = getattr(request.state, "new_token", None)
     if new_token:
+        forwarded_proto = request.headers.get("x-forwarded-proto")
+        secure_cookie = (request.url.scheme == "https" or forwarded_proto == "https")
         response.set_cookie(
             key="auth_token",
             value=new_token,
             max_age=3600,
             httponly=True,
-            secure=True,
+            secure=secure_cookie,
             samesite="lax",
         )
     return response
@@ -195,12 +197,14 @@ async def login(
                 request.session["username"] = username
                 
                 redirect_response = RedirectResponse(url="/chat", status_code=302)
+                forwarded_proto = request.headers.get("x-forwarded-proto")
+                secure_cookie = (request.url.scheme == "https" or forwarded_proto == "https")
                 redirect_response.set_cookie(
                     key="auth_token",
                     value=token,
                     max_age=3600,  # 1 hour
                     httponly=True,
-                    secure=True,  # Use in production with HTTPS
+                    secure=secure_cookie,
                     samesite="lax"
                 )
                 

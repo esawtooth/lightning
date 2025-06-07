@@ -26,7 +26,7 @@ def get_session_by_user(user_id: str):
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
-AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL", "http://localhost:8000")
+AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
 NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
@@ -60,6 +60,18 @@ def _resolve_request_url(request: Request) -> str:
     return f"{scheme}://{host}{request.url.path}"
 
 
+def _resolve_gateway_url(request: Request) -> str:
+    """Return the URL of the authentication gateway for the request."""
+    base = AUTH_GATEWAY_URL.rstrip("/") if AUTH_GATEWAY_URL else None
+    if base:
+        return base
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
+    host = host.split(":")[0]
+    return f"{scheme}://{host}"
+
+
 async def authenticate_user(request: Request) -> Optional[str]:
     """Authenticate user from session or token."""
     # Check for auth token in cookies
@@ -86,7 +98,8 @@ if hasattr(fastapi_app, "middleware"):
         if not username:
             # Redirect to auth gateway with externally visible URL
             target_url = _resolve_request_url(request)
-            redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={target_url}"
+            gateway_base = _resolve_gateway_url(request)
+            redirect_url = f"{gateway_base}/?redirect={target_url}"
             return RedirectResponse(url=redirect_url)
 
         # Store username in request state for use in Chainlit handlers
