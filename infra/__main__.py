@@ -511,7 +511,7 @@ gitea_container = containerinstance.ContainerGroup(
             ),
             volume_mounts=[
                 containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data"),
-                containerinstance.VolumeMountArgs(name="gitea-setup", mount_path="/setup", readOnly=True),
+                containerinstance.VolumeMountArgs(name="gitea-setup", mount_path="/setup", read_only=True),
             ],
             command=[
                 "/bin/sh",
