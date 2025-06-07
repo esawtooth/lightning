@@ -113,6 +113,7 @@ email_domain = communication.Domain(
     email_service_name=email_service.name,
     domain_name=domain,
     domain_management=communication.DomainManagement.CUSTOMER_MANAGED,
+    user_engagement_tracking=communication.UserEngagementTracking.DISABLED,
     location="global",
     opts=pulumi.ResourceOptions(
         # Import the pre‑existing resource so future `pulumi up` runs are idempotent
