@@ -20,6 +20,9 @@ from pulumi_azure_native import (
 )
 
 from pulumi_random import RandomPassword
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
+from azure.core.exceptions import ResourceNotFoundError
 
 # Cosmos DB resources live in a separate module
 from pulumi_azure_native import cosmosdb
@@ -32,9 +35,11 @@ openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
 # Database credentials for the PostgreSQL container
 postgres_user = config.get("postgresUser") or "gitea"
-postgres_password_secret = RandomPassword("postgres-password", length=16, special=True)
-postgres_password = postgres_password_secret.result
 postgres_db = config.get("postgresDb") or "gitea"
+
+# Resource names
+resource_group_name = "lightning_dev-1"
+vault_name = "lightning-vault"
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
 domain = config.get("domain") or "agentsmith.in"
@@ -46,8 +51,8 @@ subscription_id = client_config.subscription_id
 
 # Resource group
 resource_group = resources.ResourceGroup(
-    "lightning_dev-1",
-    resource_group_name="lightning_dev-1",
+    resource_group_name,
+    resource_group_name=resource_group_name,
     location=location,
 )
 
@@ -55,7 +60,7 @@ resource_group = resources.ResourceGroup(
 vault = keyvault.Vault(
     "vault",
     resource_group_name=resource_group.name,
-    vault_name="lightning-vault",
+    vault_name=vault_name,
     location=resource_group.location,
     properties=keyvault.VaultPropertiesArgs(
         tenant_id=client_config.tenant_id,
@@ -70,14 +75,35 @@ vault = keyvault.Vault(
     ),
 )
 
-# Store generated password in the vault
-postgres_password_secret_res = keyvault.Secret(
-    "postgres-password-secret",
-    resource_group_name=resource_group.name,
-    vault_name=vault.name,
-    secret_name="postgresPassword",
-    properties=keyvault.SecretPropertiesArgs(value=postgres_password_secret.result),
-)
+# Retrieve existing secret or create a new one
+credential = DefaultAzureCredential()
+postgres_password: pulumi.Output[str]
+try:
+    secret_client = SecretClient(vault_url=f"https://{vault_name}.vault.azure.net/", credential=credential)
+    existing = secret_client.get_secret("postgresPassword")
+    postgres_password = pulumi.Output.secret(existing.value)
+    secret_id = subscription_id.apply(
+        lambda sid: f"/subscriptions/{sid}/resourceGroups/{resource_group_name}/providers/Microsoft.KeyVault/vaults/{vault_name}/secrets/postgresPassword"
+    )
+    postgres_password_secret_res = keyvault.Secret(
+        "postgres-password-secret",
+        resource_group_name=resource_group.name,
+        vault_name=vault.name,
+        secret_name="postgresPassword",
+        opts=pulumi.ResourceOptions(import_=secret_id),
+    )
+except ResourceNotFoundError:
+    postgres_password_secret_res = None
+    postgres_password_secret = RandomPassword("postgres-password", length=16, special=True)
+    postgres_password = postgres_password_secret.result
+    postgres_password_secret_res = keyvault.Secret(
+        "postgres-password-secret",
+        resource_group_name=resource_group.name,
+        vault_name=vault.name,
+        secret_name="postgresPassword",
+        properties=keyvault.SecretPropertiesArgs(value=postgres_password_secret.result),
+    )
+
 
 # Log Analytics Workspace for Application Insights
 workspace = operationalinsights.Workspace(
