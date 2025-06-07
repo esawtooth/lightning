@@ -100,6 +100,7 @@ email_service = communication.EmailService(
     location="global",
 )
 
+#
 # Email domain (agentsmith.in) already exists in the lightning‑email service.
 # Tell Pulumi to adopt it instead of trying to create it.
 email_domain = communication.Domain(
@@ -115,7 +116,6 @@ email_domain = communication.Domain(
 
 # (Optional) surface the domain in stack outputs
 pulumi.export("emailDomainName", email_domain.domain_name)
-
 comm_keys = communication.list_communication_service_keys_output(
     resource_group_name=resource_group.name,
     communication_service_name=communication_service.name,
@@ -126,6 +126,8 @@ pulumi.export("serviceBusNamespaceName", namespace.name)
 pulumi.export("queueName", queue.name)
 pulumi.export("communicationConnectionString", comm_keys.primary_connection_string)
 pulumi.export("emailServiceName", email_service.name)
+pulumi.export("emailDomain", email_domain.from_sender_domain)
+pulumi.export("emailVerificationRecords", email_domain.verification_records)
 pulumi.export("appInsightsKey", app_insights.instrumentation_key)
 
 # Storage account for Function App
@@ -449,6 +451,32 @@ if domain:
         ttl=600,
         cname_record=dns.CnameRecordArgs(cname=func_app.default_host_name),
     )
+
+    # Create DNS records required to verify the email sending domain
+    def create_verification_record(name: str, record: pulumi.Output):
+        return dns.RecordSet(
+            name,
+            resource_group_name=resource_group.name,
+            zone_name=dns_zone.name,
+            relative_record_set_name=record.apply(lambda r: r.name),
+            record_type=record.apply(lambda r: r.type),
+            ttl=record.apply(lambda r: float(r.ttl)),
+            txt_records=record.apply(
+                lambda r: [dns.TxtRecordArgs(value=[r.value])] if r.type == "TXT" else None
+            ),
+            cname_record=record.apply(
+                lambda r: dns.CnameRecordArgs(cname=r.value) if r.type == "CNAME" else None
+            ),
+            mx_records=record.apply(
+                lambda r: [dns.MxRecordArgs(exchange=r.value, preference=0)] if r.type == "MX" else None
+            ),
+        )
+
+    create_verification_record("domain-verification", email_domain.verification_records.domain)
+    create_verification_record("dkim-verification", email_domain.verification_records.d_kim)
+    create_verification_record("dkim2-verification", email_domain.verification_records.d_kim2)
+    create_verification_record("dmarc-verification", email_domain.verification_records.d_marc)
+    create_verification_record("spf-verification", email_domain.verification_records.s_pf)
 
 # Wire the functions back to the Chainlit UI once the container address is known
 notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
