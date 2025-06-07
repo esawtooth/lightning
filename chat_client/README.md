@@ -4,18 +4,13 @@ This directory contains the enhanced Lightning Chat client with authentication.
 
 ## Architecture
 
-The chat client now consists of two services:
+The chat client exposes a single gateway service:
 
-1. **Authentication Gateway** (Port 8000)
-   - User registration and login
-   - Session management
-   - JWT token verification
-   - Redirects authenticated users to chat
-
-2. **Chainlit Chat App** (Port 8001)  
-   - AI chat interface
-   - Protected by authentication middleware
-   - Event logging and user context
+1. **Gateway on Port 443**
+   - Routes `/auth` to the authentication endpoints
+   - Routes `/chat` to the Chainlit interface
+   - Handles user sessions and JWT verification
+   - Provides a single HTTPS endpoint for the UI
 
 ## Features
 
@@ -48,7 +43,7 @@ JWT_SIGNING_KEY=your-secret-signing-key
 Optional:
 ```bash
 SESSION_SECRET=your-session-secret
-CHAINLIT_URL=http://localhost:8001  # For custom chat service URL
+CHAINLIT_URL=https://localhost/chat  # For custom gateway URL
 EVENT_API_URL=https://your-function-app.azurewebsites.net/api/events
 AUTH_TOKEN=your-api-auth-token
 ```
@@ -77,7 +72,7 @@ python ../test_local_auth.py
 ```
 
 ### Manual Testing
-1. Visit http://localhost:8000
+1. Visit https://localhost/auth
 2. Register a new account
 3. Login with credentials
 4. Access chat interface
@@ -92,7 +87,7 @@ docker build -t lightning-chat .
 
 ### Run
 ```bash
-docker run -p 8000:8000 -p 8001:8001 \
+docker run -p 443:443 \
   -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api/auth" \
   -e JWT_SIGNING_KEY="your-secret-key" \
   lightning-chat
@@ -114,20 +109,20 @@ chat_client/
 
 ## API Endpoints
 
-### Authentication Gateway (Port 8000)
-- `GET /` - Login page (redirects if authenticated)
-- `POST /login` - User authentication
-- `GET /register` - Registration page  
-- `POST /register` - User registration
-- `GET /chat` - Redirect to chat (requires auth)
-- `GET /logout` - User logout
-- `GET /health` - Health check
+### Authentication Gateway (`/auth`)
+- `GET /auth/` - Login page (redirects if authenticated)
+- `POST /auth/login` - User authentication
+- `GET /auth/register` - Registration page
+- `POST /auth/register` - User registration
+- `GET /auth/chat` - Redirect to chat (requires auth)
+- `GET /auth/logout` - User logout
+- `GET /auth/health` - Health check
 
-### Chat Service (Port 8001)
-- `GET /` - Chainlit chat interface (requires auth)
-- `POST /notify` - External message notifications
-- `GET /health` - Health check
-- `GET /dashboard` - Analytics dashboard
+### Chat Service (`/chat`)
+- `GET /chat/` - Chainlit chat interface (requires auth)
+- `POST /chat/notify` - External message notifications
+- `GET /chat/health` - Health check
+- `GET /chat/dashboard` - Analytics dashboard
 
 ## Security Features
 
@@ -154,7 +149,7 @@ Make sure your Azure Function has the UserAuth function deployed and configured.
 
 1. **Services won't start**
    - Check environment variables are set
-   - Verify ports 8000 and 8001 are available
+   - Verify port 443 is available
    - Check Python dependencies are installed
 
 2. **Authentication fails**
@@ -164,7 +159,7 @@ Make sure your Azure Function has the UserAuth function deployed and configured.
 
 3. **Chat not accessible**
    - Confirm authentication is working
-   - Check Chainlit service is running on port 8001
+   - Check the gateway service is running on port 443
    - Verify authentication middleware is working
 
 ### Logs

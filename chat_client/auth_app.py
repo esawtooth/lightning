@@ -25,7 +25,6 @@ import uvicorn
 AUTH_API_URL = os.environ.get("AUTH_API_URL", "")  # Azure Function auth endpoint
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY", "")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "your-secret-key-change-in-production")
-CHAINLIT_PORT = os.environ.get("CHAINLIT_PORT", "8001")
 
 # Setup
 app = FastAPI(title="Lightning Chat Authentication")
@@ -102,7 +101,7 @@ def verify_token(token: str) -> Optional[str]:
 
 
 def _resolve_chainlit_url(request: Request) -> str:
-    """Return the URL of the Chainlit service based on the request."""
+    """Return the base URL for the Chainlit service."""
     configured = os.environ.get("CHAINLIT_URL")
     if configured:
         return configured
@@ -110,7 +109,7 @@ def _resolve_chainlit_url(request: Request) -> str:
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
     host = host.split(":")[0]
-    return f"{scheme}://{host}:{CHAINLIT_PORT}"
+    return f"{scheme}://{host}/chat"
 
 
 async def get_current_user(request: Request) -> Optional[str]:
@@ -521,4 +520,4 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=443)

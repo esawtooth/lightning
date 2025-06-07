@@ -340,8 +340,7 @@ ui_container = containerinstance.ContainerGroup(
                 name="chat-ui",
                 image=ui_image,
                 ports=[
-                    containerinstance.ContainerPortArgs(port=8000),
-                    containerinstance.ContainerPortArgs(port=8001),
+                containerinstance.ContainerPortArgs(port=443),
                 ],
                 environment_variables=[
                     containerinstance.EnvironmentVariableArgs(
@@ -393,8 +392,7 @@ ui_container = containerinstance.ContainerGroup(
         ],
         ip_address=containerinstance.IpAddressArgs(
             ports=[
-                containerinstance.PortArgs(protocol="TCP", port=8000),
-                containerinstance.PortArgs(protocol="TCP", port=8001),
+                containerinstance.PortArgs(protocol="TCP", port=443),
             ],
             type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
         ),
@@ -601,7 +599,7 @@ gitea_container = containerinstance.ContainerGroup(
 )
 
 # Wire the functions back to the Chainlit UI once the container address is known
-notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")
+notify_url = ui_container.ip_address.apply(lambda ip: f"https://{ip.fqdn}/chat/notify")
 
 # Function to create and upload Function App package
 def create_function_package():

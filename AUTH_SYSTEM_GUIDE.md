@@ -6,9 +6,8 @@ The Lightning Chat UI container has been enhanced with a comprehensive authentic
 
 ## Architecture
 
-### Multi-Service Design
-- **Auth Gateway** (Port 8000): FastAPI-based authentication service
-- **Chat Service** (Port 8001): Chainlit-based chat interface with auth middleware
+-### Multi-Service Design
+- **Gateway** (Port 443): Routes `/auth` to the auth service and `/chat` to the chat interface
 - **Azure Functions**: Backend API for user management and authentication
 
 ### Authorization Flow
@@ -27,7 +26,7 @@ The Lightning Chat UI container has been enhanced with a comprehensive authentic
 - **Database Schema**: Added status, role, email, timestamps
 
 ### 2. Authentication Gateway (`/chat_client/auth_app.py`)
-- **FastAPI Service**: Runs on port 8000
+- **FastAPI Service**: Mounted under `/auth`
 - **JWT Verification**: Secure token handling
 - **Session Management**: HTTP-only cookies
 - **Admin Panel**: User management interface
@@ -61,7 +60,7 @@ export JWT_SIGNING_KEY="your-jwt-signing-key"
 
 # Required for Chat Client
 export AUTH_API_URL="https://your-function-app.azurewebsites.net/api"
-export CHAINLIT_URL="http://localhost:8001"  # In Docker: http://chainlit:8001
+export CHAINLIT_URL="https://localhost/chat"  # In Docker: https://gateway/chat
 ```
 
 ### 2. Deploy Azure Functions
@@ -81,7 +80,7 @@ chmod +x start.sh
 
 # Docker deployment
 docker build -t lightning-chat .
-docker run -p 8000:8000 -p 8001:8001 \
+docker run -p 443:443 \
   -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api" \
   -e JWT_SIGNING_KEY="your-jwt-signing-key" \
   lightning-chat
@@ -109,9 +108,9 @@ python test_auth_flow.py
 ```
 
 ### Manual Testing Steps
-1. **Registration**: Visit http://localhost:8000/register
+1. **Registration**: Visit https://localhost/auth/register
 2. **Waitlist Check**: Try logging in (should be blocked)
-3. **Admin Login**: Use admin credentials at http://localhost:8000/admin
+3. **Admin Login**: Use admin credentials at https://localhost/auth/admin
 4. **User Approval**: Approve pending users in admin panel
 5. **User Access**: Approved users can now access chat
 
@@ -272,8 +271,8 @@ python test_auth_flow.py
 
 ```bash
 # Check service health
-curl http://localhost:8000/health
-curl http://localhost:8001/health
+curl https://localhost/auth/health
+curl https://localhost/chat/health
 
 # Test Azure Function
 curl -X POST "https://your-function-app.azurewebsites.net/api/register" \

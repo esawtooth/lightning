@@ -263,7 +263,7 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "OPENAI_MODEL": "gpt-3.5-turbo",
     "SERVICEBUS_CONNECTION": "<namespace-connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
-    "NOTIFY_URL": "http://localhost:8000/notify",
+    "NOTIFY_URL": "https://localhost/chat/notify",
     "JWT_SIGNING_KEY": "secret",
     "COSMOS_CONNECTION": "<cosmos-connection-string>",
     "COSMOS_DATABASE": "lightning",
@@ -282,7 +282,7 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-3.5-turbo
 SERVICEBUS_CONNECTION=<namespace-connection-string>
 SERVICEBUS_QUEUE=chat-events
-NOTIFY_URL=http://localhost:8000/notify
+NOTIFY_URL=https://localhost/chat/notify
 JWT_SIGNING_KEY=secret
 COSMOS_CONNECTION=<cosmos-connection-string>
 COSMOS_DATABASE=lightning

@@ -7,6 +7,7 @@ COPY chat_client/chainlit_app.py ./chainlit_app.py
 COPY chat_client/auth_app.py ./auth_app.py
 COPY chat_client/templates/ ./templates/
 COPY chat_client/start.sh ./start.sh
+COPY chat_client/gateway_app.py ./gateway_app.py
 COPY events/ ./events/
 COPY dashboard/ ./dashboard/
 COPY common/ ./common/
@@ -26,8 +27,8 @@ RUN pip install --no-cache-dir \
 # Make startup script executable
 RUN chmod +x ./start.sh
 
-# Expose ports for both services
-EXPOSE 8000 8001
+# Expose HTTPS port for the gateway
+EXPOSE 443
 
 # Run the multi-service startup script
 CMD ["./start.sh"]

@@ -135,7 +135,7 @@ def create_admin_user():
         if user.get('role') == 'admin' and user.get('status') == 'approved':
             log_success("Admin user is ready to use!")
             print(f"\n{Colors.GREEN}You can now login to the admin panel at:{Colors.END}")
-            print(f"{Colors.GREEN}http://localhost:8000/admin{Colors.END}")
+            print(f"{Colors.GREEN}https://localhost/auth/admin{Colors.END}")
         else:
             log_error("Admin user setup incomplete")
             
