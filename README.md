@@ -10,8 +10,8 @@ The HTTP triggers use anonymous authorization so no Function key is required. Au
 ### POST /api/events
 
 Authenticate requests with a bearer token in the `Authorization` header.
-The token must be signed using the key provided in `JWT_SIGNING_KEY` and
-identifies the user. Send a JSON body describing the event:
+The bearer token should be issued by Azure Entra ID and identifies the user.
+Send a JSON body describing the event:
 
 ```json
 {
@@ -49,51 +49,15 @@ or
 
 The function stores the schedule in durable storage and returns a schedule ID.
 
-## Authentication API
+## Authentication
 
-New endpoints allow registering users and retrieving JWT tokens for authenticated
-access to the rest of the service.
+Authentication is handled by **Azure Entra ID**. Users authenticate via the
+Microsoft identity platform and receive an access token which must be supplied
+in the `Authorization` header when calling the API endpoints.
 
-### POST /api/register
-
-Create a new user by sending a JSON payload containing an identifier and
-password:
-
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"userID": "alice", "password": "secret"}' \
-  https://<function-app>.azurewebsites.net/api/register
-```
-
-### POST /api/token
-
-Exchange credentials for a signed JWT. Include the same JSON body used during
-registration:
-
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"userID": "alice", "password": "secret"}' \
-  https://<function-app>.azurewebsites.net/api/token
-```
-
-The returned token should be provided in the `Authorization` header when calling
-the other API endpoints.
-
-### POST /api/refresh
-
-Send the current token in the `Authorization` header to obtain a new JWT with a
-fresh expiration time:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer <token>" \
-  https://<function-app>.azurewebsites.net/api/refresh
-```
-
-If the token is valid a new token is returned. Invalid or expired tokens result
-in a `401` response.
+The Function App and chat client are configured with the Entra ID tenant and
+application ID. No custom registration or password handling logic remains in the
+repository.
 
 ## Python library
 
@@ -223,10 +187,12 @@ messaging:
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
   namespace.
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
-- `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
-  to the chat client. Pulumi sets this automatically based on the Chainlit
-  container address.
-- `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
+ - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
+   to the chat client. Pulumi sets this automatically based on the Chainlit
+   container address.
+ - `AAD_CLIENT_ID` &mdash; application ID issued by Azure Entra ID.
+ - `AAD_CLIENT_SECRET` &mdash; client secret for the Entra ID application.
+ - `AAD_TENANT_ID` &mdash; tenant ID where the application is registered.
 - `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
 - `COSMOS_DATABASE` &mdash; database name (defaults to `lightning`).
 - `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
@@ -264,7 +230,9 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "SERVICEBUS_CONNECTION": "<namespace-connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
     "NOTIFY_URL": "https://localhost/chat/notify",
-    "JWT_SIGNING_KEY": "secret",
+    "AAD_CLIENT_ID": "<app-id>",
+    "AAD_CLIENT_SECRET": "<client-secret>",
+    "AAD_TENANT_ID": "<tenant-id>",
     "COSMOS_CONNECTION": "<cosmos-connection-string>",
     "COSMOS_DATABASE": "lightning",
     "USER_CONTAINER": "users",
@@ -283,7 +251,9 @@ OPENAI_MODEL=gpt-3.5-turbo
 SERVICEBUS_CONNECTION=<namespace-connection-string>
 SERVICEBUS_QUEUE=chat-events
 NOTIFY_URL=https://localhost/chat/notify
-JWT_SIGNING_KEY=secret
+AAD_CLIENT_ID=<app-id>
+AAD_CLIENT_SECRET=<client-secret>
+AAD_TENANT_ID=<tenant-id>
 COSMOS_CONNECTION=<cosmos-connection-string>
 COSMOS_DATABASE=lightning
 USER_CONTAINER=users
