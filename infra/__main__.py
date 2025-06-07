@@ -486,6 +486,12 @@ ui_container = containerinstance.ContainerGroup(
                         name="CHAINLIT_URL",
                         value=pulumi.Output.concat("https://", domain, "/chat"),
                     ),
+                    containerinstance.EnvironmentVariableArgs(
+                        name="GITEA_URL",
+                        value=gitea_container.ip_address.apply(
+                            lambda ip: f"http://{ip.fqdn}"
+                        ),
+                    ),
                 ],
                 resources=containerinstance.ResourceRequirementsArgs(
                     requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
