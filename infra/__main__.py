@@ -24,6 +24,7 @@ from pulumi_random import RandomPassword
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.core.exceptions import ResourceNotFoundError
+import pulumi.runtime as runtime
 
 # Cosmos DB resources live in a separate module
 from pulumi_azure_native import cosmosdb
@@ -102,27 +103,17 @@ vault = keyvault.Vault(
     ),
 )
 
-# Retrieve existing secret or create a new one
+
+# Retrieve existing secret or create a new one (skip live calls during preview)
 credential = DefaultAzureCredential()
 postgres_password: pulumi.Output[str]
-try:
-    secret_client = SecretClient(vault_url=f"https://{vault_name}.vault.azure.net/", credential=credential)
-    existing = secret_client.get_secret("postgresPassword")
-    postgres_password = pulumi.Output.secret(existing.value)
-    secret_id = subscription_id.apply(
-        lambda sid: f"/subscriptions/{sid}/resourceGroups/{resource_group_name}/providers/Microsoft.KeyVault/vaults/{vault_name}/secrets/postgresPassword"
-    )
-    postgres_password_secret_res = keyvault.Secret(
-        "postgres-password-secret",
-        resource_group_name=resource_group.name,
-        vault_name=vault.name,
-        secret_name="postgresPassword",
-        opts=pulumi.ResourceOptions(import_=secret_id),
-    )
-except ResourceNotFoundError:
-    postgres_password_secret_res = None
+
+if runtime.is_dry_run():
+    # During `pulumi preview` we can't hit Key Vault – generate a placeholder password.
     postgres_password_secret = RandomPassword("postgres-password", length=16, special=True)
     postgres_password = postgres_password_secret.result
+
+    # Provision (or later create) the secret in KV using the generated value.
     postgres_password_secret_res = keyvault.Secret(
         "postgres-password-secret",
         resource_group_name=resource_group.name,
@@ -130,6 +121,37 @@ except ResourceNotFoundError:
         secret_name="postgresPassword",
         properties=keyvault.SecretPropertiesArgs(value=postgres_password_secret.result),
     )
+else:
+    try:
+        secret_client = SecretClient(
+            vault_url=f"https://{vault_name}.vault.azure.net/",
+            credential=credential,
+        )
+        existing = secret_client.get_secret("postgresPassword")
+        postgres_password = pulumi.Output.secret(existing.value)
+
+        # Adopt the existing secret so future runs are idempotent.
+        secret_id = subscription_id.apply(
+            lambda sid: f"/subscriptions/{sid}/resourceGroups/{resource_group_name}/providers/Microsoft.KeyVault/vaults/{vault_name}/secrets/postgresPassword"
+        )
+        postgres_password_secret_res = keyvault.Secret(
+            "postgres-password-secret",
+            resource_group_name=resource_group.name,
+            vault_name=vault.name,
+            secret_name="postgresPassword",
+            opts=pulumi.ResourceOptions(import_=secret_id),
+        )
+    except Exception:
+        # If the secret doesn't exist yet (or KV isn't reachable), create a new one.
+        postgres_password_secret = RandomPassword("postgres-password", length=16, special=True)
+        postgres_password = postgres_password_secret.result
+        postgres_password_secret_res = keyvault.Secret(
+            "postgres-password-secret",
+            resource_group_name=resource_group.name,
+            vault_name=vault.name,
+            secret_name="postgresPassword",
+            properties=keyvault.SecretPropertiesArgs(value=postgres_password_secret.result),
+        )
 
 
 # Log Analytics Workspace for Application Insights
