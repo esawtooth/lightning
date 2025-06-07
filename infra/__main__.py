@@ -20,6 +20,8 @@ from pulumi_azure_native import (
 # Cosmos DB resources live in a separate module
 from pulumi_azure_native import cosmosdb
 from pulumi_azure_native.authorization import get_client_config, RoleAssignment
+from godaddy import GoDaddyNameServers
+from pulumi_azure_native import dns
 
 config = pulumi.Config()
 location = config.get("location") or "centralindia"
@@ -27,6 +29,9 @@ openai_api_key = config.require_secret("openaiApiKey")
 jwt_signing_key = config.require_secret("jwtSigningKey")
 # Worker image will be configured by GitHub Actions or default to ACR image
 worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
+domain = config.get("domain") or "agentsmith.in"
+godaddy_api_key = config.get_secret("godaddyApiKey")
+godaddy_api_secret = config.get_secret("godaddyApiSecret")
 
 # Resource group
 resource_group = resources.ResourceGroup(
@@ -300,6 +305,50 @@ ui_container = containerinstance.ContainerGroup(
     )
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+
+if domain:
+    pulumi.export("uiDomain", pulumi.Output.concat("https://", domain))
+    pulumi.export("apiDomain", pulumi.Output.concat("https://api.", domain))
+
+    dns_zone = dns.Zone(
+        "domain-zone",
+        resource_group_name=resource_group.name,
+        zone_name=domain,
+        location="global",
+    )
+
+    dns.RecordSet(
+        "ui-a-record",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="@",
+        record_type="A",
+        ttl=600,
+        a_records=[
+            dns.ARecordArgs(
+                ipv4_address=ui_container.ip_address.apply(lambda ip: ip.ip)
+            )
+        ],
+    )
+
+    dns.RecordSet(
+        "api-cname",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="api",
+        record_type="CNAME",
+        ttl=600,
+        cname_record=dns.CnameRecordArgs(cname=func_app.default_host_name),
+    )
+
+    if godaddy_api_key and godaddy_api_secret:
+        GoDaddyNameServers(
+            "nameservers",
+            domain=domain,
+            nameservers=dns_zone.name_servers,
+            api_key=godaddy_api_key,
+            api_secret=godaddy_api_secret,
+        )
 
 # Wire the functions back to the Chainlit UI once the container address is known
 notify_url = ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}/notify")

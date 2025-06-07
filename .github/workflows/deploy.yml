@@ -51,6 +51,20 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure domain
+        run: pulumi config set domain "agentsmith.in"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure GoDaddy credentials
+        run: |
+          pulumi config set godaddyApiKey "$GODADDY_API_KEY" --secret
+          pulumi config set godaddyApiSecret "$GODADDY_API_SECRET" --secret
+        working-directory: infra
+        env:
+          GODADDY_API_KEY: ${{ secrets.GODADDY_API_KEY }}
+          GODADDY_API_SECRET: ${{ secrets.GODADDY_API_SECRET }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Deploy baseline infrastructure
         run: pulumi up --yes
         working-directory: infra
@@ -141,6 +155,20 @@ jobs:
         run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:${{ github.sha }}"
         working-directory: infra
         env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure domain
+        run: pulumi config set domain "agentsmith.in"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure GoDaddy credentials
+        run: |
+          pulumi config set godaddyApiKey "$GODADDY_API_KEY" --secret
+          pulumi config set godaddyApiSecret "$GODADDY_API_SECRET" --secret
+        working-directory: infra
+        env:
+          GODADDY_API_KEY: ${{ secrets.GODADDY_API_KEY }}
+          GODADDY_API_SECRET: ${{ secrets.GODADDY_API_SECRET }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Deploy stack
         run: pulumi up --yes
