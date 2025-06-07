@@ -183,8 +183,6 @@ pulumi config set jwtSigningKey <secret> --secret
 pulumi config set uiImage lightningacr.azurecr.io/chainlit-client:<tag>
 pulumi config set workerImage lightningacr.azurecr.io/worker-task:<tag>
 pulumi config set domain agentsmith.in
-pulumi config set godaddyApiKey <key> --secret
-pulumi config set godaddyApiSecret <secret> --secret
 pulumi up
 ```
 
@@ -196,10 +194,13 @@ Pulumi automatically:
   package and sets `WEBSITE_RUN_FROM_PACKAGE` to the package URL
 - Builds and deploys the UI containers
 - Configures all environment variables and connections
-- Creates an Azure DNS zone with records for the chat UI and API and
-  updates GoDaddy to use the zone's name servers when a domain and
-  credentials are provided
-  (defaults to `agentsmith.in` if no domain is configured)
+- Creates an Azure DNS zone with records for the chat UI and API.
+  Update your domain registrar to use the zone's name servers manually
+  (defaults to `agentsmith.in` if no domain is configured).
+  Pulumi exports these servers as `dnsZoneNameServers`.
+
+After `pulumi up` completes copy the values from `dnsZoneNameServers` and
+update the nameserver records for your domain in GoDaddy.
 
 The Function App uses the **Python 3.10** runtime. If you deployed an older
 stack running Python 3.9 you may see a deprecation warning in the Azure portal.
@@ -217,13 +218,6 @@ messaging:
   calling OpenAI.
   When deploying with GitHub Actions, set this as the `OPENAI_API_KEY` secret
   so the workflow can configure the Function App.
-- `GODADDY_API_KEY` &mdash; API key for automating DNS updates.
-  Set as the `GODADDY_API_KEY` secret for GitHub Actions.
-- `GODADDY_API_SECRET` &mdash; API secret paired with the key.
-  Set as the `GODADDY_API_SECRET` secret for GitHub Actions.
-- `GODADDY_CUSTOMER_ID` &mdash; customer identifier used when calling the GoDaddy
-  v2 API for domain updates. The Pulumi deployment currently defaults to
-  `esawtooth` if not specified.
 - `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI
   (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
