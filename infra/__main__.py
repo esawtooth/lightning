@@ -394,6 +394,7 @@ http {
                 log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,
             )
         ),
+        opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
     )
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
