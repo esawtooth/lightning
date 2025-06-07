@@ -100,6 +100,22 @@ email_service = communication.EmailService(
     location="global",
 )
 
+# Email domain (agentsmith.in) already exists in the lightning‑email service.
+# Tell Pulumi to adopt it instead of trying to create it.
+email_domain = communication.Domain(
+    "email-domain",
+    resource_group_name=resource_group.name,
+    email_service_name=email_service.name,
+    domain_name=domain,
+    opts=pulumi.ResourceOptions(
+        # Import the pre‑existing resource so future `pulumi up` runs are idempotent
+        import_=f"/subscriptions/{subscription_id}/resourceGroups/lightning_dev-1/providers/Microsoft.Communication/emailServices/lightning-email/domains/{domain}"
+    ),
+)
+
+# (Optional) surface the domain in stack outputs
+pulumi.export("emailDomainName", email_domain.domain_name)
+
 comm_keys = communication.list_communication_service_keys_output(
     resource_group_name=resource_group.name,
     communication_service_name=communication_service.name,
