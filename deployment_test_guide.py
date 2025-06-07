@@ -26,17 +26,17 @@ def test_endpoints():
         {
             "name": "Authentication Flow",
             "description": "Test user registration and login",
-            "example": "1. Visit http://<ui-url>:8000/\n   2. Register new account\n   3. Login with credentials"
+            "example": "1. Visit https://<ui-url>/auth\n   2. Register new account\n   3. Login with credentials"
         },
         {
             "name": "Chat Interface", 
             "description": "Authenticated Chainlit chat UI",
-            "example": "After login, access chat at http://<ui-url>:8000/chat"
+            "example": "After login, access chat at https://<ui-url>/chat"
         },
         {
             "name": "Health Checks",
             "description": "Service health monitoring",
-            "example": "GET http://<ui-url>:8000/health (Auth Gateway)\n   GET http://<ui-url>:8001/health (Chat Service)"
+            "example": "GET https://<ui-url>/auth/health (Auth Gateway)\n   GET https://<ui-url>/chat/health (Chat Service)"
         },
         {
             "name": "Event API",
@@ -74,7 +74,7 @@ def get_azure_resources():
     print("1. Go to https://portal.azure.com")
     print("2. Navigate to Resource Group 'lightning'")
     print("3. Look for:")
-    print("   - Container Instance 'chat-ui' → Get public IP (Auth Gateway on :8000, Chat on :8001)")
+    print("   - Container Instance 'chat-ui' → Get public IP (Gateway on :443)")
     print("   - Function App 'lightning-func-*' → Get URL (API endpoints)")
     print("   - Container Registry 'lightningacr' → Container images")
     print("   - Cosmos DB 'lightning-cosmos-*' → User and event storage")

@@ -11,8 +11,8 @@ import os
 from datetime import datetime
 
 # Configuration
-AUTH_SERVICE_URL = "http://localhost:8000"
-CHAT_SERVICE_URL = "http://localhost:8001"
+AUTH_SERVICE_URL = "https://localhost/auth"
+CHAT_SERVICE_URL = "https://localhost/chat"
 AUTH_API_URL = os.environ.get("AUTH_API_URL", "https://your-function-app.azurewebsites.net/api")
 
 class Colors:

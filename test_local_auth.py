@@ -97,8 +97,7 @@ def start_local_services():
     os.chdir(Path(__file__).parent / "chat_client")
     
     print("🚀 Starting Lightning Chat services locally...")
-    print("📍 Auth Gateway: http://localhost:8000")
-    print("💬 Chat Service: http://localhost:8001")
+    print("📍 Gateway: https://localhost")
     print("\nPress Ctrl+C to stop services")
     
     try:
@@ -134,7 +133,7 @@ def main():
     
     print("\n" + "=" * 50)
     print("🎯 Test Checklist:")
-    print("1. Visit http://localhost:8000")
+    print("1. Visit https://localhost/auth")
     print("2. Try to access chat without logging in (should redirect)")
     print("3. Register a new account")
     print("4. Login with your credentials") 
