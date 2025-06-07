@@ -653,12 +653,21 @@ gitea_container = containerinstance.ContainerGroup(
                 containerinstance.EnvironmentVariableArgs(
                     name="GITEA__database__PASSWD", secure_value=postgres_password
                 ),
+                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
+                containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_client_secret),
+                containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
             ],
             resources=containerinstance.ResourceRequirementsArgs(
                 requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=1.0)
             ),
             volume_mounts=[
-                containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data")
+                containerinstance.VolumeMountArgs(name="gitea-data", mount_path="/data"),
+                containerinstance.VolumeMountArgs(name="gitea-setup", mount_path="/setup", read_only=True),
+            ],
+            command=[
+                "/bin/sh",
+                "-c",
+                "/setup/setup.sh; /usr/local/bin/docker-entrypoint.sh",
             ],
         )
     ],
@@ -670,7 +679,17 @@ gitea_container = containerinstance.ContainerGroup(
                 storage_account_name=repo_storage_account.name,
                 storage_account_key=repo_primary_key,
             ),
-        )
+        ),
+        containerinstance.VolumeArgs(
+            name="gitea-setup",
+            secret={
+                "setup.sh": pulumi.Output.from_input(
+                    "#!/bin/sh\n"
+                    "set -e\n"
+                    "/usr/local/bin/gitea admin auth add-oauth \\\n+  --name AzureAD \\\n+  --provider openidConnect \\\n+  --key $AAD_CLIENT_ID \\\n+  --secret $AAD_CLIENT_SECRET \\\n+  --auto-discover-url https://login.microsoftonline.com/$AAD_TENANT_ID/v2.0/.well-known/openid-configuration \\\n+  --config /data/gitea/conf/app.ini || true\n"
+                ).apply(lambda s: __import__("base64").b64encode(s.encode()).decode()),
+            },
+        ),
     ],
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
