@@ -2,28 +2,46 @@
 <html>
 <head>
     <title>Tasks</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <style>
+        #logs {
+            background: #f0f0f0;
+            padding: 1em;
+            max-height: 300px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
     <script>
+        let tasks = [];
         async function loadTasks() {
             const resp = await fetch('/tasks.json');
             if (resp.status !== 200) {
                 document.getElementById('error').textContent = 'Failed to load tasks';
                 return;
             }
-            const tasks = await resp.json();
+            tasks = await resp.json();
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const filter = document.getElementById('statusFilter').value;
             const tbody = document.getElementById('tasks-body');
             tbody.innerHTML = '';
             let total = 0;
             tasks.forEach(t => {
+                if (filter !== 'all' && t.status !== filter) return;
                 const row = document.createElement('tr');
                 const info = t.cost || {};
                 const cost = info.cost ? Number(info.cost) : 0;
                 total += cost;
                 const costDisplay = cost ? '$' + cost.toFixed(4) : '';
-                row.innerHTML = `<td>${t.id}</td><td>${t.status}</td><td>${costDisplay}</td><td><button onclick="showLogs('${t.id}')">view</button></td>`;
+                row.innerHTML = `<td>${t.id}</td><td>${t.status}</td><td>${costDisplay}</td><td><button class="button is-small" onclick="showLogs('${t.id}')">view</button></td>`;
                 tbody.appendChild(row);
             });
             document.getElementById('total-cost').textContent = '$' + total.toFixed(4);
         }
+
         let logInterval;
         function parseHistory(text) {
             const lines = text.split(/\r?\n/);
@@ -63,13 +81,32 @@
             await fetchLogs();
             logInterval = setInterval(fetchLogs, 3000);
         }
-        window.onload = loadTasks;
+
+        function startAutoRefresh() {
+            loadTasks();
+            setInterval(loadTasks, 10000);
+        }
+
+        window.onload = startAutoRefresh;
     </script>
 </head>
 <body>
     <h1>Task Monitor</h1>
     <p id="error" style="color:red"></p>
-    <table border="1">
+    <div class="field is-grouped">
+        <div class="control">
+            <div class="select is-small">
+                <select id="statusFilter" onchange="renderTasks()">
+                    <option value="all">All</option>
+                    <option value="queued">Queued</option>
+                    <option value="running">Running</option>
+                    <option value="success">Success</option>
+                    <option value="failed">Failed</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    <table class="table is-fullwidth is-striped">
         <thead><tr><th>ID</th><th>Status</th><th>Cost</th><th>Logs</th></tr></thead>
         <tbody id="tasks-body"></tbody>
     </table>
