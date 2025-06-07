@@ -27,6 +27,7 @@ EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL", "http://localhost:8000")
+CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
 NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
 
@@ -46,6 +47,17 @@ def verify_user_token(token: str) -> Optional[str]:
         logging.warning(f"Invalid token: {e}")
     
     return None
+
+
+def _resolve_request_url(request: Request) -> str:
+    """Return the externally accessible URL for the given request."""
+    base = CHAINLIT_URL.rstrip("/") if CHAINLIT_URL else None
+    if base:
+        return f"{base}{request.url.path}"
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
+    return f"{scheme}://{host}{request.url.path}"
 
 
 async def authenticate_user(request: Request) -> Optional[str]:
@@ -72,8 +84,9 @@ if hasattr(fastapi_app, "middleware"):
         # Check authentication
         username = await authenticate_user(request)
         if not username:
-            # Redirect to auth gateway
-            redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={request.url}"
+            # Redirect to auth gateway with externally visible URL
+            target_url = _resolve_request_url(request)
+            redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={target_url}"
             return RedirectResponse(url=redirect_url)
 
         # Store username in request state for use in Chainlit handlers
