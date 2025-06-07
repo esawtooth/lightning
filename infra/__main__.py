@@ -350,50 +350,6 @@ ui_container = containerinstance.ContainerGroup(
                     requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
                 ),
             ),
-            containerinstance.ContainerArgs(
-                name="nginx",
-                image="nginx:1.25-alpine",
-                ports=[containerinstance.ContainerPortArgs(port=80)],
-                environment_variables=[
-                    containerinstance.EnvironmentVariableArgs(
-                        name="NGINX_CONF",
-                        value="""
-events {}
-http {
-  server {
-    listen 80;
-    location /chat/ {
-      proxy_pass http://127.0.0.1:8001/;
-      proxy_http_version 1.1;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection 'upgrade';
-    }
-    location /dashboard/ {
-      proxy_pass http://127.0.0.1:8001/dashboard/;
-    }
-    location /ws/ {
-      proxy_pass http://127.0.0.1:8001/ws/;
-      proxy_http_version 1.1;
-      proxy_set_header Upgrade $http_upgrade;
-      proxy_set_header Connection 'upgrade';
-    }
-    location / {
-      proxy_pass http://127.0.0.1:8000/;
-    }
-  }
-}
-""",
-                    )
-                ],
-                command=[
-                    "/bin/sh",
-                    "-c",
-                    "echo \"$NGINX_CONF\" > /etc/nginx/nginx.conf && nginx -g 'daemon off;'",
-                ],
-                resources=containerinstance.ResourceRequirementsArgs(
-                    requests=containerinstance.ResourceRequestsArgs(cpu=0.5, memory_in_gb=0.5)
-                ),
-            ),
         ],
         image_registry_credentials=[
             containerinstance.ImageRegistryCredentialArgs(
@@ -404,7 +360,8 @@ http {
         ],
         ip_address=containerinstance.IpAddressArgs(
             ports=[
-                containerinstance.PortArgs(protocol="TCP", port=80),
+                containerinstance.PortArgs(protocol="TCP", port=8000),
+                containerinstance.PortArgs(protocol="TCP", port=8001),
             ],
             type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
         ),
