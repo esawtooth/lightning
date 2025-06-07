@@ -14,6 +14,10 @@ az login --service-principal \
 
 az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 
+If you need az, you will first need to install the cli using:
+
+curl -sL https://aka.ms/InstallAzureCLIDeb | sudo bash
+
 ## Firecrawl utilities
 
 Two helper scripts are available in the project root:
