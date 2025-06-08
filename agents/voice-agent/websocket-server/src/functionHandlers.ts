@@ -1,4 +1,5 @@
 import { FunctionHandler } from "./types";
+import { sendDigits } from "./callControl";
 
 const functions: FunctionHandler[] = [];
 
@@ -19,6 +20,25 @@ functions.push({
   handler: async (args: { query: string }) => {
     // TODO: replace with real implementation
     return JSON.stringify({ result: `No results for '${args.query}'.` });
+  },
+});
+
+functions.push({
+  schema: {
+    name: "dial_digits",
+    type: "function",
+    description: "Send DTMF digits to the current call to navigate IVR menus.",
+    parameters: {
+      type: "object",
+      properties: {
+        digits: { type: "string", description: "Digits to send" },
+      },
+      required: ["digits"],
+    },
+  },
+  handler: async (args: { digits: string }) => {
+    const result = await sendDigits(args.digits);
+    return JSON.stringify(result);
   },
 });
 
