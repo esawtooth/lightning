@@ -553,11 +553,11 @@ network.PrivateDnsZoneGroup(
 )
 
 privatedns.VirtualNetworkLink(
-    "repo-storage-pe-dns",
+    "repo-storage-zone-link",
     resource_group_name=resource_group.name,
     private_zone_name=blob_zone.name,
+    virtual_network_link_name="vnet-link-repo-storage",
     registration_enabled=False,
-    private_endpoint_name=repo_storage_pe.name,
     location="global",
     virtual_network=privatedns.SubResourceArgs(id=vnet.id),
 )
