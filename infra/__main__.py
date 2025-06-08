@@ -672,6 +672,15 @@ voice_ws_container = containerinstance.ContainerGroup(
                     name="PUBLIC_URL",
                     value=pulumi.Output.concat("https://", domain, "/voice-ws"),
                 ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="COSMOS_CONNECTION", secure_value=cosmos_connection_string
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="COSMOS_DATABASE", value=cosmos_db.name
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="USER_CONTAINER", value=user_container.name
+                ),
             ],
             resources=containerinstance.ResourceRequirementsArgs(
                 requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
