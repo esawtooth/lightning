@@ -76,7 +76,7 @@ aad_sp = azuread.ServicePrincipal(
 aad_secret = azuread.ApplicationPassword(
     "vextir-secret",
     application_id=aad_app.id,
-    end_date_relative="8760h",
+    end_date=(datetime.datetime.utcnow() + datetime.timedelta(hours=8760)).strftime("%Y-%m-%dT%H:%M:%SZ"),
 )
 
 pulumi.export("aadClientId", aad_app.client_id)
@@ -248,10 +248,6 @@ pulumi.export("emailServiceName", email_service.name)
 pulumi.export("emailDomain", email_domain.from_sender_domain)
 pulumi.export("emailVerificationRecords", email_domain.verification_records)
 pulumi.export("appInsightsKey", app_insights.instrumentation_key)
-
-pulumi.export("openaiAccountName", openai_account.name)
-pulumi.export("openaiEndpoint", openai_account.properties.endpoint)
-pulumi.export("openaiApiKey", openai_keys.key1)
 
 # Storage account for Function App
 storage_account = storage.StorageAccount(
@@ -608,6 +604,11 @@ openai_keys = cognitiveservices.list_account_keys_output(
     account_name=openai_account.name,
     resource_group_name=resource_group.name,
 )
+
+# Export OpenAI account details now that the resources are defined
+pulumi.export("openaiAccountName", openai_account.name)
+pulumi.export("openaiEndpoint", openai_account.properties.endpoint)
+pulumi.export("openaiApiKey", openai_keys.key1)
 
 # Deploy pay-as-you-go models in the OpenAI account
 for model in ["o4-mini", "gpt-4o", "4o-mini", "4o-realtime"]:
