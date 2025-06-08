@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Header, Cookie
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from datetime import datetime
@@ -12,19 +12,21 @@ API_BASE = os.environ.get("API_BASE", "http://localhost:7071/api")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 
 
-def _get_token(token: str = None):
+def _get_token(
+    token: str | None = None,
+    authorization: str | None = Header(None, alias="Authorization"),
+    auth_cookie: str | None = Cookie(None, alias="auth_token"),
+):
+    """Return bearer token from query param, header, cookie or env."""
+    if authorization and authorization.startswith("Bearer "):
+        return authorization.split(" ", 1)[1]
+    if auth_cookie:
+        return auth_cookie
     return token or AUTH_TOKEN
 
 templates = Jinja2Templates(directory=os.path.join(os.path.dirname(__file__), "templates"))
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
-
-class LoginForm(BaseModel):
-    username: str
-    password: str
-
-
-from starlette.requests import Request
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -62,18 +64,6 @@ async def task_detail(task_id: str, token: str = Depends(_get_token)):
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
-
-
-@app.post("/login")
-async def login(form: LoginForm):
-    resp = requests.post(f"{API_BASE}/userauth/login", json=form.dict())
-    if resp.status_code != 200:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    token = resp.json().get("token")
-    response = RedirectResponse("/", status_code=302)
-    if token:
-        response.set_cookie("token", token, httponly=True)
-    return response
 
 
 class EventIn(BaseModel):
