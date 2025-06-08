@@ -260,6 +260,9 @@ USER_CONTAINER=users
 REPO_CONTAINER=repos
 SCHEDULE_CONTAINER=schedules
 TASK_CONTAINER=tasks
+ACS_CONNECTION=<acs-connection>
+ACS_SENDER=no-reply@example.com
+VERIFY_BASE_URL=https://localhost
 AUTH_TOKEN=<jwt-token>
 ```
 
