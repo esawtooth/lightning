@@ -19,6 +19,7 @@ from pulumi_azure_native import (
     keyvault,
     network,
     privatedns,
+    cognitiveservices,
 )
 import pulumi_azuread as azuread
 
@@ -247,6 +248,10 @@ pulumi.export("emailServiceName", email_service.name)
 pulumi.export("emailDomain", email_domain.from_sender_domain)
 pulumi.export("emailVerificationRecords", email_domain.verification_records)
 pulumi.export("appInsightsKey", app_insights.instrumentation_key)
+
+pulumi.export("openaiAccountName", openai_account.name)
+pulumi.export("openaiEndpoint", openai_account.properties.endpoint)
+pulumi.export("openaiApiKey", openai_keys.key1)
 
 # Storage account for Function App
 storage_account = storage.StorageAccount(
@@ -564,6 +569,42 @@ send_keys = servicebus.list_namespace_keys_output(
     namespace_name=namespace.name,
     resource_group_name=resource_group.name,
 )
+
+# Azure OpenAI account using pay-as-you-go pricing
+openai_account = cognitiveservices.Account(
+    "openai-account",
+    resource_group_name=resource_group.name,
+    account_name="vextir-openai",
+    location="global",
+    kind="OpenAI",
+    sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
+    properties=cognitiveservices.AccountPropertiesArgs(
+        public_network_access=cognitiveservices.PublicNetworkAccess.ENABLED,
+    ),
+)
+
+# Retrieve the API keys for the OpenAI account
+openai_keys = cognitiveservices.list_account_keys_output(
+    account_name=openai_account.name,
+    resource_group_name=resource_group.name,
+)
+
+# Deploy pay-as-you-go models in the OpenAI account
+for model in ["o4-mini", "gpt-4o", "4o-mini", "4o-realtime"]:
+    cognitiveservices.Deployment(
+        f"{model.replace('-', '')}-deploy",
+        resource_group_name=resource_group.name,
+        account_name=openai_account.name,
+        deployment_name=model,
+        sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
+        properties=cognitiveservices.DeploymentPropertiesArgs(
+            model=cognitiveservices.DeploymentModelArgs(
+                name=model,
+                format="OpenAI",
+                version="latest",
+            )
+        ),
+    )
 
 #
 # Function App
