@@ -11,14 +11,20 @@ interface Session {
   responseStartTimestamp?: number;
   latestMediaTimestamp?: number;
   openAIApiKey?: string;
+  objective?: string;
 }
 
 let session: Session = {};
 
-export function handleCallConnection(ws: WebSocket, openAIApiKey: string) {
+export function handleCallConnection(
+  ws: WebSocket,
+  openAIApiKey: string,
+  objective?: string
+) {
   cleanupConnection(session.twilioConn);
   session.twilioConn = ws;
   session.openAIApiKey = openAIApiKey;
+  session.objective = objective;
 
   ws.on("message", handleTwilioMessage);
   ws.on("error", ws.close);
@@ -144,6 +150,26 @@ function tryConnectModel() {
         ...config,
       },
     });
+
+    if (session.objective) {
+      jsonSend(session.modelConn, {
+        type: "conversation.create",
+      });
+      jsonSend(session.modelConn, {
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "system",
+          content: [
+            {
+              type: "text",
+              text: `Your objective is: ${session.objective}. Use the user_search function to look up facts as needed.`,
+            },
+          ],
+        },
+      });
+      jsonSend(session.modelConn, { type: "response.create" });
+    }
   });
 
   session.modelConn.on("message", handleModelMessage);
