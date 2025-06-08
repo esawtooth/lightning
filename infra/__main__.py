@@ -218,9 +218,8 @@ email_service = communication.EmailService(
     location="global",
 )
 
-#
-# Email domain (vextir.com) already exists in the vextir-email service.
-# Tell Pulumi to adopt it instead of trying to create it.
+# Email domain for outbound messages. If the domain already exists it will be
+# updated in-place otherwise a new domain is created.
 email_domain = communication.Domain(
     "email-domain",
     resource_group_name=resource_group.name,
@@ -229,10 +228,6 @@ email_domain = communication.Domain(
     domain_management=communication.DomainManagement.CUSTOMER_MANAGED,
     user_engagement_tracking=communication.UserEngagementTracking.DISABLED,
     location="global",
-    opts=pulumi.ResourceOptions(
-        # Import the pre‑existing resource so future `pulumi up` runs are idempotent
-        import_=f"/subscriptions/{subscription_id}/resourceGroups/vextir_dev-1/providers/Microsoft.Communication/emailServices/vextir-email/domains/{domain}"
-    ),
 )
 
 # (Optional) surface the domain in stack outputs
