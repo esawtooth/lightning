@@ -17,6 +17,8 @@ from pulumi_azure_native import (
     applicationinsights,
     communication,
     keyvault,
+    network,
+    privatedns,
 )
 import pulumi_azuread as azuread
 
@@ -252,6 +254,7 @@ storage_account = storage.StorageAccount(
     resource_group_name=resource_group.name,
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     kind=storage.Kind.STORAGE_V2,
+    public_network_access=storage.PublicNetworkAccess.DISABLED,
 )
 
 # Separate storage account for Git repositories and database volumes
@@ -260,6 +263,7 @@ repo_storage_account = storage.StorageAccount(
     resource_group_name=resource_group.name,
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     kind=storage.Kind.STORAGE_V2,
+    public_network_access=storage.PublicNetworkAccess.DISABLED,
 )
 
 # File shares used by Gitea and PostgreSQL containers
@@ -283,6 +287,69 @@ repo_storage_keys = storage.list_storage_account_keys_output(
 )
 repo_primary_key = repo_storage_keys.keys[0].value
 
+# Virtual network and subnets
+vnet = network.VirtualNetwork(
+    "vextir-vnet",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    virtual_network_name="vextir-vnet",
+    address_space=network.AddressSpaceArgs(address_prefixes=["10.0.0.0/16"]),
+)
+
+container_subnet = network.Subnet(
+    "containers-subnet",
+    resource_group_name=resource_group.name,
+    virtual_network_name=vnet.name,
+    subnet_name="containers",
+    address_prefix="10.0.0.0/24",
+    service_endpoints=[
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.CosmosDB"),
+    ],
+)
+
+function_subnet = network.Subnet(
+    "functions-subnet",
+    resource_group_name=resource_group.name,
+    virtual_network_name=vnet.name,
+    subnet_name="functions",
+    address_prefix="10.0.1.0/24",
+    service_endpoints=[
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.CosmosDB"),
+    ],
+)
+
+# Private DNS zones for private endpoints
+blob_zone = privatedns.PrivateZone(
+    "blob-zone",
+    resource_group_name=resource_group.name,
+    private_zone_name="privatelink.blob.core.windows.net",
+)
+
+cosmos_zone = privatedns.PrivateZone(
+    "cosmos-zone",
+    resource_group_name=resource_group.name,
+    private_zone_name="privatelink.documents.azure.com",
+)
+
+privatedns.VirtualNetworkLink(
+    "blob-zone-link",
+    resource_group_name=resource_group.name,
+    private_zone_name=blob_zone.name,
+    registration_enabled=False,
+    virtual_network_link_name="vnet-link-blob",
+    virtual_network=privatedns.SubResourceArgs(id=vnet.id),
+)
+
+privatedns.VirtualNetworkLink(
+    "cosmos-zone-link",
+    resource_group_name=resource_group.name,
+    private_zone_name=cosmos_zone.name,
+    registration_enabled=False,
+    virtual_network_link_name="vnet-link-cosmos",
+    virtual_network=privatedns.SubResourceArgs(id=vnet.id),
+)
 # Azure Container Registry
 acr = containerregistry.Registry(
     "vextir-acr",
@@ -312,6 +379,7 @@ cosmos_account = cosmosdb.DatabaseAccount(
     location=resource_group.location,
     database_account_offer_type="Standard",
     locations=[cosmosdb.LocationArgs(location_name=resource_group.location)],
+    public_network_access=cosmosdb.PublicNetworkAccess.DISABLED,
     consistency_policy=cosmosdb.ConsistencyPolicyArgs(
         default_consistency_level=cosmosdb.DefaultConsistencyLevel.SESSION
     ),
@@ -379,6 +447,100 @@ storage_connection_string = pulumi.Output.concat(
     primary_storage_key,
 )
 
+# Private endpoints for Cosmos DB and storage
+cosmos_pe = network.PrivateEndpoint(
+    "cosmos-pe",
+    resource_group_name=resource_group.name,
+    private_endpoint_name="cosmos-pe",
+    subnet=network.SubnetArgs(id=container_subnet.id),
+    location=resource_group.location,
+    private_link_service_connections=[
+        network.PrivateLinkServiceConnectionArgs(
+            name="cosmos-db",
+            private_link_service_id=cosmos_account.id,
+            group_ids=["Sql"],
+            private_link_service_connection_state=network.PrivateLinkServiceConnectionStateArgs(
+                status="Approved",
+                description="Auto-approved",
+            ),
+        )
+    ],
+)
+network.PrivateDnsZoneGroup(
+    "cosmos-pe-dns",
+    resource_group_name=resource_group.name,
+    private_endpoint_name=cosmos_pe.name,
+    private_dns_zone_group_name="cosmosdns",
+    private_dns_zone_configs=[
+        network.PrivateDnsZoneConfigArgs(
+            name="cosmos",
+            private_dns_zone_id=cosmos_zone.id,
+        )
+    ],
+)
+
+storage_pe = network.PrivateEndpoint(
+    "storage-pe",
+    resource_group_name=resource_group.name,
+    private_endpoint_name="storage-pe",
+    subnet=network.SubnetArgs(id=container_subnet.id),
+    location=resource_group.location,
+    private_link_service_connections=[
+        network.PrivateLinkServiceConnectionArgs(
+            name="storage",
+            private_link_service_id=storage_account.id,
+            group_ids=["blob"],
+            private_link_service_connection_state=network.PrivateLinkServiceConnectionStateArgs(
+                status="Approved",
+                description="Auto-approved",
+            ),
+        )
+    ],
+)
+network.PrivateDnsZoneGroup(
+    "storage-pe-dns",
+    resource_group_name=resource_group.name,
+    private_endpoint_name=storage_pe.name,
+    private_dns_zone_group_name="storagedns",
+    private_dns_zone_configs=[
+        network.PrivateDnsZoneConfigArgs(
+            name="blob",
+            private_dns_zone_id=blob_zone.id,
+        )
+    ],
+)
+
+repo_storage_pe = network.PrivateEndpoint(
+    "repo-storage-pe",
+    resource_group_name=resource_group.name,
+    private_endpoint_name="repo-storage-pe",
+    subnet=network.SubnetArgs(id=container_subnet.id),
+    location=resource_group.location,
+    private_link_service_connections=[
+        network.PrivateLinkServiceConnectionArgs(
+            name="repo-storage",
+            private_link_service_id=repo_storage_account.id,
+            group_ids=["file"],
+            private_link_service_connection_state=network.PrivateLinkServiceConnectionStateArgs(
+                status="Approved",
+                description="Auto-approved",
+            ),
+        )
+    ],
+)
+network.PrivateDnsZoneGroup(
+    "repo-storage-pe-dns",
+    resource_group_name=resource_group.name,
+    private_endpoint_name=repo_storage_pe.name,
+    private_dns_zone_group_name="repostoragedns",
+    private_dns_zone_configs=[
+        network.PrivateDnsZoneConfigArgs(
+            name="file",
+            private_dns_zone_id=blob_zone.id,
+        )
+    ],
+)
+
 # App Service plan for Function App (Linux required for Python functions)
 app_service_plan = web.AppServicePlan(
     "function-plan",
@@ -415,6 +577,14 @@ func_app = web.WebApp(
         linux_fx_version="Python|3.10",  # Updated to Python 3.10 runtime
         # App settings will be configured separately via WebAppApplicationSettings
     ),
+)
+
+# Integrate Function App with the virtual network
+web.WebAppSwiftVirtualNetworkConnection(
+    "func-vnet", 
+    name=func_app.name,
+    resource_group_name=resource_group.name,
+    subnet_resource_id=function_subnet.id,
 )
 
 # TODO: Role assignment requires higher privileges - commenting out for now
@@ -467,8 +637,9 @@ postgres_container = containerinstance.ContainerGroup(
     ],
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
-        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+        type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
+    subnet_ids=[container_subnet.id],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
@@ -540,8 +711,9 @@ gitea_container = containerinstance.ContainerGroup(
     ],
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
-        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+        type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
+    subnet_ids=[container_subnet.id],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
@@ -607,7 +779,7 @@ ui_container = containerinstance.ContainerGroup(
                     containerinstance.EnvironmentVariableArgs(
                         name="GITEA_URL",
                         value=gitea_container.ip_address.apply(
-                            lambda ip: f"http://{ip.fqdn}"
+                            lambda ip: f"http://{ip.ip}"
                         ),
                     ),
                 ],
@@ -804,11 +976,11 @@ if domain:
 # Export URLs that depend on the containers defined above
 pulumi.export(
     "giteaUrl",
-    gitea_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"),
+    gitea_container.ip_address.apply(lambda ip: f"http://{ip.ip}"),
 )
 pulumi.export(
     "postgresFqdn",
-    postgres_container.ip_address.apply(lambda ip: ip.fqdn),
+    postgres_container.ip_address.apply(lambda ip: ip.ip),
 )
 
 # Wire the functions back to the Chainlit UI once the container address is known
