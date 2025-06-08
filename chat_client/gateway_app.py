@@ -1,7 +1,9 @@
 import os
 
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Response
 from starlette.responses import RedirectResponse
+import asyncio
+import requests
 from common.jwt_utils import verify_token
 
 from auth_app import app as auth_app
@@ -42,3 +44,38 @@ async def repo_redirect(request: Request):
 
     base = GITEA_URL.rstrip("/")
     return RedirectResponse(url=f"{base}/{user_id}")
+
+
+@app.api_route("/store/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"], include_in_schema=False)
+async def gitea_proxy(path: str, request: Request):
+    """Proxy requests to the Gitea UI under the /store path."""
+    if not GITEA_URL:
+        raise HTTPException(status_code=404, detail="GITEA_URL not configured")
+
+    url = f"{GITEA_URL.rstrip('/')}/{path}"
+    headers = {k: v for k, v in request.headers.items() if k.lower() != "host"}
+    body = await request.body()
+
+    def _send():
+        return requests.request(
+            request.method,
+            url,
+            params=request.query_params,
+            headers=headers,
+            data=body,
+            allow_redirects=False,
+        )
+
+    resp = await asyncio.to_thread(_send)
+
+    response = Response(content=resp.content, status_code=resp.status_code)
+    for k, v in resp.headers.items():
+        if k.lower() not in {"content-encoding", "transfer-encoding", "connection"}:
+            response.headers[k] = v
+    return response
+
+
+@app.get("/store", include_in_schema=False)
+async def store_root():
+    """Redirect to /store/ for convenience."""
+    return RedirectResponse(url="/store/")
