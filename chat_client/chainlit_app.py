@@ -2,7 +2,7 @@ import os
 from datetime import datetime
 from typing import Optional
 
-import jwt
+from common.jwt_utils import verify_token
 import logging
 import requests
 import chainlit as cl
@@ -25,27 +25,41 @@ def get_session_by_user(user_id: str):
 
 EVENT_API_URL = os.environ.get("EVENT_API_URL")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
-JWT_SIGNING_KEY = os.environ.get("JWT_SIGNING_KEY")
-AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL", "http://localhost:8000")
+AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
+CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
 NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
 
 
 
 def verify_user_token(token: str) -> Optional[str]:
-    """Verify JWT token and return username if valid."""
-    if not JWT_SIGNING_KEY:
-        logging.error("JWT_SIGNING_KEY not configured")
-        return None
-    
     try:
-        payload = jwt.decode(token, JWT_SIGNING_KEY, algorithms=["HS256"])
-        username = payload.get("sub")
-        if username and payload.get("exp", 0) > datetime.utcnow().timestamp():
-            return username
-    except jwt.InvalidTokenError as e:
+        return verify_token(token)
+    except Exception as e:
         logging.warning(f"Invalid token: {e}")
-    
-    return None
+        return None
+
+
+def _resolve_request_url(request: Request) -> str:
+    """Return the externally accessible URL for the given request."""
+    base = CHAINLIT_URL.rstrip("/") if CHAINLIT_URL else None
+    if base:
+        return f"{base}{request.url.path}"
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
+    return f"{scheme}://{host}{request.url.path}"
+
+
+def _resolve_gateway_url(request: Request) -> str:
+    """Return the URL of the authentication gateway for the request."""
+    base = AUTH_GATEWAY_URL.rstrip("/") if AUTH_GATEWAY_URL else None
+    if base:
+        return base
+
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
+    host = host.split(":")[0]
+    return f"{scheme}://{host}"
 
 
 async def authenticate_user(request: Request) -> Optional[str]:
@@ -72,8 +86,10 @@ if hasattr(fastapi_app, "middleware"):
         # Check authentication
         username = await authenticate_user(request)
         if not username:
-            # Redirect to auth gateway
-            redirect_url = f"{AUTH_GATEWAY_URL}/?redirect={request.url}"
+            # Redirect to auth gateway with externally visible URL
+            target_url = _resolve_request_url(request)
+            gateway_base = _resolve_gateway_url(request)
+            redirect_url = f"{gateway_base}/?redirect={target_url}"
             return RedirectResponse(url=redirect_url)
 
         # Store username in request state for use in Chainlit handlers
@@ -115,7 +131,7 @@ async def start():
         pass
     
     welcome_message = f"""
-🌟 **Welcome to Lightning Chat, {username}!**
+🌟 **Welcome to Vextir Chat, {username}!**
 
 I'm your AI assistant, ready to help you with:
 - Answering questions
@@ -187,7 +203,7 @@ async def health_check():
     """Health check endpoint for the chat service."""
     return {
         "status": "healthy",
-        "service": "lightning-chat",
+        "service": "vextir-chat",
         "timestamp": datetime.utcnow().isoformat()
     }
 

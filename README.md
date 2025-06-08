@@ -1,4 +1,4 @@
-# lightning
+# vextir
 
 Event based AI
 
@@ -10,8 +10,8 @@ The HTTP triggers use anonymous authorization so no Function key is required. Au
 ### POST /api/events
 
 Authenticate requests with a bearer token in the `Authorization` header.
-The token must be signed using the key provided in `JWT_SIGNING_KEY` and
-identifies the user. Send a JSON body describing the event:
+The bearer token should be issued by Azure Entra ID and identifies the user.
+Send a JSON body describing the event:
 
 ```json
 {
@@ -49,51 +49,15 @@ or
 
 The function stores the schedule in durable storage and returns a schedule ID.
 
-## Authentication API
+## Authentication
 
-New endpoints allow registering users and retrieving JWT tokens for authenticated
-access to the rest of the service.
+Authentication is handled by **Azure Entra ID**. Users authenticate via the
+Microsoft identity platform and receive an access token which must be supplied
+in the `Authorization` header when calling the API endpoints.
 
-### POST /api/register
-
-Create a new user by sending a JSON payload containing an identifier and
-password:
-
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"userID": "alice", "password": "secret"}' \
-  https://<function-app>.azurewebsites.net/api/register
-```
-
-### POST /api/token
-
-Exchange credentials for a signed JWT. Include the same JSON body used during
-registration:
-
-```bash
-curl -X POST \
-  -H "Content-Type: application/json" \
-  -d '{"userID": "alice", "password": "secret"}' \
-  https://<function-app>.azurewebsites.net/api/token
-```
-
-The returned token should be provided in the `Authorization` header when calling
-the other API endpoints.
-
-### POST /api/refresh
-
-Send the current token in the `Authorization` header to obtain a new JWT with a
-fresh expiration time:
-
-```bash
-curl -X POST \
-  -H "Authorization: Bearer <token>" \
-  https://<function-app>.azurewebsites.net/api/refresh
-```
-
-If the token is valid a new token is returned. Invalid or expired tokens result
-in a `401` response.
+The Function App and chat client are configured with the Entra ID tenant and
+application ID. No custom registration or password handling logic remains in the
+repository.
 
 ## Python library
 
@@ -180,26 +144,27 @@ cd infra
 pip install -r requirements.txt
 pulumi config set openaiApiKey <key> --secret
 pulumi config set jwtSigningKey <secret> --secret
-pulumi config set uiImage lightningacr.azurecr.io/chainlit-client:<tag>
-pulumi config set workerImage lightningacr.azurecr.io/worker-task:<tag>
-pulumi config set domain agentsmith.in
-pulumi config set godaddyApiKey <key> --secret
-pulumi config set godaddyApiSecret <secret> --secret
+pulumi config set uiImage vextiracr.azurecr.io/chainlit-client:<tag>
+pulumi config set workerImage vextiracr.azurecr.io/worker-task:<tag>
+pulumi config set domain vextir.com
 pulumi up
 ```
 
-Pulumi automatically:
-- Creates all Azure resources (Function App, Cosmos DB, Service Bus, etc.)
+ Pulumi automatically:
+ - Creates all Azure resources (Function App, Cosmos DB, Service Bus, Communication Service, Email Service, etc.)
 - Packages the Azure Functions code
 - Deploys the function code to the Function App
 - Grants the Function App's managed identity read access to the deployment
   package and sets `WEBSITE_RUN_FROM_PACKAGE` to the package URL
 - Builds and deploys the UI containers
 - Configures all environment variables and connections
-- Creates an Azure DNS zone with records for the chat UI and API and
-  updates GoDaddy to use the zone's name servers when a domain and
-  credentials are provided
-  (defaults to `agentsmith.in` if no domain is configured)
+- Creates an Azure DNS zone with records for the chat UI and API.
+  Update your domain registrar to use the zone's name servers manually
+  (defaults to `vextir.com` if no domain is configured).
+  Pulumi exports these servers as `dnsZoneNameServers`.
+
+After `pulumi up` completes copy the values from `dnsZoneNameServers` and
+update the nameserver records for your domain in GoDaddy.
 
 The Function App uses the **Python 3.10** runtime. If you deployed an older
 stack running Python 3.9 you may see a deprecation warning in the Azure portal.
@@ -217,28 +182,27 @@ messaging:
   calling OpenAI.
   When deploying with GitHub Actions, set this as the `OPENAI_API_KEY` secret
   so the workflow can configure the Function App.
-- `GODADDY_API_KEY` &mdash; API key for automating DNS updates.
-  Set as the `GODADDY_API_KEY` secret for GitHub Actions.
-- `GODADDY_API_SECRET` &mdash; API secret paired with the key.
-  Set as the `GODADDY_API_SECRET` secret for GitHub Actions.
-- `GODADDY_CUSTOMER_ID` &mdash; customer identifier used when calling the GoDaddy
-  v2 API for domain updates. The Pulumi deployment currently defaults to
-  `esawtooth` if not specified.
 - `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI
   (defaults to `gpt-3.5-turbo`).
 - `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
   namespace.
 - `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
-- `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
-  to the chat client. Pulumi sets this automatically based on the Chainlit
-  container address.
-- `JWT_SIGNING_KEY` &mdash; HMAC key used to validate bearer tokens.
+ - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
+   to the chat client. Pulumi sets this automatically based on the Chainlit
+   container address.
+ - `AAD_CLIENT_ID` &mdash; application ID issued by Azure Entra ID.
+ - `AAD_CLIENT_SECRET` &mdash; client secret for the Entra ID application.
+ - `AAD_TENANT_ID` &mdash; tenant ID where the application is registered.
 - `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
-- `COSMOS_DATABASE` &mdash; database name (defaults to `lightning`).
+- `COSMOS_DATABASE` &mdash; database name (defaults to `vextir`).
 - `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
 - `TASK_CONTAINER` &mdash; container storing worker task records. Defaults to `tasks`.
+- `ACS_CONNECTION` &mdash; connection string for Azure Communication Services email.
+- This connection string is retrieved from the Communication Service, while an additional Email Service resource handles domains.
+- `ACS_SENDER` &mdash; default sender email address for verification messages. Defaults to `no-reply@<domain>` where `<domain>` comes from the Pulumi `domain` config (set in the GitHub workflow).
+- `VERIFY_BASE_URL` &mdash; base URL used to generate verification links.
 - `APPINSIGHTS_INSTRUMENTATIONKEY` &mdash; instrumentation key for Application Insights. Pulumi sets this automatically.
 - `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package. Pulumi grants
   the Function App's managed identity read access so the app can download the
@@ -265,10 +229,12 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "OPENAI_MODEL": "gpt-3.5-turbo",
     "SERVICEBUS_CONNECTION": "<namespace-connection-string>",
     "SERVICEBUS_QUEUE": "chat-events",
-    "NOTIFY_URL": "http://localhost:8000/notify",
-    "JWT_SIGNING_KEY": "secret",
+    "NOTIFY_URL": "https://localhost/chat/notify",
+    "AAD_CLIENT_ID": "<app-id>",
+    "AAD_CLIENT_SECRET": "<client-secret>",
+    "AAD_TENANT_ID": "<tenant-id>",
     "COSMOS_CONNECTION": "<cosmos-connection-string>",
-    "COSMOS_DATABASE": "lightning",
+    "COSMOS_DATABASE": "vextir",
     "USER_CONTAINER": "users",
     "REPO_CONTAINER": "repos",
     "SCHEDULE_CONTAINER": "schedules",
@@ -284,10 +250,12 @@ OPENAI_API_KEY=sk-...
 OPENAI_MODEL=gpt-3.5-turbo
 SERVICEBUS_CONNECTION=<namespace-connection-string>
 SERVICEBUS_QUEUE=chat-events
-NOTIFY_URL=http://localhost:8000/notify
-JWT_SIGNING_KEY=secret
+NOTIFY_URL=https://localhost/chat/notify
+AAD_CLIENT_ID=<app-id>
+AAD_CLIENT_SECRET=<client-secret>
+AAD_TENANT_ID=<tenant-id>
 COSMOS_CONNECTION=<cosmos-connection-string>
-COSMOS_DATABASE=lightning
+COSMOS_DATABASE=vextir
 USER_CONTAINER=users
 REPO_CONTAINER=repos
 SCHEDULE_CONTAINER=schedules
@@ -335,6 +303,10 @@ chainlit run chat_client/chainlit_app.py
 Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
 Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
 forward messages back to the client.
+
+If your authentication gateway runs on a different host, set
+`AUTH_GATEWAY_URL` accordingly. When unset, the URL is inferred from the
+request's forwarded headers.
 
 ## Dashboard
 

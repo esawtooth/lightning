@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentsmith Chat - Register</title>
+    <title>Vextir Chat - Register</title>
     <style>
         * {
             margin: 0;
@@ -121,7 +121,7 @@
             text-decoration: underline;
         }
         
-        .agentsmith-icon {
+        .vextir-icon {
             font-size: 2rem;
             margin-bottom: 0.5rem;
         }
@@ -136,9 +136,9 @@
 <body>
     <div class="register-container">
         <div class="logo">
-            <div class="agentsmith-icon">⚡</div>
-            <h1>Join Agentsmith</h1>
-            <p>Request access to the Agentsmith Chat platform</p>
+            <div class="vextir-icon">⚡</div>
+            <h1>Join Vextir</h1>
+            <p>Request access to the Vextir Chat platform</p>
         </div>
         
         {% if request.query_params.get("error") %}
@@ -167,9 +167,9 @@
             </div>
             
             <div class="form-group">
-                <label for="email">Email (Optional)</label>
-                <input type="email" id="email" name="email" placeholder="your.email@example.com">
-                <div class="password-requirements">For approval notifications</div>
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+                <div class="password-requirements">Used for verification and notifications</div>
             </div>
             
             <div class="form-group">
