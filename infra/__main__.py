@@ -306,6 +306,12 @@ container_subnet = network.Subnet(
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
     ],
+    delegations=[
+        network.DelegationArgs(
+            name="aciDelegation",
+            service_name="Microsoft.ContainerInstance/containerGroups",
+        )
+    ],
 )
 
 function_subnet = network.Subnet(
@@ -341,6 +347,7 @@ privatedns.VirtualNetworkLink(
     private_zone_name=blob_zone.name,
     registration_enabled=False,
     virtual_network_link_name="vnet-link-blob",
+    location="global",
     virtual_network=privatedns.SubResourceArgs(id=vnet.id),
 )
 
@@ -350,6 +357,7 @@ privatedns.VirtualNetworkLink(
     private_zone_name=cosmos_zone.name,
     registration_enabled=False,
     virtual_network_link_name="vnet-link-cosmos",
+    location="global",
     virtual_network=privatedns.SubResourceArgs(id=vnet.id),
 )
 # Azure Container Registry
@@ -543,6 +551,16 @@ network.PrivateDnsZoneGroup(
     ],
 )
 
+privatedns.VirtualNetworkLink(
+    "repo-storage-pe-dns",
+    resource_group_name=resource_group.name,
+    private_zone_name=blob_zone.name,
+    registration_enabled=False,
+    private_endpoint_name=repo_storage_pe.name,
+    location="global",
+    virtual_network=privatedns.SubResourceArgs(id=vnet.id),
+)
+
 # App Service plan for Function App (Linux required for Python functions)
 app_service_plan = web.AppServicePlan(
     "function-plan",
@@ -581,13 +599,7 @@ func_app = web.WebApp(
     ),
 )
 
-# Integrate Function App with the virtual network
-web.WebAppSwiftVirtualNetworkConnection(
-    "func-vnet", 
-    name=func_app.name,
-    resource_group_name=resource_group.name,
-    subnet_resource_id=function_subnet.id,
-)
+# VNet integration for Function App (not supported for Dynamic SKU, so removed)
 
 # TODO: Role assignment requires higher privileges - commenting out for now
 # aci_role = RoleAssignment(
