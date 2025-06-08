@@ -306,6 +306,19 @@ container_subnet = network.Subnet(
     service_endpoints=[
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
+    ]
+)
+
+# Dedicated subnet for Azure Container Instance groups
+aci_subnet = network.Subnet(
+    "aci-subnet",
+    resource_group_name=resource_group.name,
+    virtual_network_name=vnet.name,
+    subnet_name="aci",
+    address_prefix="10.0.2.0/24",
+    service_endpoints=[
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
     ],
     delegations=[
         network.DelegationArgs(
@@ -552,16 +565,6 @@ network.PrivateDnsZoneGroup(
     ],
 )
 
-privatedns.VirtualNetworkLink(
-    "repo-storage-zone-link",
-    resource_group_name=resource_group.name,
-    private_zone_name=blob_zone.name,
-    virtual_network_link_name="vnet-link-repo-storage",
-    registration_enabled=False,
-    location="global",
-    virtual_network=privatedns.SubResourceArgs(id=vnet.id),
-)
-
 # App Service plan for Function App (Linux required for Python functions)
 app_service_plan = web.AppServicePlan(
     "function-plan",
@@ -591,7 +594,7 @@ openai_account = cognitiveservices.Account(
     "openai-account",
     resource_group_name=resource_group.name,
     account_name="vextir-openai",
-    location="global",
+    location="westus2",  # OpenAI accounts are only available in specific regions
     kind="OpenAI",
     sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
     properties=cognitiveservices.AccountPropertiesArgs(
@@ -695,7 +698,7 @@ postgres_container = containerinstance.ContainerGroup(
         ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
         type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
-    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=container_subnet.id)],
+    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=aci_subnet.id)],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
@@ -769,7 +772,7 @@ gitea_container = containerinstance.ContainerGroup(
         ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
         type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
-    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=container_subnet.id)],
+    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=aci_subnet.id)],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
