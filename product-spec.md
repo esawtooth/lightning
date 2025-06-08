@@ -1,16 +1,16 @@
-# Lightning OS – Comprehensive Product Specification
+# Vextir OS – Comprehensive Product Specification
 
 *Last updated: June 1, 2025*
 
 ## Vision
 
-**Lightning OS is the definitive cloud-native operating system orchestrating autonomous and reactive AI workflows, providing intelligent, proactive, and user-centric task execution through persistent context, robust policy management, and sophisticated scheduling.**
+**Vextir OS is the definitive cloud-native operating system orchestrating autonomous and reactive AI workflows, providing intelligent, proactive, and user-centric task execution through persistent context, robust policy management, and sophisticated scheduling.**
 
 ---
 
 ## Product Specification
 
-Lightning OS comprises the following integrated subsystems:
+Vextir OS comprises the following integrated subsystems:
 
 ### Persistent Context Graph
 
@@ -217,4 +217,4 @@ Lightning OS comprises the following integrated subsystems:
 
 ---
 
-**Lightning OS empowers users by intelligently orchestrating proactive, secure, and autonomous workflows, setting a new standard for productivity, automation, and personalized user experiences.**
+**Vextir OS empowers users by intelligently orchestrating proactive, secure, and autonomous workflows, setting a new standard for productivity, automation, and personalized user experiences.**

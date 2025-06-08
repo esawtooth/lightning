@@ -9,7 +9,7 @@ from azure.mgmt.containerinstance import ContainerInstanceManagementClient
 from auth import verify_token
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
-COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 TASK_CONTAINER = os.environ.get("TASK_CONTAINER", "tasks")
 ACI_RESOURCE_GROUP = os.environ.get("ACI_RESOURCE_GROUP")
 ACI_SUBSCRIPTION_ID = os.environ.get("ACI_SUBSCRIPTION_ID")

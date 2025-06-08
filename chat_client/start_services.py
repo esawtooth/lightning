@@ -1,6 +1,6 @@
 #!/bin/bash
 """
-Startup script for Lightning Chat with Authentication Gateway.
+Startup script for Vextir Chat with Authentication Gateway.
 This script starts both the authentication gateway and the Chainlit chat app.
 """
 
@@ -28,12 +28,12 @@ def start_gateway():
 
 def signal_handler(signum, frame):
     """Handle shutdown signals."""
-    print("\n🛑 Shutting down Lightning Chat services...")
+    print("\n🛑 Shutting down Vextir Chat services...")
     sys.exit(0)
 
 def main():
     """Main startup function."""
-    print("⚡ Lightning Chat - Starting Services")
+    print("⚡ Vextir Chat - Starting Services")
     print("=" * 50)
     
     # Check required environment variables
@@ -57,7 +57,7 @@ def main():
     except KeyboardInterrupt:
         print("\n🛑 Received shutdown signal")
     finally:
-        print("👋 Lightning Chat services stopped")
+        print("👋 Vextir Chat services stopped")
 
 if __name__ == "__main__":
     main()

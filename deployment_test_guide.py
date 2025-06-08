@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to test the deployed Lightning application endpoints.
+Script to test the deployed Vextir application endpoints.
 """
 
 import requests
@@ -8,7 +8,7 @@ import json
 import time
 
 def test_endpoints():
-    print("🧪 Testing Lightning Application Deployment")
+    print("🧪 Testing Vextir Application Deployment")
     print("=" * 50)
     
     # Based on your infrastructure, these are the expected endpoints:
@@ -18,7 +18,7 @@ def test_endpoints():
     print("\n🔍 Looking for deployed endpoints...")
     print("💡 Check the Azure portal for:")
     print("   - Container Instance 'chat-ui' public IP")
-    print("   - Function App 'lightning-func-<hash>' URL")
+    print("   - Function App 'vextir-func-<hash>' URL")
     print()
     
     # Test scenarios to try once you have the URLs:
@@ -59,7 +59,7 @@ def test_endpoints():
     print("\n" + "=" * 50)
     print("🚀 Quick Start Guide:")
     print("1. Get endpoints from Azure portal")
-    print("2. Visit the Lightning Chat UI in your browser")
+    print("2. Visit the Vextir Chat UI in your browser")
     print("3. Register a new account or login")
     print("4. Access the authenticated chat interface")
     print("5. Try chatting with the AI assistant")
@@ -72,18 +72,18 @@ def get_azure_resources():
     print()
     print("Option 1 - Azure Portal:")
     print("1. Go to https://portal.azure.com")
-    print("2. Navigate to Resource Group 'lightning'")
+    print("2. Navigate to Resource Group 'vextir'")
     print("3. Look for:")
     print("   - Container Instance 'chat-ui' → Get public IP (Gateway on :443)")
-    print("   - Function App 'lightning-func-*' → Get URL (API endpoints)")
-    print("   - Container Registry 'lightningacr' → Container images")
-    print("   - Cosmos DB 'lightning-cosmos-*' → User and event storage")
+    print("   - Function App 'vextir-func-*' → Get URL (API endpoints)")
+    print("   - Container Registry 'vextiracr' → Container images")
+    print("   - Cosmos DB 'vextir-cosmos-*' → User and event storage")
     print()
     print("Option 2 - Azure CLI:")
-    print("az container show --resource-group lightning --name chat-ui --query ipAddress.fqdn")
-    print("az functionapp list --resource-group lightning --query '[].defaultHostName'")
+    print("az container show --resource-group vextir --name chat-ui --query ipAddress.fqdn")
+    print("az functionapp list --resource-group vextir --query '[].defaultHostName'")
 
 if __name__ == "__main__":
     test_endpoints()
     get_azure_resources()
-    print("\n✅ Ready to test your Lightning application!")
+    print("\n✅ Ready to test your Vextir application!")

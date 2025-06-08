@@ -42,11 +42,11 @@ postgres_user = config.get("postgresUser") or "gitea"
 postgres_db = config.get("postgresDb") or "gitea"
 
 # Resource names
-resource_group_name = "lightning_dev-1"
-vault_name = "lightning-vault"
+resource_group_name = "vextir_dev-1"
+vault_name = "vextir-vault"
 # Worker image will be configured by GitHub Actions or default to ACR image
-worker_image = config.get("workerImage") or "lightningacr.azurecr.io/worker-task:latest"
-domain = config.get("domain") or "agentsmith.in"
+worker_image = config.get("workerImage") or "vextiracr.azurecr.io/worker-task:latest"
+domain = config.get("domain") or "vextir.com"
 acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 
 # Fetch subscription ID early so it can be used anywhere below
@@ -55,20 +55,20 @@ subscription_id = client_config.subscription_id
 
 # Azure Entra ID application used for authentication
 aad_app = azuread.Application(
-    "lightning-app",
-    display_name="Lightning Chat",
+    "vextir-app",
+    display_name="Vextir Chat",
     web=azuread.ApplicationWebArgs(
         redirect_uris=[pulumi.Output.concat("https://", domain, "/auth/callback")],
     ),
 )
 
 aad_sp = azuread.ServicePrincipal(
-    "lightning-sp",
+    "vextir-sp",
     client_id=aad_app.client_id,
 )
 
 aad_secret = azuread.ApplicationPassword(
-    "lightning-secret",
+    "vextir-secret",
     application_id=aad_app.id,
     end_date_relative="8760h",
 )
@@ -158,7 +158,7 @@ else:
 workspace = operationalinsights.Workspace(
     "log-workspace",
     resource_group_name=resource_group.name,
-    workspace_name="lightning-logs",
+    workspace_name="vextir-logs",
     location=resource_group.location,
     sku=operationalinsights.WorkspaceSkuArgs(name="PerGB2018"),
     retention_in_days=30,
@@ -172,7 +172,7 @@ workspace_keys = operationalinsights.get_shared_keys_output(
 
 # Application Insights instance
 app_insights = applicationinsights.Component(
-    "lightning-ai",
+    "vextir-ai",
     resource_group_name=resource_group.name,
     kind="web",
     application_type="web",
@@ -181,18 +181,18 @@ app_insights = applicationinsights.Component(
 
 # Service Bus namespace and queue
 namespace = servicebus.Namespace(
-    "lightning-namespace",
+    "vextir-namespace",
     resource_group_name=resource_group.name,
-    namespace_name="lightning-namespace",
+    namespace_name="vextir-namespace",
     location=resource_group.location,
     sku=servicebus.SBSkuArgs(name="Standard", tier="Standard"),
 )
 
 queue = servicebus.Queue(
-    "lightning-queue",
+    "vextir-queue",
     resource_group_name=resource_group.name,
     namespace_name=namespace.name,
-    queue_name="lightning-queue",
+    queue_name="vextir-queue",
     enable_partitioning=True,
 )
 
@@ -201,7 +201,7 @@ queue = servicebus.Queue(
 communication_service = communication.CommunicationService(
     "comm-service",
     resource_group_name=resource_group.name,
-    communication_service_name="lightning-comm",
+    communication_service_name="vextir-comm",
     data_location="United States",
     location="global",
 )
@@ -210,13 +210,13 @@ communication_service = communication.CommunicationService(
 email_service = communication.EmailService(
     "email-service",
     resource_group_name=resource_group.name,
-    email_service_name="lightning-email",
+    email_service_name="vextir-email",
     data_location="United States",
     location="global",
 )
 
 #
-# Email domain (agentsmith.in) already exists in the lightning‑email service.
+# Email domain (vextir.com) already exists in the vextir-email service.
 # Tell Pulumi to adopt it instead of trying to create it.
 email_domain = communication.Domain(
     "email-domain",
@@ -228,7 +228,7 @@ email_domain = communication.Domain(
     location="global",
     opts=pulumi.ResourceOptions(
         # Import the pre‑existing resource so future `pulumi up` runs are idempotent
-        import_=f"/subscriptions/{subscription_id}/resourceGroups/lightning_dev-1/providers/Microsoft.Communication/emailServices/lightning-email/domains/{domain}"
+        import_=f"/subscriptions/{subscription_id}/resourceGroups/vextir_dev-1/providers/Microsoft.Communication/emailServices/vextir-email/domains/{domain}"
     ),
 )
 
@@ -287,9 +287,9 @@ repo_primary_key = repo_storage_keys.keys[0].value
 
 # Azure Container Registry
 acr = containerregistry.Registry(
-    "lightning-acr",
+    "vextir-acr",
     resource_group_name=resource_group.name,
-    registry_name="lightningacr",
+    registry_name="vextiracr",
     location=resource_group.location,
     sku=containerregistry.SkuArgs(name="Basic"),
     admin_user_enabled=True,
@@ -310,7 +310,7 @@ pulumi.export("acrPassword", acr_credentials.passwords[0].value)
 cosmos_account = cosmosdb.DatabaseAccount(
     "cosmos-account",
     resource_group_name=resource_group.name,
-    account_name="lightning-cosmos",
+    account_name="vextir-cosmos",
     location=resource_group.location,
     database_account_offer_type="Standard",
     locations=[cosmosdb.LocationArgs(location_name=resource_group.location)],
@@ -323,8 +323,8 @@ cosmos_db = cosmosdb.SqlResourceSqlDatabase(
     "cosmos-db",
     account_name=cosmos_account.name,
     resource_group_name=resource_group.name,
-    database_name="lightning",
-    resource=cosmosdb.SqlDatabaseResourceArgs(id="lightning"),
+    database_name="vextir",
+    resource=cosmosdb.SqlDatabaseResourceArgs(id="vextir"),
 )
 
 user_container = cosmosdb.SqlResourceSqlContainer(
@@ -854,7 +854,7 @@ all_app_settings = {
     "FUNCTIONS_EXTENSION_VERSION": "~4",
     "FUNCTIONS_WORKER_RUNTIME": "python",
     "COSMOS_CONNECTION": cosmos_connection_string,
-    "COSMOS_DATABASE": "lightning",
+    "COSMOS_DATABASE": "vextir",
     "SCHEDULE_CONTAINER": "schedules",
     "SERVICEBUS_CONNECTION": send_keys.primary_connection_string,
     "SERVICEBUS_QUEUE": queue.name,

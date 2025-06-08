@@ -208,9 +208,9 @@ def test_resolve_gateway_fallback(monkeypatch):
     _, module = load_chainlit_app(monkeypatch, capture)
 
     request = types.SimpleNamespace(
-        headers={'x-forwarded-proto': 'https', 'x-forwarded-host': 'agentsmith.in'},
-        url=types.SimpleNamespace(scheme='https', hostname='agentsmith.in')
+        headers={'x-forwarded-proto': 'https', 'x-forwarded-host': 'vextir.com'},
+        url=types.SimpleNamespace(scheme='https', hostname='vextir.com')
     )
-    assert module._resolve_gateway_url(request) == 'https://agentsmith.in'
+    assert module._resolve_gateway_url(request) == 'https://vextir.com'
 
 

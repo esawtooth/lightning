@@ -8,7 +8,7 @@ from azure.servicebus import ServiceBusClient, ServiceBusMessage
 from croniter import croniter
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
-COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 SCHEDULE_CONTAINER = os.environ.get("SCHEDULE_CONTAINER", "schedules")
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
