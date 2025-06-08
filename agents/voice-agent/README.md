@@ -98,6 +98,8 @@ TWILIO_AUTH_TOKEN="<twilio-auth-token>"
 COSMOS_CONNECTION="<connection-string>"
 COSMOS_DATABASE="vextir"
 USER_CONTAINER="users"
+LOG_CONTAINER="logs"
+REPO_CONTAINER="repos"
 ```
 
 The Cosmos variables allow the server to look up callers in the `users` container
@@ -118,6 +120,8 @@ Make note of the `Forwarding` URL. (e.g. `https://54c5-35-170-32-42.ngrok-free.a
 ### Websocket URL
 
 Your server should now be accessible at the `Forwarding` URL when run, so set the `PUBLIC_URL` in `websocket-server/.env`. See `websocket-server/.env.example` for reference.
+
+All conversation events are written to the Cosmos DB container specified by `LOG_CONTAINER`. When a call ends, the complete transcript is saved to the user's Gitea repository in the container defined by `REPO_CONTAINER`.
 
 # Additional Notes
 
