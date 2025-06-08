@@ -641,7 +641,7 @@ postgres_container = containerinstance.ContainerGroup(
         ports=[containerinstance.PortArgs(protocol="TCP", port=5432)],
         type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
-    subnet_ids=[container_subnet.id],
+    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=container_subnet.id)],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
@@ -715,7 +715,7 @@ gitea_container = containerinstance.ContainerGroup(
         ports=[containerinstance.PortArgs(protocol="TCP", port=3000)],
         type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
     ),
-    subnet_ids=[container_subnet.id],
+    subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=container_subnet.id)],
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
             workspace_id=workspace.customer_id,
