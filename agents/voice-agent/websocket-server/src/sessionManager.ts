@@ -1,5 +1,6 @@
 import { RawData, WebSocket } from "ws";
 import functions from "./functionHandlers";
+import { setCallSid } from "./callControl";
 
 interface Session {
   twilioConn?: WebSocket;
@@ -13,6 +14,7 @@ interface Session {
   openAIApiKey?: string;
   objective?: string;
   userProfile?: any;
+  callSid?: string;
 }
 
 let session: Session = {};
@@ -37,6 +39,8 @@ export function handleCallConnection(
     session.twilioConn = undefined;
     session.modelConn = undefined;
     session.streamSid = undefined;
+    session.callSid = undefined;
+    setCallSid(undefined);
     session.lastAssistantItem = undefined;
     session.responseStartTimestamp = undefined;
     session.latestMediaTimestamp = undefined;
@@ -92,6 +96,8 @@ function handleTwilioMessage(data: RawData) {
   switch (msg.event) {
     case "start":
       session.streamSid = msg.start.streamSid;
+      session.callSid = msg.start.callSid ?? msg.start.CallSid;
+      setCallSid(session.callSid);
       session.latestMediaTimestamp = 0;
       session.lastAssistantItem = undefined;
       session.responseStartTimestamp = undefined;
@@ -289,6 +295,8 @@ function closeAllConnections() {
     session.frontendConn = undefined;
   }
   session.streamSid = undefined;
+  session.callSid = undefined;
+  setCallSid(undefined);
   session.lastAssistantItem = undefined;
   session.responseStartTimestamp = undefined;
   session.latestMediaTimestamp = undefined;
