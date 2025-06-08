@@ -304,7 +304,7 @@ container_subnet = network.Subnet(
     address_prefix="10.0.0.0/24",
     service_endpoints=[
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
-        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.CosmosDB"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
     ],
 )
 
@@ -316,7 +316,7 @@ function_subnet = network.Subnet(
     address_prefix="10.0.1.0/24",
     service_endpoints=[
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
-        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.CosmosDB"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
     ],
 )
 
@@ -325,12 +325,14 @@ blob_zone = privatedns.PrivateZone(
     "blob-zone",
     resource_group_name=resource_group.name,
     private_zone_name="privatelink.blob.core.windows.net",
+    location="global",
 )
 
 cosmos_zone = privatedns.PrivateZone(
     "cosmos-zone",
     resource_group_name=resource_group.name,
     private_zone_name="privatelink.documents.azure.com",
+    location="global",
 )
 
 privatedns.VirtualNetworkLink(
@@ -1130,57 +1132,4 @@ web.WebAppApplicationSettings(
     name=func_app.name,
     resource_group_name=resource_group.name,
     properties=all_app_settings,
-)
-
-# --- Network resources including subnets and service endpoints ---
-from pulumi_azure_native import network
-from pulumi_azure_native import privatedns
-
-# Subnet for containers, ensure correct CosmosDB service endpoint
-containers_subnet = network.Subnet(
-    "containers-subnet",
-    resource_group_name=resource_group.name,
-    virtual_network_name="vextir-vnet",
-    subnet_name="containers",
-    address_prefix="10.0.1.0/24",
-    service_endpoints=[
-        network.ServiceEndpointPropertiesFormatArgs(
-            service="Microsoft.Storage"
-        ),
-        network.ServiceEndpointPropertiesFormatArgs(
-            service="Microsoft.AzureCosmosDB"
-        ),
-    ],
-)
-
-# Subnet for functions, ensure correct CosmosDB service endpoint
-functions_subnet = network.Subnet(
-    "functions-subnet",
-    resource_group_name=resource_group.name,
-    virtual_network_name="vextir-vnet",
-    subnet_name="functions",
-    address_prefix="10.0.2.0/24",
-    service_endpoints=[
-        network.ServiceEndpointPropertiesFormatArgs(
-            service="Microsoft.Storage"
-        ),
-        network.ServiceEndpointPropertiesFormatArgs(
-            service="Microsoft.AzureCosmosDB"
-        ),
-    ],
-)
-
-# Private DNS zones for Cosmos and Blob, ensure correct global location
-cosmos_zone = privatedns.PrivateZone(
-    "cosmos-zone",
-    resource_group_name=resource_group.name,
-    private_zone_name="privatelink.documents.azure.com",
-    location="global",
-)
-
-blob_zone = privatedns.PrivateZone(
-    "blob-zone",
-    resource_group_name=resource_group.name,
-    private_zone_name="privatelink.blob.core.windows.net",
-    location="global",
 )
