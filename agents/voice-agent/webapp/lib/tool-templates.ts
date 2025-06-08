@@ -1,14 +1,5 @@
 export const toolTemplates = [
   {
-    name: "ping_no_args",
-    type: "function",
-    description: "A simple ping tool with no arguments",
-    parameters: {
-      type: "object",
-      properties: {},
-    },
-  },
-  {
     name: "get_user_nested_args",
     type: "function",
     description: "Fetch user profile by nested identifier",
