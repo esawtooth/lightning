@@ -1,16 +1,5 @@
 export const toolTemplates = [
   {
-    name: "get_weather",
-    type: "function",
-    description: "Get the current weather",
-    parameters: {
-      type: "object",
-      properties: {
-        location: { type: "string" },
-      },
-    },
-  },
-  {
     name: "ping_no_args",
     type: "function",
     description: "A simple ping tool with no arguments",
