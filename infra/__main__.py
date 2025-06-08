@@ -254,7 +254,7 @@ storage_account = storage.StorageAccount(
     resource_group_name=resource_group.name,
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     kind=storage.Kind.STORAGE_V2,
-    public_network_access=storage.PublicNetworkAccess.DISABLED,
+    public_network_access=storage.PublicNetworkAccess.ENABLED,
 )
 
 # Separate storage account for Git repositories and database volumes
