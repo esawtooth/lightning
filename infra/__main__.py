@@ -48,6 +48,9 @@ vault_name = "vextir-vault"
 worker_image = config.get("workerImage") or "vextiracr.azurecr.io/worker-task:latest"
 domain = config.get("domain") or "vextir.com"
 acs_sender = config.get("acsSender") or f"no-reply@{domain}"
+twilio_account_sid = config.require_secret("twilioAccountSid")
+twilio_auth_token = config.require_secret("twilioAuthToken")
+voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:latest"
 
 # Fetch subscription ID early so it can be used anywhere below
 client_config = get_client_config()
@@ -644,6 +647,64 @@ ui_container = containerinstance.ContainerGroup(
 
 pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
 
+# Container group for the voice agent websocket server
+voice_ws_container = containerinstance.ContainerGroup(
+    "voice-ws",
+    resource_group_name=resource_group.name,
+    location=resource_group.location,
+    os_type="Linux",
+    containers=[
+        containerinstance.ContainerArgs(
+            name="voice-ws",
+            image=voice_ws_image,
+            ports=[containerinstance.ContainerPortArgs(port=8081)],
+            environment_variables=[
+                containerinstance.EnvironmentVariableArgs(
+                    name="OPENAI_API_KEY", secure_value=openai_api_key
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="TWILIO_ACCOUNT_SID", secure_value=twilio_account_sid
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="TWILIO_AUTH_TOKEN", secure_value=twilio_auth_token
+                ),
+                containerinstance.EnvironmentVariableArgs(
+                    name="PUBLIC_URL",
+                    value=pulumi.Output.concat("https://", domain, "/voice-ws"),
+                ),
+            ],
+            resources=containerinstance.ResourceRequirementsArgs(
+                requests=containerinstance.ResourceRequestsArgs(cpu=1.0, memory_in_gb=1.0)
+            ),
+        )
+    ],
+    image_registry_credentials=[
+        containerinstance.ImageRegistryCredentialArgs(
+            server=acr.login_server,
+            username=acr_credentials.username,
+            password=acr_credentials.passwords[0].value,
+        )
+    ],
+    ip_address=containerinstance.IpAddressArgs(
+        ports=[containerinstance.PortArgs(protocol="TCP", port=8081)],
+        type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+    ),
+    diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
+        log_analytics=containerinstance.LogAnalyticsArgs(
+            workspace_id=workspace.customer_id,
+            workspace_key=workspace_keys.primary_shared_key,
+            workspace_resource_id=workspace.id,
+            log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,
+        )
+    ),
+    opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
+)
+
+pulumi.export(
+    "voiceWsUrl",
+    voice_ws_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}:8081"),
+)
+
 if domain:
     pulumi.export("uiDomain", pulumi.Output.concat("https://", domain))
     pulumi.export("apiDomain", pulumi.Output.concat("https://api.", domain))
@@ -678,6 +739,18 @@ if domain:
         record_type="CNAME",
         ttl=600,
         cname_record=dns.CnameRecordArgs(cname=func_app.default_host_name),
+    )
+
+    dns.RecordSet(
+        "voicews-cname",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="voice-ws",
+        record_type="CNAME",
+        ttl=600,
+        cname_record=dns.CnameRecordArgs(
+            cname=voice_ws_container.ip_address.apply(lambda ip: ip.fqdn)
+        ),
     )
 
     # Create DNS records required to verify the email sending domain
