@@ -6,6 +6,10 @@ export function setCallSid(sid: string | undefined) {
   callSid = sid;
 }
 
+export function getCallSid(): string | undefined {
+  return callSid;
+}
+
 const authHeader =
   TWILIO_ACCOUNT_SID && TWILIO_AUTH_TOKEN
     ?
