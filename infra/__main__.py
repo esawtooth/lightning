@@ -590,45 +590,45 @@ send_keys = servicebus.list_namespace_keys_output(
 )
 
 # Azure OpenAI account using pay-as-you-go pricing
-openai_account = cognitiveservices.Account(
-    "openai-account",
-    resource_group_name=resource_group.name,
-    account_name="vextir-openai",
-    location="westus2",  # OpenAI accounts are only available in specific regions
-    kind="OpenAI",
-    sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
-    properties=cognitiveservices.AccountPropertiesArgs(
-        public_network_access=cognitiveservices.PublicNetworkAccess.ENABLED,
-    ),
-)
+# openai_account = cognitiveservices.Account(
+#     "openai-account",
+#     resource_group_name=resource_group.name,
+#     account_name="vextir-openai",
+#     location="westus2",  # OpenAI accounts are only available in specific regions
+#     kind="OpenAI",
+#     sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
+#     properties=cognitiveservices.AccountPropertiesArgs(
+#         public_network_access=cognitiveservices.PublicNetworkAccess.ENABLED,
+#     ),
+# )
 
-# Retrieve the API keys for the OpenAI account
-openai_keys = cognitiveservices.list_account_keys_output(
-    account_name=openai_account.name,
-    resource_group_name=resource_group.name,
-)
+# # Retrieve the API keys for the OpenAI account
+# openai_keys = cognitiveservices.list_account_keys_output(
+#     account_name=openai_account.name,
+#     resource_group_name=resource_group.name,
+# )
 
 # Export OpenAI account details now that the resources are defined
-pulumi.export("openaiAccountName", openai_account.name)
-pulumi.export("openaiEndpoint", openai_account.properties.endpoint)
-pulumi.export("openaiApiKey", openai_keys.key1)
+# pulumi.export("openaiAccountName", openai_account.name)
+# pulumi.export("openaiEndpoint", openai_account.properties.endpoint)
+# pulumi.export("openaiApiKey", openai_keys.key1)
 
 # Deploy pay-as-you-go models in the OpenAI account
-for model in ["o4-mini", "gpt-4o", "4o-mini", "4o-realtime"]:
-    cognitiveservices.Deployment(
-        f"{model.replace('-', '')}-deploy",
-        resource_group_name=resource_group.name,
-        account_name=openai_account.name,
-        deployment_name=model,
-        sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
-        properties=cognitiveservices.DeploymentPropertiesArgs(
-            model=cognitiveservices.DeploymentModelArgs(
-                name=model,
-                format="OpenAI",
-                version="latest",
-            )
-        ),
-    )
+# for model in ["o4-mini", "gpt-4o", "4o-mini", "4o-realtime"]:
+#     cognitiveservices.Deployment(
+#         f"{model.replace('-', '')}-deploy",
+#         resource_group_name=resource_group.name,
+#         account_name=openai_account.name,
+#         deployment_name=model,
+#         sku=cognitiveservices.SkuArgs(name="S0", tier=cognitiveservices.SkuTier.STANDARD),
+#         properties=cognitiveservices.DeploymentPropertiesArgs(
+#             model=cognitiveservices.DeploymentModelArgs(
+#                 name=model,
+#                 format="OpenAI",
+#                 version="latest",
+#             )
+#         ),
+#     )
 
 #
 # Function App
