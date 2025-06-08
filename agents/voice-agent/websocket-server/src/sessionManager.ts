@@ -13,6 +13,7 @@ interface Session {
   latestMediaTimestamp?: number;
   openAIApiKey?: string;
   objective?: string;
+  userProfile?: any;
   callSid?: string;
 }
 
@@ -21,12 +22,14 @@ let session: Session = {};
 export function handleCallConnection(
   ws: WebSocket,
   openAIApiKey: string,
-  objective?: string
+  objective?: string,
+  userProfile?: any
 ) {
   cleanupConnection(session.twilioConn);
   session.twilioConn = ws;
   session.openAIApiKey = openAIApiKey;
   session.objective = objective;
+  session.userProfile = userProfile;
 
   ws.on("message", handleTwilioMessage);
   ws.on("error", ws.close);
@@ -41,6 +44,7 @@ export function handleCallConnection(
     session.lastAssistantItem = undefined;
     session.responseStartTimestamp = undefined;
     session.latestMediaTimestamp = undefined;
+    session.userProfile = undefined;
     if (!session.frontendConn) session = {};
   });
 }
@@ -297,6 +301,7 @@ function closeAllConnections() {
   session.responseStartTimestamp = undefined;
   session.latestMediaTimestamp = undefined;
   session.saved_config = undefined;
+  session.userProfile = undefined;
 }
 
 function cleanupConnection(ws?: WebSocket) {

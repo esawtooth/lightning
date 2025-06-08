@@ -87,6 +87,13 @@ npm run dev
 ### OpenAI & Twilio
 
 Set your credentials in `webapp/.env` and `websocket-server` - see `webapp/.env.example` and `websocket-server.env.example` for reference.
+The websocket server also needs Cosmos DB settings so it can map incoming phone numbers to user profiles. Add the following variables to `websocket-server/.env`:
+
+```
+COSMOS_CONNECTION="<connection-string>"
+COSMOS_DATABASE="vextir"
+USER_CONTAINER="users"
+```
 
 ### Ngrok
 
