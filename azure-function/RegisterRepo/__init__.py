@@ -9,7 +9,7 @@ from azure.cosmos import CosmosClient, PartitionKey
 from auth import verify_token
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
-COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 REPO_CONTAINER = os.environ.get("REPO_CONTAINER", "repos")
 GITEA_URL = os.environ.get("GITEA_URL")
 GITEA_TOKEN = os.environ.get("GITEA_TOKEN")

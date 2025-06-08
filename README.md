@@ -1,4 +1,4 @@
-# lightning
+# vextir
 
 Event based AI
 
@@ -144,9 +144,9 @@ cd infra
 pip install -r requirements.txt
 pulumi config set openaiApiKey <key> --secret
 pulumi config set jwtSigningKey <secret> --secret
-pulumi config set uiImage lightningacr.azurecr.io/chainlit-client:<tag>
-pulumi config set workerImage lightningacr.azurecr.io/worker-task:<tag>
-pulumi config set domain agentsmith.in
+pulumi config set uiImage vextiracr.azurecr.io/chainlit-client:<tag>
+pulumi config set workerImage vextiracr.azurecr.io/worker-task:<tag>
+pulumi config set domain vextir.com
 pulumi up
 ```
 
@@ -160,7 +160,7 @@ pulumi up
 - Configures all environment variables and connections
 - Creates an Azure DNS zone with records for the chat UI and API.
   Update your domain registrar to use the zone's name servers manually
-  (defaults to `agentsmith.in` if no domain is configured).
+  (defaults to `vextir.com` if no domain is configured).
   Pulumi exports these servers as `dnsZoneNameServers`.
 
 After `pulumi up` completes copy the values from `dnsZoneNameServers` and
@@ -194,7 +194,7 @@ messaging:
  - `AAD_CLIENT_SECRET` &mdash; client secret for the Entra ID application.
  - `AAD_TENANT_ID` &mdash; tenant ID where the application is registered.
 - `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
-- `COSMOS_DATABASE` &mdash; database name (defaults to `lightning`).
+- `COSMOS_DATABASE` &mdash; database name (defaults to `vextir`).
 - `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
 - `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
 - `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
@@ -234,7 +234,7 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "AAD_CLIENT_SECRET": "<client-secret>",
     "AAD_TENANT_ID": "<tenant-id>",
     "COSMOS_CONNECTION": "<cosmos-connection-string>",
-    "COSMOS_DATABASE": "lightning",
+    "COSMOS_DATABASE": "vextir",
     "USER_CONTAINER": "users",
     "REPO_CONTAINER": "repos",
     "SCHEDULE_CONTAINER": "schedules",
@@ -255,7 +255,7 @@ AAD_CLIENT_ID=<app-id>
 AAD_CLIENT_SECRET=<client-secret>
 AAD_TENANT_ID=<tenant-id>
 COSMOS_CONNECTION=<cosmos-connection-string>
-COSMOS_DATABASE=lightning
+COSMOS_DATABASE=vextir
 USER_CONTAINER=users
 REPO_CONTAINER=repos
 SCHEDULE_CONTAINER=schedules

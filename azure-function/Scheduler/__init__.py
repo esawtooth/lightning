@@ -11,7 +11,7 @@ from events import Event
 from auth import verify_token
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
-COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 SCHEDULE_CONTAINER = os.environ.get("SCHEDULE_CONTAINER", "schedules")
 
 _client = CosmosClient.from_connection_string(COSMOS_CONN)

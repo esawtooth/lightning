@@ -23,7 +23,7 @@ from azure.servicebus import ServiceBusClient, ServiceBusMessage
 from events import Event, WorkerTaskEvent
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
-COSMOS_DB = os.environ.get("COSMOS_DATABASE", "lightning")
+COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 REPO_CONTAINER = os.environ.get("REPO_CONTAINER", "repos")
 TASK_CONTAINER = os.environ.get("TASK_CONTAINER", "tasks")
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")

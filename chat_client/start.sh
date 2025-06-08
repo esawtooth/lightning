@@ -2,7 +2,7 @@
 
 set -e
 
-echo "⚡ Lightning Chat - Starting Gateway"
+echo "⚡ Vextir Chat - Starting Gateway"
 
 # Verify required environment variables
 check_env_var() {

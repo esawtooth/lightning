@@ -47,17 +47,17 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
-        run: pulumi config set workerImage "lightningacr.azurecr.io/worker-task:latest"
+        run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
-        run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:latest"
+        run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure domain
-        run: pulumi config set domain "agentsmith.in"
+        run: pulumi config set domain "vextir.com"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -92,7 +92,7 @@ jobs:
       - name: Log in to Azure Container Registry
         run: |
           az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
-          az acr login --name lightningacr
+          az acr login --name vextiracr
         env:
           ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
@@ -103,7 +103,7 @@ jobs:
           context: .
           file: ./Dockerfile.worker
           push: true
-          tags: lightningacr.azurecr.io/worker-task:${{ github.sha }},lightningacr.azurecr.io/worker-task:latest
+          tags: vextiracr.azurecr.io/worker-task:${{ github.sha }},vextiracr.azurecr.io/worker-task:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push chainlit client image
@@ -112,7 +112,7 @@ jobs:
           context: .
           file: ./chat_client/Dockerfile
           push: true
-          tags: lightningacr.azurecr.io/chainlit-client:${{ github.sha }},lightningacr.azurecr.io/chainlit-client:latest
+          tags: vextiracr.azurecr.io/chainlit-client:${{ github.sha }},vextiracr.azurecr.io/chainlit-client:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -158,17 +158,17 @@ jobs:
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
-        run: pulumi config set workerImage "lightningacr.azurecr.io/worker-task:${{ github.sha }}"
+        run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
-        run: pulumi config set uiImage "lightningacr.azurecr.io/chainlit-client:${{ github.sha }}"
+        run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure domain
-        run: pulumi config set domain "agentsmith.in"
+        run: pulumi config set domain "vextir.com"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

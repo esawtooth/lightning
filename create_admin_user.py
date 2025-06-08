@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to create the first admin user in the Lightning Chat system.
+Script to create the first admin user in the Vextir Chat system.
 This script manually promotes a user to admin status in the database.
 """
 
@@ -13,7 +13,7 @@ from azure.cosmos import CosmosClient, PartitionKey
 # Configuration
 COSMOS_URL = os.environ.get("COSMOS_URL", "https://your-cosmos-account.documents.azure.com:443/")
 COSMOS_KEY = os.environ.get("COSMOS_KEY", "your-cosmos-key")
-DATABASE_NAME = os.environ.get("COSMOS_DATABASE", "lightning")
+DATABASE_NAME = os.environ.get("COSMOS_DATABASE", "vextir")
 CONTAINER_NAME = os.environ.get("COSMOS_CONTAINER", "users")
 
 class Colors:
@@ -43,7 +43,7 @@ def _hash_password(password: str, salt: str) -> str:
 def create_admin_user():
     """Create or promote a user to admin status."""
     
-    print(f"\n{Colors.BOLD}Lightning Chat - Admin User Creator{Colors.END}")
+    print(f"\n{Colors.BOLD}Vextir Chat - Admin User Creator{Colors.END}")
     print("=" * 40)
     
     # Check environment variables
@@ -146,7 +146,7 @@ def create_admin_user():
 def list_users():
     """List all users in the database."""
     
-    print(f"\n{Colors.BOLD}Lightning Chat - User List{Colors.END}")
+    print(f"\n{Colors.BOLD}Vextir Chat - User List{Colors.END}")
     print("=" * 30)
     
     if not all([COSMOS_URL, COSMOS_KEY]):
@@ -188,7 +188,7 @@ def main():
     """Main menu."""
     
     while True:
-        print(f"\n{Colors.BOLD}Lightning Chat - Database Admin Tool{Colors.END}")
+        print(f"\n{Colors.BOLD}Vextir Chat - Database Admin Tool{Colors.END}")
         print("1. Create/Promote Admin User")
         print("2. List All Users")
         print("3. Exit")
