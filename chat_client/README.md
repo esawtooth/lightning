@@ -1,6 +1,6 @@
-# Lightning Chat - Authentication Gateway
+# Vextir Chat - Authentication Gateway
 
-This directory contains the Lightning Chat client secured with Azure Entra ID.
+This directory contains the Vextir Chat client secured with Azure Entra ID.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ cookie.
 ### 🎨 Modern UI
 - Responsive design
 - Professional authentication pages
-- Lightning-themed branding
+- Vextir-themed branding
 - Error handling and feedback
 
 ## Environment Variables
@@ -78,7 +78,7 @@ pytest ..
 
 ### Build
 ```bash
-docker build -t lightning-chat .
+docker build -t vextir-chat .
 ```
 
 ### Run
@@ -87,7 +87,7 @@ docker run -p 443:443 \
   -e AAD_CLIENT_ID="<app-id>" \
   -e AAD_TENANT_ID="<tenant-id>" \
   -e AAD_CLIENT_SECRET="<client-secret>" \
-  lightning-chat
+  vextir-chat
 ```
 
 ## File Structure

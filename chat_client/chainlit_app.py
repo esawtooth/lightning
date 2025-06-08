@@ -131,7 +131,7 @@ async def start():
         pass
     
     welcome_message = f"""
-🌟 **Welcome to Lightning Chat, {username}!**
+🌟 **Welcome to Vextir Chat, {username}!**
 
 I'm your AI assistant, ready to help you with:
 - Answering questions
@@ -203,7 +203,7 @@ async def health_check():
     """Health check endpoint for the chat service."""
     return {
         "status": "healthy",
-        "service": "lightning-chat",
+        "service": "vextir-chat",
         "timestamp": datetime.utcnow().isoformat()
     }
 

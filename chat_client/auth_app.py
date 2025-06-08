@@ -27,7 +27,7 @@ auth_app = msal.ConfidentialClientApplication(
 
 SCOPES = ["User.Read"]
 
-app = FastAPI(title="Lightning Chat Authentication")
+app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 templates = Jinja2Templates(directory="templates")
 

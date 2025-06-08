@@ -51,7 +51,7 @@ def main() -> int:
     cosmos_conn = os.environ.get("COSMOS_CONNECTION")
     task_id = os.environ.get("TASK_ID")
     if cosmos_conn and task_id:
-        db_name = os.environ.get("COSMOS_DATABASE", "lightning")
+        db_name = os.environ.get("COSMOS_DATABASE", "vextir")
         container_name = os.environ.get("TASK_CONTAINER", "tasks")
         client = CosmosClient.from_connection_string(cosmos_conn)
         db = client.create_database_if_not_exists(db_name)

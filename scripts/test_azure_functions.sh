@@ -1,5 +1,5 @@
 #!/bin/bash
-# Simple Azure CLI script to check and test Lightning Function App
+# Simple Azure CLI script to check and test Vextir Function App
 
 if [ $# -lt 2 ]; then
   echo "Usage: $0 <resource-group> <function-app-name>" >&2

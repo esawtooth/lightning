@@ -1,8 +1,8 @@
-# Lightning Chat - Enhanced Authentication & Authorization System
+# Vextir Chat - Enhanced Authentication & Authorization System
 
 ## Overview
 
-The Lightning Chat UI container has been enhanced with a comprehensive authentication and authorization system. Users must authenticate before accessing chat, and only admin-approved users can access the system after registration. Registration places users on a waitlist pending admin approval.
+The Vextir Chat UI container has been enhanced with a comprehensive authentication and authorization system. Users must authenticate before accessing chat, and only admin-approved users can access the system after registration. Registration places users on a waitlist pending admin approval.
 
 ## Architecture
 
@@ -38,7 +38,7 @@ The Lightning Chat UI container has been enhanced with a comprehensive authentic
 - **Health Checks**: Service monitoring
 
 ### 4. Professional UI Templates
-- **Login Page** (`templates/login.html`): Lightning-branded with status messaging
+- **Login Page** (`templates/login.html`): Vextir-branded with status messaging
 - **Registration Page** (`templates/register.html`): Email field and waitlist info
 - **Admin Panel** (`templates/admin.html`): Full-featured user management interface
 
@@ -54,7 +54,7 @@ The Lightning Chat UI container has been enhanced with a comprehensive authentic
 # Required for Azure Functions
 export COSMOS_URL="https://your-cosmos-account.documents.azure.com:443/"
 export COSMOS_KEY="your-cosmos-primary-key"
-export COSMOS_DATABASE="lightning"
+export COSMOS_DATABASE="vextir"
 export COSMOS_CONTAINER="users"
 export JWT_SIGNING_KEY="your-jwt-signing-key"
 
@@ -79,11 +79,11 @@ chmod +x start.sh
 ./start.sh
 
 # Docker deployment
-docker build -t lightning-chat .
+docker build -t vextir-chat .
 docker run -p 443:443 \
   -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api" \
   -e JWT_SIGNING_KEY="your-jwt-signing-key" \
-  lightning-chat
+  vextir-chat
 ```
 
 ### 4. Create First Admin User
@@ -203,7 +203,7 @@ python test_auth_flow.py
 ## File Structure
 
 ```
-/Users/rohit/src/lightning/
+/Users/rohit/src/vextir/
 ├── azure-function/
 │   └── UserAuth/
 │       ├── __init__.py          # Enhanced auth functions
@@ -286,4 +286,4 @@ docker logs container-name
 env | grep -E "(AUTH_API_URL|JWT_SIGNING_KEY|COSMOS_)"
 ```
 
-This completes the comprehensive authentication and authorization enhancement for Lightning Chat. The system now provides secure, admin-controlled access with a professional user interface and robust backend infrastructure.
+This completes the comprehensive authentication and authorization enhancement for Vextir Chat. The system now provides secure, admin-controlled access with a professional user interface and robust backend infrastructure.

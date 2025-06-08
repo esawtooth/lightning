@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simple integration test suite for the Lightning Azure Functions.
+"""Simple integration test suite for the Vextir Azure Functions.
 
 The script checks that the deployed functions respond correctly by
 registering a temporary user, logging in, and sending test requests to
@@ -144,7 +144,7 @@ def schedule_event(base_url, token):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="Test deployed Lightning functions")
+    parser = argparse.ArgumentParser(description="Test deployed Vextir functions")
     parser.add_argument("resource_group", nargs="?")
     parser.add_argument("function_app", nargs="?")
     parser.add_argument("--base-url")

@@ -7,7 +7,7 @@ from common.jwt_utils import verify_token
 from auth_app import app as auth_app
 from chainlit_app import fastapi_app as chat_app
 
-app = FastAPI(title="Lightning Chat Gateway")
+app = FastAPI(title="Vextir Chat Gateway")
 
 GITEA_URL = os.environ.get("GITEA_URL")
 
