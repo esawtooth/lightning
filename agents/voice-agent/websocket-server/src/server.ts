@@ -9,8 +9,12 @@ import cors from "cors";
 import {
   handleCallConnection,
   handleFrontendConnection,
+  setLogCallback,
+  setCallEndCallback,
 } from "./sessionManager";
 import functions from "./functionHandlers";
+import { CosmosClient, Container } from "@azure/cosmos";
+import { getCallSid } from "./callControl";
 
 dotenv.config();
 
@@ -18,6 +22,106 @@ const PORT = parseInt(process.env.PORT || "8081", 10);
 const PUBLIC_URL = process.env.PUBLIC_URL || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OBJECTIVE = process.env.OBJECTIVE || "";
+const COSMOS_CONNECTION = process.env.COSMOS_CONNECTION || "";
+const COSMOS_DATABASE = process.env.COSMOS_DATABASE || "vextir";
+const USER_CONTAINER = process.env.USER_CONTAINER || "users";
+const LOG_CONTAINER = process.env.LOG_CONTAINER || "logs";
+const REPO_CONTAINER = process.env.REPO_CONTAINER || "repos";
+
+let userContainer: Container | undefined;
+let logContainer: Container | undefined;
+let repoContainer: Container | undefined;
+if (COSMOS_CONNECTION) {
+  try {
+    const cosmosClient = new CosmosClient(COSMOS_CONNECTION);
+    userContainer = cosmosClient
+      .database(COSMOS_DATABASE)
+      .container(USER_CONTAINER);
+    logContainer = cosmosClient
+      .database(COSMOS_DATABASE)
+      .container(LOG_CONTAINER);
+    repoContainer = cosmosClient
+      .database(COSMOS_DATABASE)
+      .container(REPO_CONTAINER);
+  } catch (err) {
+    console.error("Failed to init Cosmos client", err);
+  }
+}
+
+setLogCallback(recordLog);
+setCallEndCallback(saveTranscript);
+
+function recordLog(event: any) {
+  if (!logContainer) return;
+  const callId = getCallSid() || "unknown";
+  const entity = {
+    id: `${callId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    pk: callId,
+    timestamp: new Date().toISOString(),
+    event,
+  };
+  logContainer.items
+    .create(entity)
+    .catch((err) => console.error("Failed to store log", err));
+}
+
+async function saveTranscript(logs: any[], user?: any) {
+  if (!repoContainer || !user) return;
+  try {
+    const { resource } = await repoContainer.item("repo", user.id).read();
+    const repoUrl = resource.repo as string;
+    const giteaUrl = process.env.GITEA_URL;
+    const giteaToken = process.env.GITEA_TOKEN;
+    if (!repoUrl || !giteaUrl || !giteaToken) return;
+    const owner = user.id;
+    const repoName = repoUrl.split("/").pop()?.replace(/\.git$/, "");
+    if (!repoName) return;
+    const path = `transcripts/${new Date().toISOString()}.json`;
+    const summary = logs
+      .filter((e: any) => e.item && e.item.type === "message")
+      .slice(0, 5)
+      .map((e: any) => e.item.content?.map((c: any) => c.text).join(" "))
+      .join("\n");
+    const body = {
+      content: Buffer.from(
+        JSON.stringify({ logs, summary }, null, 2)
+      ).toString("base64"),
+      message: `add transcript ${path}`,
+    };
+    await fetch(
+      `${giteaUrl}/api/v1/repos/${owner}/${repoName}/contents/${encodeURIComponent(
+        path
+      )}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `token ${giteaToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    );
+  } catch (err) {
+    console.error("Failed to save transcript", err);
+  }
+}
+
+let currentUserProfile: any | null = null;
+
+async function lookupUserByPhone(phone: string): Promise<any | null> {
+  if (!userContainer || !phone) return null;
+  try {
+    const query = {
+      query: "SELECT * FROM c WHERE c.phone_number = @phone",
+      parameters: [{ name: "@phone", value: phone }],
+    };
+    const { resources } = await userContainer.items.query(query).fetchAll();
+    return resources[0] || null;
+  } catch (err) {
+    console.error("Failed to query user", err);
+    return null;
+  }
+}
 
 if (!OPENAI_API_KEY) {
   console.error("OPENAI_API_KEY environment variable is required");
@@ -38,7 +142,10 @@ app.get("/public-url", (req, res) => {
   res.json({ publicUrl: PUBLIC_URL });
 });
 
-app.all("/twiml", (req, res) => {
+app.all("/twiml", async (req, res) => {
+  const from = (req.body?.From as string) || (req.query?.From as string) || "";
+  currentUserProfile = await lookupUserByPhone(from);
+
   const wsUrl = new URL(PUBLIC_URL);
   wsUrl.protocol = "wss:";
   wsUrl.pathname = `/call`;
@@ -69,7 +176,7 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
   if (type === "call") {
     if (currentCall) currentCall.close();
     currentCall = ws;
-    handleCallConnection(currentCall, OPENAI_API_KEY, OBJECTIVE);
+    handleCallConnection(currentCall, OPENAI_API_KEY, OBJECTIVE, currentUserProfile || undefined);
   } else if (type === "logs") {
     if (currentLogs) currentLogs.close();
     currentLogs = ws;

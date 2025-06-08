@@ -13,6 +13,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@azure/cosmos": "^4.0.0",
     "@types/node": "^22.0.0",
     "@types/ws": "^8.5.12",
     "cors": "^2.8.5",

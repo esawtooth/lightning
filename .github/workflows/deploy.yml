@@ -46,6 +46,15 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure Twilio credentials
+        run: |
+          pulumi config set twilioAccountSid "$TWILIO_ACCOUNT_SID" --secret
+          pulumi config set twilioAuthToken "$TWILIO_AUTH_TOKEN" --secret
+        working-directory: infra
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
         run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:latest"
         working-directory: infra
@@ -53,6 +62,11 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
         run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:latest"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure voice websocket image
+        run: pulumi config set voiceWsImage "vextiracr.azurecr.io/voice-ws:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
@@ -115,6 +129,22 @@ jobs:
           tags: vextiracr.azurecr.io/chainlit-client:${{ github.sha }},vextiracr.azurecr.io/chainlit-client:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Build and push voice websocket image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agents/voice-agent/websocket-server
+          push: true
+          tags: vextiracr.azurecr.io/voice-ws:${{ github.sha }},vextiracr.azurecr.io/voice-ws:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Build and push voice webapp image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./agents/voice-agent/webapp
+          push: true
+          tags: vextiracr.azurecr.io/voice-webapp:${{ github.sha }},vextiracr.azurecr.io/voice-webapp:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy:
     runs-on: ubuntu-latest
@@ -157,6 +187,15 @@ jobs:
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure Twilio credentials
+        run: |
+          pulumi config set twilioAccountSid "$TWILIO_ACCOUNT_SID" --secret
+          pulumi config set twilioAuthToken "$TWILIO_AUTH_TOKEN" --secret
+        working-directory: infra
+        env:
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
         run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:${{ github.sha }}"
         working-directory: infra
@@ -164,6 +203,11 @@ jobs:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
         run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:${{ github.sha }}"
+        working-directory: infra
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      - name: Configure voice websocket image
+        run: pulumi config set voiceWsImage "vextiracr.azurecr.io/voice-ws:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
