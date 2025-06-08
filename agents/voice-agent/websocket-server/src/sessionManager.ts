@@ -2,6 +2,20 @@ import { RawData, WebSocket } from "ws";
 import functions from "./functionHandlers";
 import { setCallSid } from "./callControl";
 
+export type LogCallback = (ev: any) => void;
+export type CallEndCallback = (logs: any[], user?: any) => void;
+
+let logCallback: LogCallback | undefined;
+let callEndCallback: CallEndCallback | undefined;
+
+export function setLogCallback(cb: LogCallback) {
+  logCallback = cb;
+}
+
+export function setCallEndCallback(cb: CallEndCallback) {
+  callEndCallback = cb;
+}
+
 interface Session {
   twilioConn?: WebSocket;
   frontendConn?: WebSocket;
@@ -15,6 +29,7 @@ interface Session {
   objective?: string;
   userProfile?: any;
   callSid?: string;
+  logs?: any[];
 }
 
 let session: Session = {};
@@ -30,10 +45,12 @@ export function handleCallConnection(
   session.openAIApiKey = openAIApiKey;
   session.objective = objective;
   session.userProfile = userProfile;
+  session.logs = [];
 
   ws.on("message", handleTwilioMessage);
   ws.on("error", ws.close);
   ws.on("close", () => {
+    finalizeLogs();
     cleanupConnection(session.modelConn);
     cleanupConnection(session.twilioConn);
     session.twilioConn = undefined;
@@ -92,6 +109,9 @@ async function handleFunctionCall(item: { name: string; arguments: string }) {
 function handleTwilioMessage(data: RawData) {
   const msg = parseMessage(data);
   if (!msg) return;
+
+  if (session.logs) session.logs.push(msg);
+  if (logCallback) logCallback(msg);
 
   switch (msg.event) {
     case "start":
@@ -190,6 +210,9 @@ function tryConnectModel() {
 function handleModelMessage(data: RawData) {
   const event = parseMessage(data);
   if (!event) return;
+
+  if (session.logs) session.logs.push(event);
+  if (logCallback) logCallback(event);
 
   jsonSend(session.frontendConn, event);
 
@@ -302,6 +325,17 @@ function closeAllConnections() {
   session.latestMediaTimestamp = undefined;
   session.saved_config = undefined;
   session.userProfile = undefined;
+}
+
+function finalizeLogs() {
+  if (session.logs && callEndCallback) {
+    try {
+      callEndCallback([...session.logs], session.userProfile);
+    } catch (err) {
+      console.error("Error finalizing logs", err);
+    }
+  }
+  session.logs = [];
 }
 
 function cleanupConnection(ws?: WebSocket) {
