@@ -2,7 +2,7 @@
 //! Documents are stored individually on disk and loaded at startup.
 
 use anyhow::Result;
-use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
+use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT, Value, ScalarValue};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -11,6 +11,7 @@ use std::{
 use uuid::Uuid;
 
 const DEFAULT_USER: &str = "user1";
+const CONTENT_KEY: &str = "content";
 
 /// Different kinds of documents managed by the store.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -18,6 +19,14 @@ pub enum DocumentType {
     Folder,
     IndexGuide,
     Text,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Pointer {
+    pub pointer_type: String,
+    pub target: String,
+    pub name: Option<String>,
+    pub preview_text: Option<String>,
 }
 /// In-memory wrapper around an Automerge document.
 pub struct Document {
@@ -40,8 +49,8 @@ impl Document {
         doc_type: DocumentType,
     ) -> Result<Self> {
         let mut doc = AutoCommit::new();
-        let text_id = doc.put_object(ROOT, "text", ObjType::Text)?;
-        doc.splice_text(&text_id, 0, 0, text)?;
+        let list_id = doc.put_object(ROOT, CONTENT_KEY, ObjType::List)?;
+        doc.insert(&list_id, 0, text)?;
         Ok(Self {
             id,
             doc,
@@ -73,14 +82,51 @@ impl Document {
     }
 
     pub fn text(&self) -> String {
-        let text_id = self.doc.get(ROOT, "text").unwrap().unwrap().1;
-        self.doc.text(&text_id).unwrap_or_default()
+        let list_id = self.doc.get(ROOT, CONTENT_KEY).unwrap().unwrap().1;
+        let len = self.doc.length(&list_id);
+        let mut out = String::new();
+        for i in 0..len {
+            if let Ok(Some((val, _))) = self.doc.get(&list_id, i) {
+                match val {
+                    Value::Scalar(s) => {
+                        if let ScalarValue::Str(s) = s.as_ref() {
+                            out.push_str(s);
+                        }
+                    }
+                    _ => out.push_str("[pointer]"),
+                }
+            }
+        }
+        out
     }
 
     pub fn set_text(&mut self, text: &str) -> Result<()> {
-        let text_id = self.doc.get(ROOT, "text")?.unwrap().1;
-        let len = self.doc.length(&text_id) as isize;
-        self.doc.splice_text(&text_id, 0, len, text)?;
+        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
+        let len = self.doc.length(&list_id);
+        for i in (0..len).rev() {
+            self.doc.delete(&list_id, i)?;
+        }
+        self.doc.insert(&list_id, 0, text)?;
+        Ok(())
+    }
+
+    pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
+        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
+        let ptr_id = self.doc.insert_object(&list_id, index, ObjType::Map)?;
+        self.doc.put(&ptr_id, "type", pointer.pointer_type)?;
+        self.doc.put(&ptr_id, "target", pointer.target)?;
+        if let Some(name) = pointer.name {
+            self.doc.put(&ptr_id, "name", name)?;
+        }
+        if let Some(preview) = pointer.preview_text {
+            self.doc.put(&ptr_id, "preview_text", preview)?;
+        }
+        Ok(())
+    }
+
+    pub fn remove_at(&mut self, index: usize) -> Result<()> {
+        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
+        self.doc.delete(&list_id, index)?;
         Ok(())
     }
 
@@ -193,6 +239,19 @@ mod tests {
         assert_eq!(doc.owner(), "user1");
         store.update(id, "world").unwrap();
         assert_eq!(store.get(id).unwrap().text(), "world");
+
+        // test pointer insertion
+        let ptr = Pointer {
+            pointer_type: "blob".to_string(),
+            target: "123".to_string(),
+            name: Some("file.pdf".to_string()),
+            preview_text: None,
+        };
+        let doc_mut = store.docs.get_mut(&id).unwrap();
+        doc_mut.insert_pointer(1, ptr).unwrap();
+        assert_eq!(doc_mut.text(), "world[pointer]");
+        doc_mut.remove_at(1).unwrap();
+        assert_eq!(doc_mut.text(), "world");
         store.delete(id).unwrap();
         assert!(store.get(id).is_none());
     }
