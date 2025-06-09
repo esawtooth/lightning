@@ -56,17 +56,23 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
-        run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:latest"
+        # Use a public image so the baseline deployment succeeds even
+        # before the private registry images are built and pushed.
+        run: pulumi config set workerImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
-        run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:latest"
+        # The real UI image is pushed after this job. Use a stable public
+        # container here so `pulumi up` doesn't fail due to an inaccessible
+        # image during the baseline deployment.
+        run: pulumi config set uiImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure voice websocket image
-        run: pulumi config set voiceWsImage "vextiracr.azurecr.io/voice-ws:latest"
+        # Likewise use a public placeholder for the websocket container
+        run: pulumi config set voiceWsImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
