@@ -87,15 +87,24 @@ async fn create_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     let doc_type = req.doc_type.unwrap_or(DocumentType::Text);
-    let id = store
-        .create(
-            req.name.clone(),
-            &req.content,
-            auth.user_id.clone(),
-            req.parent_folder_id,
-            doc_type,
-        )
-        .expect("create");
+    let id = if doc_type == DocumentType::Folder {
+        let parent = req
+            .parent_folder_id
+            .unwrap_or_else(|| store.ensure_root(&auth.user_id).unwrap());
+        store
+            .create_folder(parent, req.name.clone(), auth.user_id.clone())
+            .expect("create_folder")
+    } else {
+        store
+            .create(
+                req.name.clone(),
+                &req.content,
+                auth.user_id.clone(),
+                req.parent_folder_id,
+                doc_type,
+            )
+            .expect("create")
+    };
     Json(DocResponse {
         id,
         name: req.name,

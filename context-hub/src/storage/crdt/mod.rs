@@ -32,6 +32,15 @@ impl DocumentType {
             DocumentType::Text => "Text",
         }
     }
+
+    fn from_str(s: &str) -> Self {
+        match s {
+            "Folder" => DocumentType::Folder,
+            "IndexGuide" => DocumentType::IndexGuide,
+            "Text" => DocumentType::Text,
+            _ => DocumentType::Text,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -71,6 +80,7 @@ impl Document {
                 doc.insert(&list_id, 0, text)?;
             }
         }
+        doc.put(ROOT, "doc_type", doc_type.as_str())?;
         Ok(Self {
             id,
             doc,
@@ -170,7 +180,21 @@ impl Document {
     pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = AutoCommit::load(&bytes)?;
-        let doc_type = if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
+        let doc_type = if let Ok(Some((val, _))) = doc.get(ROOT, "doc_type") {
+            if let Value::Scalar(s) = val {
+                if let ScalarValue::Str(s) = s.as_ref() {
+                    DocumentType::from_str(s)
+                } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
+                    DocumentType::Folder
+                } else {
+                    DocumentType::Text
+                }
+            } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
+                DocumentType::Folder
+            } else {
+                DocumentType::Text
+            }
+        } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
             DocumentType::Folder
         } else {
             DocumentType::Text
@@ -295,6 +319,7 @@ impl DocumentStore {
             None,
             DocumentType::Folder,
         )?;
+        self.create_index_for(id, "root", user)?;
         self.roots.insert(user.to_string(), id);
         Ok(id)
     }
@@ -318,6 +343,24 @@ impl DocumentStore {
         Ok(id)
     }
 
+    fn create_index_for(&mut self, folder: Uuid, folder_name: &str, owner: &str) -> Result<Uuid> {
+        let index_name = "_index.guide".to_string();
+        let content = format!("# {}", folder_name);
+        let index_id = self.create(
+            index_name.clone(),
+            &content,
+            owner.to_string(),
+            Some(folder),
+            DocumentType::IndexGuide,
+        )?;
+        let path = self.path(folder);
+        if let Some(doc) = self.docs.get_mut(&folder) {
+            doc.add_child(index_id, &index_name, DocumentType::IndexGuide)?;
+            doc.save(&path)?;
+        }
+        Ok(index_id)
+    }
+
     pub fn create_folder(&mut self, parent: Uuid, name: String, owner: String) -> Result<Uuid> {
         let id = self.create(
             name.clone(),
@@ -331,6 +374,7 @@ impl DocumentStore {
             parent_doc.add_child(id, &name, DocumentType::Folder)?;
             parent_doc.save(&path)?;
         }
+        let _ = self.create_index_for(id, &name, &owner)?;
         Ok(id)
     }
 
@@ -452,6 +496,30 @@ mod tests {
     }
 
     #[test]
+    fn folder_has_index_guide() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let folder = store
+            .create_folder(root, "project".to_string(), "user1".to_string())
+            .unwrap();
+        let doc = store.get(folder).unwrap();
+        assert_eq!(doc.child_count(), 1);
+        let idx_id = doc.child_ids()[0];
+        let idx = store.get(idx_id).unwrap();
+        assert_eq!(idx.doc_type(), DocumentType::IndexGuide);
+        assert_eq!(idx.name(), "_index.guide");
+    }
+
+    #[test]
     fn store_persists_to_disk() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
@@ -510,7 +578,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(store.get(root).unwrap().child_count(), 1);
-        assert_eq!(store.get(child).unwrap().child_count(), 1);
+        assert_eq!(store.get(child).unwrap().child_count(), 2);
 
         store.delete(child).unwrap();
 
