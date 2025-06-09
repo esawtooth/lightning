@@ -1,0 +1,16 @@
+[package]
+name = "context-hub"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+automerge = "1.0.0-alpha.4"
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+
+[dev-dependencies]
+tempfile = "3"
