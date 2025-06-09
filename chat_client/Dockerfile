@@ -12,17 +12,11 @@ COPY events/ ./events/
 COPY dashboard/ ./dashboard/
 COPY common/ ./common/
 
+# Copy Python dependencies
+COPY chat_client/requirements.txt ./requirements.txt
+
 # Install Python dependencies
-RUN pip install --no-cache-dir \
-    chainlit \
-    fastapi \
-    uvicorn \
-    requests \
-    jinja2 \
-    python-multipart \
-    python-jose[cryptography] \
-    PyJWT \
-    itsdangerous
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Make startup script executable
 RUN chmod +x ./start.sh
