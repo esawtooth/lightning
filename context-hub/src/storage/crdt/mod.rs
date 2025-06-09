@@ -9,22 +9,28 @@ use std::{
 };
 use uuid::Uuid;
 
+const DEFAULT_USER: &str = "user1";
 /// In-memory wrapper around an Automerge document.
 pub struct Document {
     id: Uuid,
     doc: AutoCommit,
+    owner: String,
 }
 
 impl Document {
-    pub fn new(id: Uuid, text: &str) -> Result<Self> {
+    pub fn new(id: Uuid, text: &str, owner: String) -> Result<Self> {
         let mut doc = AutoCommit::new();
         let text_id = doc.put_object(ROOT, "text", ObjType::Text)?;
         doc.splice_text(&text_id, 0, 0, text)?;
-        Ok(Self { id, doc })
+        Ok(Self { id, doc, owner })
     }
 
     pub fn id(&self) -> Uuid {
         self.id
+    }
+
+    pub fn owner(&self) -> &str {
+        &self.owner
     }
 
     pub fn text(&self) -> String {
@@ -44,10 +50,10 @@ impl Document {
         Ok(())
     }
 
-    pub fn load(id: Uuid, path: &Path) -> Result<Self> {
+    pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = AutoCommit::load(&bytes)?;
-        Ok(Self { id, doc })
+        Ok(Self { id, doc, owner })
     }
 }
 
@@ -68,7 +74,7 @@ impl DocumentStore {
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.path().file_stem().and_then(|s| s.to_str()) {
                     if let Ok(id) = Uuid::parse_str(name) {
-                        if let Ok(doc) = Document::load(id, &entry.path()) {
+                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string()) {
                             docs.insert(id, doc);
                         }
                     }
@@ -82,9 +88,9 @@ impl DocumentStore {
         self.dir.join(format!("{}.bin", id))
     }
 
-    pub fn create(&mut self, text: &str) -> Result<Uuid> {
+    pub fn create(&mut self, text: &str, owner: String) -> Result<Uuid> {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, text)?;
+        let mut doc = Document::new(id, text, owner)?;
         doc.save(&self.path(id))?;
         self.docs.insert(id, doc);
         Ok(id)
@@ -118,8 +124,10 @@ mod tests {
     fn create_and_update_document() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
-        let id = store.create("hello").unwrap();
-        assert_eq!(store.get(id).unwrap().text(), "hello");
+        let id = store.create("hello", "user1".to_string()).unwrap();
+        let doc = store.get(id).unwrap();
+        assert_eq!(doc.text(), "hello");
+        assert_eq!(doc.owner(), "user1");
         store.update(id, "world").unwrap();
         assert_eq!(store.get(id).unwrap().text(), "world");
         store.delete(id).unwrap();

@@ -59,6 +59,7 @@ struct DocRequest {
 struct DocResponse {
     id: Uuid,
     content: String,
+    owner: String,
 }
 
 pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
@@ -71,14 +72,15 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
 
 async fn create_doc(
     State(state): State<AppState>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Json(req): Json<DocRequest>,
 ) -> Json<DocResponse> {
     let mut store = state.store.lock().await;
-    let id = store.create(&req.content).expect("create");
+    let id = store.create(&req.content, auth.user_id.clone()).expect("create");
     Json(DocResponse {
         id,
         content: req.content,
+        owner: auth.user_id,
     })
 }
 
@@ -92,6 +94,7 @@ async fn get_doc(
         Ok(Json(DocResponse {
             id,
             content: doc.text(),
+            owner: doc.owner().to_string(),
         }))
     } else {
         Err(StatusCode::NOT_FOUND)
