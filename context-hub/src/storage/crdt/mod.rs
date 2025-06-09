@@ -2,7 +2,9 @@
 //! Documents are stored individually on disk and loaded at startup.
 
 use anyhow::Result;
-use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT, Value, ScalarValue};
+use automerge::{
+    transaction::Transactable, AutoCommit, ObjType, ReadDoc, ScalarValue, Value, ROOT,
+};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -12,6 +14,7 @@ use uuid::Uuid;
 
 const DEFAULT_USER: &str = "user1";
 const CONTENT_KEY: &str = "content";
+const CHILDREN_KEY: &str = "children";
 
 /// Different kinds of documents managed by the store.
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -19,6 +22,16 @@ pub enum DocumentType {
     Folder,
     IndexGuide,
     Text,
+}
+
+impl DocumentType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            DocumentType::Folder => "Folder",
+            DocumentType::IndexGuide => "IndexGuide",
+            DocumentType::Text => "Text",
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -49,8 +62,15 @@ impl Document {
         doc_type: DocumentType,
     ) -> Result<Self> {
         let mut doc = AutoCommit::new();
-        let list_id = doc.put_object(ROOT, CONTENT_KEY, ObjType::List)?;
-        doc.insert(&list_id, 0, text)?;
+        match doc_type {
+            DocumentType::Folder => {
+                doc.put_object(ROOT, CHILDREN_KEY, ObjType::Map)?;
+            }
+            _ => {
+                let list_id = doc.put_object(ROOT, CONTENT_KEY, ObjType::List)?;
+                doc.insert(&list_id, 0, text)?;
+            }
+        }
         Ok(Self {
             id,
             doc,
@@ -82,6 +102,9 @@ impl Document {
     }
 
     pub fn text(&self) -> String {
+        if self.doc_type == DocumentType::Folder {
+            return String::new();
+        }
         let list_id = self.doc.get(ROOT, CONTENT_KEY).unwrap().unwrap().1;
         let len = self.doc.length(&list_id);
         let mut out = String::new();
@@ -101,6 +124,9 @@ impl Document {
     }
 
     pub fn set_text(&mut self, text: &str) -> Result<()> {
+        if self.doc_type == DocumentType::Folder {
+            return Ok(());
+        }
         let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
         let len = self.doc.length(&list_id);
         for i in (0..len).rev() {
@@ -111,6 +137,9 @@ impl Document {
     }
 
     pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
+        if self.doc_type == DocumentType::Folder {
+            return Ok(());
+        }
         let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
         let ptr_id = self.doc.insert_object(&list_id, index, ObjType::Map)?;
         self.doc.put(&ptr_id, "type", pointer.pointer_type)?;
@@ -125,6 +154,9 @@ impl Document {
     }
 
     pub fn remove_at(&mut self, index: usize) -> Result<()> {
+        if self.doc_type == DocumentType::Folder {
+            return Ok(());
+        }
         let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
         self.doc.delete(&list_id, index)?;
         Ok(())
@@ -138,14 +170,44 @@ impl Document {
     pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = AutoCommit::load(&bytes)?;
+        let doc_type = if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
+            DocumentType::Folder
+        } else {
+            DocumentType::Text
+        };
         Ok(Self {
             id,
             doc,
             owner,
             name: id.to_string(),
             parent_folder_id: None,
-            doc_type: DocumentType::Text,
+            doc_type,
         })
+    }
+
+    pub fn add_child(&mut self, child_id: Uuid, name: &str, doc_type: DocumentType) -> Result<()> {
+        if self.doc_type != DocumentType::Folder {
+            return Ok(());
+        }
+        let map_id = self.doc.get(ROOT, CHILDREN_KEY)?.unwrap().1;
+        let child = self
+            .doc
+            .put_object(&map_id, child_id.to_string(), ObjType::Map)?;
+        self.doc.put(&child, "id", child_id.to_string())?;
+        self.doc.put(&child, "name", name.to_string())?;
+        self.doc.put(&child, "type", doc_type.as_str())?;
+        Ok(())
+    }
+
+    pub fn child_count(&self) -> usize {
+        if self.doc_type != DocumentType::Folder {
+            return 0;
+        }
+        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+            self.doc.keys(&map_id).count()
+        } else {
+            0
+        }
     }
 }
 
@@ -166,7 +228,8 @@ impl DocumentStore {
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.path().file_stem().and_then(|s| s.to_str()) {
                     if let Ok(id) = Uuid::parse_str(name) {
-                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string()) {
+                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string())
+                        {
                             docs.insert(id, doc);
                         }
                     }
@@ -193,6 +256,22 @@ impl DocumentStore {
         let mut doc = Document::new(id, name, text, owner, parent_folder_id, doc_type)?;
         doc.save(&self.path(id))?;
         self.docs.insert(id, doc);
+        Ok(id)
+    }
+
+    pub fn create_folder(&mut self, parent: Uuid, name: String, owner: String) -> Result<Uuid> {
+        let id = self.create(
+            name.clone(),
+            "",
+            owner.clone(),
+            Some(parent),
+            DocumentType::Folder,
+        )?;
+        let path = self.path(parent);
+        if let Some(parent_doc) = self.docs.get_mut(&parent) {
+            parent_doc.add_child(id, &name, DocumentType::Folder)?;
+            parent_doc.save(&path)?;
+        }
         Ok(id)
     }
 
@@ -271,6 +350,29 @@ mod tests {
         assert_eq!(doc.text(), "hello");
         doc.set_text("goodbye").unwrap();
         assert_eq!(doc.text(), "goodbye");
+    }
+
+    #[test]
+    fn create_folder_updates_parent() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root_id = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let child_id = store
+            .create_folder(root_id, "child".to_string(), "user1".to_string())
+            .unwrap();
+        let root_doc = store.get(root_id).unwrap();
+        assert_eq!(root_doc.doc_type(), DocumentType::Folder);
+        assert_eq!(root_doc.child_count(), 1);
+        let child_doc = store.get(child_id).unwrap();
+        assert_eq!(child_doc.doc_type(), DocumentType::Folder);
     }
 
     #[test]
