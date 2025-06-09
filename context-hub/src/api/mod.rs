@@ -72,7 +72,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
         .route("/docs", post(create_doc))
-        .route("/docs/:id", get(get_doc).put(update_doc).delete(delete_doc))
+        .route("/docs/{id}", get(get_doc).put(update_doc).delete(delete_doc))
         .with_state(app_state)
 }
 
@@ -155,5 +155,60 @@ async fn delete_doc(
         }
         Some(_) => StatusCode::FORBIDDEN,
         None => StatusCode::NOT_FOUND,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{body::{self, Body}, http::Request};
+    use serde_json::json;
+    use tower::util::ServiceExt;
+
+    #[tokio::test]
+    async fn crud_endpoints() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = DocumentStore::new(tempdir.path()).unwrap();
+        let app = router(Arc::new(Mutex::new(store)));
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"content": "hello"}).to_string()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let id = v["id"].as_str().unwrap();
+
+        let req = Request::builder()
+            .uri(format!("/docs/{}", id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = Request::builder()
+            .method("PUT")
+            .uri(format!("/docs/{}", id))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"content": "world"}).to_string()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        let req = Request::builder()
+            .method("DELETE")
+            .uri(format!("/docs/{}", id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
     }
 }
