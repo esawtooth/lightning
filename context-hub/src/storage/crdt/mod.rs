@@ -33,12 +33,13 @@ impl Document {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: Uuid,
-        name: String,
+        name: impl Into<String>,
         text: &str,
         owner: String,
         parent_folder_id: Option<Uuid>,
         doc_type: DocumentType,
     ) -> Result<Self> {
+        let name = name.into();
         let mut doc = AutoCommit::new();
         let text_id = doc.put_object(ROOT, "text", ObjType::Text)?;
         doc.splice_text(&text_id, 0, 0, text)?;
@@ -120,7 +121,8 @@ impl DocumentStore {
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.path().file_stem().and_then(|s| s.to_str()) {
                     if let Ok(id) = Uuid::parse_str(name) {
-                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string()) {
+                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string())
+                        {
                             docs.insert(id, doc);
                         }
                     }
@@ -137,12 +139,13 @@ impl DocumentStore {
     #[allow(clippy::too_many_arguments)]
     pub fn create(
         &mut self,
-        name: String,
+        name: impl Into<String>,
         text: &str,
         owner: String,
         parent_folder_id: Option<Uuid>,
         doc_type: DocumentType,
     ) -> Result<Uuid> {
+        let name = name.into();
         let id = Uuid::new_v4();
         let mut doc = Document::new(id, name, text, owner, parent_folder_id, doc_type)?;
         doc.save(&self.path(id))?;
@@ -195,5 +198,32 @@ mod tests {
         assert_eq!(store.get(id).unwrap().text(), "world");
         store.delete(id).unwrap();
         assert!(store.get(id).is_none());
+    }
+
+    #[test]
+    fn create_document_in_folder() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let folder_id = store
+            .create(
+                "folder",
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let doc_id = store
+            .create(
+                "child.txt",
+                "content",
+                "user1".to_string(),
+                Some(folder_id),
+                DocumentType::Text,
+            )
+            .unwrap();
+        let doc = store.get(doc_id).unwrap();
+        assert_eq!(doc.parent_folder_id(), Some(folder_id));
+        assert_eq!(doc.name(), "child.txt");
     }
 }
