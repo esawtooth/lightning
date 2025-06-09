@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::storage::crdt::DocumentStore;
+use crate::storage::crdt::{DocumentStore, DocumentType};
 
 /// Authentication context extracted from request headers.
 #[derive(Clone, Debug)]
@@ -52,13 +52,19 @@ pub struct AppState {
 
 #[derive(Serialize, Deserialize)]
 struct DocRequest {
+    name: String,
     content: String,
+    parent_folder_id: Option<Uuid>,
+    doc_type: Option<DocumentType>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct DocResponse {
     id: Uuid,
+    name: String,
     content: String,
+    parent_folder_id: Option<Uuid>,
+    doc_type: DocumentType,
     owner: String,
 }
 
@@ -76,10 +82,22 @@ async fn create_doc(
     Json(req): Json<DocRequest>,
 ) -> Json<DocResponse> {
     let mut store = state.store.lock().await;
-    let id = store.create(&req.content, auth.user_id.clone()).expect("create");
+    let doc_type = req.doc_type.unwrap_or(DocumentType::Text);
+    let id = store
+        .create(
+            req.name.clone(),
+            &req.content,
+            auth.user_id.clone(),
+            req.parent_folder_id,
+            doc_type,
+        )
+        .expect("create");
     Json(DocResponse {
         id,
+        name: req.name,
         content: req.content,
+        parent_folder_id: req.parent_folder_id,
+        doc_type,
         owner: auth.user_id,
     })
 }
@@ -93,7 +111,10 @@ async fn get_doc(
     match store.get(id) {
         Some(doc) if doc.owner() == auth.user_id => Ok(Json(DocResponse {
             id,
+            name: doc.name().to_string(),
             content: doc.text(),
+            parent_folder_id: doc.parent_folder_id(),
+            doc_type: doc.doc_type(),
             owner: doc.owner().to_string(),
         })),
         Some(_) => Err(StatusCode::FORBIDDEN),
