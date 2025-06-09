@@ -176,7 +176,17 @@ mod tests {
             .uri("/docs")
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(Body::from(json!({"content": "hello"}).to_string()))
+            .body(
+                Body::from(
+                    json!({
+                        "name": "file.txt",
+                        "content": "hello",
+                        "parent_folder_id": null,
+                        "doc_type": "Text"
+                    })
+                    .to_string(),
+                ),
+            )
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -197,7 +207,17 @@ mod tests {
             .uri(format!("/docs/{}", id))
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(Body::from(json!({"content": "world"}).to_string()))
+            .body(
+                Body::from(
+                    json!({
+                        "name": "file.txt",
+                        "content": "world",
+                        "parent_folder_id": null,
+                        "doc_type": "Text"
+                    })
+                    .to_string(),
+                ),
+            )
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
