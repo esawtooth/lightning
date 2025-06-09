@@ -86,38 +86,53 @@ async fn create_doc(
 
 async fn get_doc(
     State(state): State<AppState>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocResponse>, StatusCode> {
     let store = state.store.lock().await;
-    if let Some(doc) = store.get(id) {
-        Ok(Json(DocResponse {
+    match store.get(id) {
+        Some(doc) if doc.owner() == auth.user_id => Ok(Json(DocResponse {
             id,
             content: doc.text(),
             owner: doc.owner().to_string(),
-        }))
-    } else {
-        Err(StatusCode::NOT_FOUND)
+        })),
+        Some(_) => Err(StatusCode::FORBIDDEN),
+        None => Err(StatusCode::NOT_FOUND),
     }
 }
 
 async fn update_doc(
     State(state): State<AppState>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Path(id): Path<Uuid>,
     Json(req): Json<DocRequest>,
 ) -> StatusCode {
     let mut store = state.store.lock().await;
-    let _ = store.update(id, &req.content);
-    StatusCode::NO_CONTENT
+    let allowed = match store.get(id) {
+        Some(doc) if doc.owner() == auth.user_id => true,
+        Some(_) => return StatusCode::FORBIDDEN,
+        None => return StatusCode::NOT_FOUND,
+    };
+    if allowed {
+        let _ = store.update(id, &req.content);
+        StatusCode::NO_CONTENT
+    } else {
+        StatusCode::FORBIDDEN
+    }
 }
 
 async fn delete_doc(
     State(state): State<AppState>,
-    _auth: AuthContext,
+    auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> StatusCode {
     let mut store = state.store.lock().await;
-    let _ = store.delete(id);
-    StatusCode::NO_CONTENT
+    match store.get(id) {
+        Some(doc) if doc.owner() == auth.user_id => {
+            let _ = store.delete(id);
+            StatusCode::NO_CONTENT
+        }
+        Some(_) => StatusCode::FORBIDDEN,
+        None => StatusCode::NOT_FOUND,
+    }
 }
