@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -10,19 +11,45 @@ use std::{
 use uuid::Uuid;
 
 const DEFAULT_USER: &str = "user1";
+
+/// Different kinds of documents managed by the store.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum DocumentType {
+    Folder,
+    IndexGuide,
+    Text,
+}
 /// In-memory wrapper around an Automerge document.
 pub struct Document {
     id: Uuid,
     doc: AutoCommit,
     owner: String,
+    name: String,
+    parent_folder_id: Option<Uuid>,
+    doc_type: DocumentType,
 }
 
 impl Document {
-    pub fn new(id: Uuid, text: &str, owner: String) -> Result<Self> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        id: Uuid,
+        name: String,
+        text: &str,
+        owner: String,
+        parent_folder_id: Option<Uuid>,
+        doc_type: DocumentType,
+    ) -> Result<Self> {
         let mut doc = AutoCommit::new();
         let text_id = doc.put_object(ROOT, "text", ObjType::Text)?;
         doc.splice_text(&text_id, 0, 0, text)?;
-        Ok(Self { id, doc, owner })
+        Ok(Self {
+            id,
+            doc,
+            owner,
+            name,
+            parent_folder_id,
+            doc_type,
+        })
     }
 
     pub fn id(&self) -> Uuid {
@@ -31,6 +58,18 @@ impl Document {
 
     pub fn owner(&self) -> &str {
         &self.owner
+    }
+
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    pub fn parent_folder_id(&self) -> Option<Uuid> {
+        self.parent_folder_id
+    }
+
+    pub fn doc_type(&self) -> DocumentType {
+        self.doc_type
     }
 
     pub fn text(&self) -> String {
@@ -53,7 +92,14 @@ impl Document {
     pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = AutoCommit::load(&bytes)?;
-        Ok(Self { id, doc, owner })
+        Ok(Self {
+            id,
+            doc,
+            owner,
+            name: id.to_string(),
+            parent_folder_id: None,
+            doc_type: DocumentType::Text,
+        })
     }
 }
 
@@ -88,9 +134,17 @@ impl DocumentStore {
         self.dir.join(format!("{}.bin", id))
     }
 
-    pub fn create(&mut self, text: &str, owner: String) -> Result<Uuid> {
+    #[allow(clippy::too_many_arguments)]
+    pub fn create(
+        &mut self,
+        name: String,
+        text: &str,
+        owner: String,
+        parent_folder_id: Option<Uuid>,
+        doc_type: DocumentType,
+    ) -> Result<Uuid> {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, text, owner)?;
+        let mut doc = Document::new(id, name, text, owner, parent_folder_id, doc_type)?;
         doc.save(&self.path(id))?;
         self.docs.insert(id, doc);
         Ok(id)
@@ -124,9 +178,18 @@ mod tests {
     fn create_and_update_document() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
-        let id = store.create("hello", "user1".to_string()).unwrap();
+        let id = store
+            .create(
+                "test.txt".to_string(),
+                "hello",
+                "user1".to_string(),
+                None,
+                DocumentType::Text,
+            )
+            .unwrap();
         let doc = store.get(id).unwrap();
         assert_eq!(doc.text(), "hello");
+        assert_eq!(doc.name(), "test.txt");
         assert_eq!(doc.owner(), "user1");
         store.update(id, "world").unwrap();
         assert_eq!(store.get(id).unwrap().text(), "world");
