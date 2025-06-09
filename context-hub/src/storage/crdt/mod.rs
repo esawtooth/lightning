@@ -133,4 +133,26 @@ mod tests {
         store.delete(id).unwrap();
         assert!(store.get(id).is_none());
     }
+
+    #[test]
+    fn document_text_roundtrip() {
+        let id = Uuid::new_v4();
+        let mut doc = Document::new(id, "hello", "user".to_string()).unwrap();
+        assert_eq!(doc.text(), "hello");
+        doc.set_text("goodbye").unwrap();
+        assert_eq!(doc.text(), "goodbye");
+    }
+
+    #[test]
+    fn store_persists_to_disk() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let id = store.create("persist", "user1".to_string()).unwrap();
+        store.update(id, "changed").unwrap();
+        drop(store);
+
+        let store2 = DocumentStore::new(tempdir.path()).unwrap();
+        let doc = store2.get(id).unwrap();
+        assert_eq!(doc.text(), "changed");
+    }
 }
