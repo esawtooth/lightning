@@ -8,6 +8,10 @@ This directory contains a minimal Rust implementation of the Context Hub service
 cargo run
 ```
 
+All API calls require an `X-User-Id` HTTP header identifying the current user.
+An optional `X-Agent-Id` header can be supplied when the request originates from
+an agent acting on behalf of the user.
+
 The server exposes the following endpoints:
 
 - `GET /health` – simple health check returning `OK`.
