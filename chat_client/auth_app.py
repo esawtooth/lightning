@@ -11,9 +11,21 @@ from starlette.middleware.sessions import SessionMiddleware
 import msal
 from common.jwt_utils import verify_token
 
-AAD_CLIENT_ID = os.environ.get("AAD_CLIENT_ID") or os.environ.get("AZURE_CLIENT_ID")
-AAD_TENANT_ID = os.environ.get("AAD_TENANT_ID") or os.environ.get("AZURE_TENANT_ID")
-AAD_CLIENT_SECRET = os.environ.get("AAD_CLIENT_SECRET") or os.environ.get("AZURE_CLIENT_SECRET")
+AAD_CLIENT_ID = (
+    os.environ.get("AAD_CLIENT_ID")
+    or os.environ.get("ARM_CLIENT_ID")
+    or os.environ.get("AZURE_CLIENT_ID")
+)
+AAD_TENANT_ID = (
+    os.environ.get("AAD_TENANT_ID")
+    or os.environ.get("ARM_TENANT_ID")
+    or os.environ.get("AZURE_TENANT_ID")
+)
+AAD_CLIENT_SECRET = (
+    os.environ.get("AAD_CLIENT_SECRET")
+    or os.environ.get("ARM_CLIENT_SECRET")
+    or os.environ.get("AZURE_CLIENT_SECRET")
+)
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "change-me")
 
 if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):

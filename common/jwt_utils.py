@@ -28,8 +28,16 @@ def verify_token(token_or_header: str) -> str:
         token = token_or_header.split(" ", 1)[1]
 
     key = os.environ.get("JWT_SIGNING_KEY")
-    tenant = os.environ.get("AAD_TENANT_ID") or os.environ.get("AZURE_TENANT_ID")
-    client_id = os.environ.get("AAD_CLIENT_ID") or os.environ.get("AZURE_CLIENT_ID")
+    tenant = (
+        os.environ.get("AAD_TENANT_ID")
+        or os.environ.get("ARM_TENANT_ID")
+        or os.environ.get("AZURE_TENANT_ID")
+    )
+    client_id = (
+        os.environ.get("AAD_CLIENT_ID")
+        or os.environ.get("ARM_CLIENT_ID")
+        or os.environ.get("AZURE_CLIENT_ID")
+    )
 
     if key:
         options = {"require": ["exp"]}
