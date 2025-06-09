@@ -1,8 +1,8 @@
 //! HTTP API layer exposing document CRUD endpoints.
 
 use axum::{
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{FromRequestParts, Path, State},
+    http::{request::Parts, StatusCode},
     routing::{get, post},
     Json, Router,
 };
@@ -12,6 +12,37 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::storage::crdt::DocumentStore;
+
+/// Authentication context extracted from request headers.
+#[derive(Clone, Debug)]
+pub struct AuthContext {
+    pub user_id: String,
+    pub agent_id: Option<String>,
+}
+
+impl<S> FromRequestParts<S> for AuthContext
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let headers = &parts.headers;
+        let user = headers
+            .get("X-User-Id")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        if let Some(user_id) = user {
+            let agent_id = headers
+                .get("X-Agent-Id")
+                .and_then(|v| v.to_str().ok())
+                .map(|s| s.to_string());
+            Ok(Self { user_id, agent_id })
+        } else {
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
+}
 
 /// Shared application state containing the document store.
 #[derive(Clone)]
@@ -40,6 +71,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
 
 async fn create_doc(
     State(state): State<AppState>,
+    _auth: AuthContext,
     Json(req): Json<DocRequest>,
 ) -> Json<DocResponse> {
     let mut store = state.store.lock().await;
@@ -52,6 +84,7 @@ async fn create_doc(
 
 async fn get_doc(
     State(state): State<AppState>,
+    _auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocResponse>, StatusCode> {
     let store = state.store.lock().await;
@@ -67,6 +100,7 @@ async fn get_doc(
 
 async fn update_doc(
     State(state): State<AppState>,
+    _auth: AuthContext,
     Path(id): Path<Uuid>,
     Json(req): Json<DocRequest>,
 ) -> StatusCode {
@@ -75,7 +109,11 @@ async fn update_doc(
     StatusCode::NO_CONTENT
 }
 
-async fn delete_doc(State(state): State<AppState>, Path(id): Path<Uuid>) -> StatusCode {
+async fn delete_doc(
+    State(state): State<AppState>,
+    _auth: AuthContext,
+    Path(id): Path<Uuid>,
+) -> StatusCode {
     let mut store = state.store.lock().await;
     let _ = store.delete(id);
     StatusCode::NO_CONTENT
