@@ -66,7 +66,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
         .route("/docs", post(create_doc))
-        .route("/docs/:id", get(get_doc).put(update_doc).delete(delete_doc))
+        .route("/docs/{id}", get(get_doc).put(update_doc).delete(delete_doc))
         .with_state(app_state)
 }
 
