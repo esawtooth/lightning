@@ -2,7 +2,7 @@
 //! Documents are stored individually on disk and loaded at startup.
 
 use anyhow::Result;
-use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ROOT};
+use automerge::{transaction::Transactable, AutoCommit, ObjType, ReadDoc, ScalarValue, ROOT};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
@@ -42,6 +42,19 @@ impl Document {
         let mut doc = AutoCommit::new();
         let text_id = doc.put_object(ROOT, "text", ObjType::Text)?;
         doc.splice_text(&text_id, 0, 0, text)?;
+        doc.put(ROOT, "name", name.clone())?;
+        doc.put(ROOT, "owner", owner.clone())?;
+        if let Some(folder_id) = parent_folder_id {
+            doc.put(ROOT, "parent_folder_id", folder_id.to_string())?;
+        } else {
+            doc.put(ROOT, "parent_folder_id", ScalarValue::Null)?;
+        }
+        let doc_type_str = match doc_type {
+            DocumentType::Folder => "folder",
+            DocumentType::IndexGuide => "indexGuide",
+            DocumentType::Text => "text",
+        };
+        doc.put(ROOT, "doc_type", doc_type_str)?;
         Ok(Self {
             id,
             doc,
@@ -92,13 +105,34 @@ impl Document {
     pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = AutoCommit::load(&bytes)?;
+        let name = if let Some((v, _)) = doc.get(ROOT, "name")? {
+            v.to_str()
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| id.to_string())
+        } else {
+            id.to_string()
+        };
+        let parent_folder_id = if let Some((v, _)) = doc.get(ROOT, "parent_folder_id")? {
+            v.to_str().and_then(|s| Uuid::parse_str(s).ok())
+        } else {
+            None
+        };
+        let doc_type = if let Some((v, _)) = doc.get(ROOT, "doc_type")? {
+            match v.to_str() {
+                Some("folder") => DocumentType::Folder,
+                Some("indexGuide") => DocumentType::IndexGuide,
+                _ => DocumentType::Text,
+            }
+        } else {
+            DocumentType::Text
+        };
         Ok(Self {
             id,
             doc,
             owner,
-            name: id.to_string(),
-            parent_folder_id: None,
-            doc_type: DocumentType::Text,
+            name,
+            parent_folder_id,
+            doc_type,
         })
     }
 }
@@ -120,7 +154,8 @@ impl DocumentStore {
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.path().file_stem().and_then(|s| s.to_str()) {
                     if let Ok(id) = Uuid::parse_str(name) {
-                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string()) {
+                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string())
+                        {
                             docs.insert(id, doc);
                         }
                     }
@@ -200,7 +235,15 @@ mod tests {
     #[test]
     fn document_text_roundtrip() {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, "hello", "user".to_string()).unwrap();
+        let mut doc = Document::new(
+            id,
+            "doc.txt".to_string(),
+            "hello",
+            "user".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
         assert_eq!(doc.text(), "hello");
         doc.set_text("goodbye").unwrap();
         assert_eq!(doc.text(), "goodbye");
@@ -210,7 +253,15 @@ mod tests {
     fn store_persists_to_disk() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
-        let id = store.create("persist", "user1".to_string()).unwrap();
+        let id = store
+            .create(
+                "persist.txt".to_string(),
+                "persist",
+                "user1".to_string(),
+                None,
+                DocumentType::Text,
+            )
+            .unwrap();
         store.update(id, "changed").unwrap();
         drop(store);
 

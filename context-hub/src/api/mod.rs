@@ -72,7 +72,10 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
         .route("/docs", post(create_doc))
-        .route("/docs/{id}", get(get_doc).put(update_doc).delete(delete_doc))
+        .route(
+            "/docs/{id}",
+            get(get_doc).put(update_doc).delete(delete_doc),
+        )
         .with_state(app_state)
 }
 
@@ -161,7 +164,10 @@ async fn delete_doc(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::{self, Body}, http::Request};
+    use axum::{
+        body::{self, Body},
+        http::Request,
+    };
     use serde_json::json;
     use tower::util::ServiceExt;
 
@@ -176,7 +182,9 @@ mod tests {
             .uri("/docs")
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(Body::from(json!({"content": "hello"}).to_string()))
+            .body(Body::from(
+                json!({"name": "file.txt", "content": "hello"}).to_string(),
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -197,7 +205,9 @@ mod tests {
             .uri(format!("/docs/{}", id))
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(Body::from(json!({"content": "world"}).to_string()))
+            .body(Body::from(
+                json!({"name": "file.txt", "content": "world"}).to_string(),
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
