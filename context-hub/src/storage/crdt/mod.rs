@@ -239,6 +239,7 @@ impl Document {
 pub struct DocumentStore {
     docs: HashMap<Uuid, Document>,
     dir: PathBuf,
+    roots: HashMap<String, Uuid>,
 }
 
 impl DocumentStore {
@@ -247,6 +248,7 @@ impl DocumentStore {
         std::fs::create_dir_all(&dir)?;
         // load existing
         let mut docs = HashMap::new();
+        let mut roots = HashMap::new();
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             if entry.file_type()?.is_file() {
@@ -254,17 +256,47 @@ impl DocumentStore {
                     if let Ok(id) = Uuid::parse_str(name) {
                         if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string())
                         {
+                            if doc.doc_type() == DocumentType::Folder
+                                && doc.parent_folder_id().is_none()
+                            {
+                                roots.insert(doc.owner().to_string(), id);
+                            }
                             docs.insert(id, doc);
                         }
                     }
                 }
             }
         }
-        Ok(Self { docs, dir })
+        Ok(Self { docs, dir, roots })
     }
 
     fn path(&self, id: Uuid) -> PathBuf {
         self.dir.join(format!("{}.bin", id))
+    }
+
+    /// Ensure a root folder exists for the given user and return its ID.
+    pub fn ensure_root(&mut self, user: &str) -> Result<Uuid> {
+        if let Some(id) = self.roots.get(user) {
+            return Ok(*id);
+        }
+        // search existing docs
+        if let Some((id, _)) = self.docs.iter().find(|(_, d)| {
+            d.owner() == user
+                && d.doc_type() == DocumentType::Folder
+                && d.parent_folder_id().is_none()
+        }) {
+            self.roots.insert(user.to_string(), *id);
+            return Ok(*id);
+        }
+        let id = self.create(
+            "root".to_string(),
+            "",
+            user.to_string(),
+            None,
+            DocumentType::Folder,
+        )?;
+        self.roots.insert(user.to_string(), id);
+        Ok(id)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -277,9 +309,12 @@ impl DocumentStore {
         doc_type: DocumentType,
     ) -> Result<Uuid> {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, name, text, owner, parent_folder_id, doc_type)?;
+        let mut doc = Document::new(id, name, text, owner.clone(), parent_folder_id, doc_type)?;
         doc.save(&self.path(id))?;
         self.docs.insert(id, doc);
+        if doc_type == DocumentType::Folder && parent_folder_id.is_none() {
+            self.roots.insert(owner, id);
+        }
         Ok(id)
     }
 
@@ -435,6 +470,23 @@ mod tests {
         let store2 = DocumentStore::new(tempdir.path()).unwrap();
         let doc = store2.get(id).unwrap();
         assert_eq!(doc.text(), "changed");
+    }
+
+    #[test]
+    fn ensure_root_creates_per_user() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root1 = store.ensure_root("user1").unwrap();
+        let again = store.ensure_root("user1").unwrap();
+        assert_eq!(root1, again);
+        let doc1 = store.get(root1).unwrap();
+        assert_eq!(doc1.owner(), "user1");
+        assert!(doc1.parent_folder_id().is_none());
+
+        let root2 = store.ensure_root("user2").unwrap();
+        assert_ne!(root1, root2);
+        let doc2 = store.get(root2).unwrap();
+        assert_eq!(doc2.owner(), "user2");
     }
 
     #[test]

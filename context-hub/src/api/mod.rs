@@ -72,7 +72,10 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
         .route("/docs", post(create_doc))
-        .route("/docs/{id}", get(get_doc).put(update_doc).delete(delete_doc))
+        .route(
+            "/docs/{id}",
+            get(get_doc).put(update_doc).delete(delete_doc),
+        )
         .with_state(app_state)
 }
 
@@ -82,6 +85,7 @@ async fn create_doc(
     Json(req): Json<DocRequest>,
 ) -> Json<DocResponse> {
     let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
     let doc_type = req.doc_type.unwrap_or(DocumentType::Text);
     let id = store
         .create(
@@ -107,7 +111,8 @@ async fn get_doc(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocResponse>, StatusCode> {
-    let store = state.store.lock().await;
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) if doc.owner() == auth.user_id => Ok(Json(DocResponse {
             id,
@@ -129,6 +134,7 @@ async fn update_doc(
     Json(req): Json<DocRequest>,
 ) -> StatusCode {
     let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
     let allowed = match store.get(id) {
         Some(doc) if doc.owner() == auth.user_id => true,
         Some(_) => return StatusCode::FORBIDDEN,
@@ -148,6 +154,7 @@ async fn delete_doc(
     Path(id): Path<Uuid>,
 ) -> StatusCode {
     let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) if doc.owner() == auth.user_id => {
             let _ = store.delete(id);
@@ -161,7 +168,10 @@ async fn delete_doc(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::{self, Body}, http::Request};
+    use axum::{
+        body::{self, Body},
+        http::Request,
+    };
     use serde_json::json;
     use tower::util::ServiceExt;
 
@@ -169,24 +179,23 @@ mod tests {
     async fn crud_endpoints() {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
-        let app = router(Arc::new(Mutex::new(store)));
+        let shared = Arc::new(Mutex::new(store));
+        let app = router(shared.clone());
 
         let req = Request::builder()
             .method("POST")
             .uri("/docs")
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(
-                Body::from(
-                    json!({
-                        "name": "file.txt",
-                        "content": "hello",
-                        "parent_folder_id": null,
-                        "doc_type": "Text"
-                    })
-                    .to_string(),
-                ),
-            )
+            .body(Body::from(
+                json!({
+                    "name": "file.txt",
+                    "content": "hello",
+                    "parent_folder_id": null,
+                    "doc_type": "Text"
+                })
+                .to_string(),
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
@@ -207,17 +216,15 @@ mod tests {
             .uri(format!("/docs/{}", id))
             .header("X-User-Id", "user1")
             .header("content-type", "application/json")
-            .body(
-                Body::from(
-                    json!({
-                        "name": "file.txt",
-                        "content": "world",
-                        "parent_folder_id": null,
-                        "doc_type": "Text"
-                    })
-                    .to_string(),
-                ),
-            )
+            .body(Body::from(
+                json!({
+                    "name": "file.txt",
+                    "content": "world",
+                    "parent_folder_id": null,
+                    "doc_type": "Text"
+                })
+                .to_string(),
+            ))
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
@@ -230,5 +237,9 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // root folder should exist
+        let mut store = shared.lock().await;
+        assert!(store.ensure_root("user1").is_ok());
     }
 }
