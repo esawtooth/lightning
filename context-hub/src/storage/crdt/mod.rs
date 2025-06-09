@@ -259,7 +259,15 @@ mod tests {
     #[test]
     fn document_text_roundtrip() {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, "hello", "user".to_string()).unwrap();
+        let mut doc = Document::new(
+            id,
+            "file.txt".to_string(),
+            "hello",
+            "user".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
         assert_eq!(doc.text(), "hello");
         doc.set_text("goodbye").unwrap();
         assert_eq!(doc.text(), "goodbye");
@@ -269,7 +277,15 @@ mod tests {
     fn store_persists_to_disk() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
-        let id = store.create("persist", "user1".to_string()).unwrap();
+        let id = store
+            .create(
+                "persist.txt".to_string(),
+                "persist",
+                "user1".to_string(),
+                None,
+                DocumentType::Text,
+            )
+            .unwrap();
         store.update(id, "changed").unwrap();
         drop(store);
 
