@@ -209,6 +209,30 @@ impl Document {
             0
         }
     }
+
+    pub fn child_ids(&self) -> Vec<Uuid> {
+        if self.doc_type != DocumentType::Folder {
+            return Vec::new();
+        }
+        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+            self.doc
+                .keys(&map_id)
+                .filter_map(|k| Uuid::parse_str(&k).ok())
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    pub fn remove_child(&mut self, child_id: Uuid) -> Result<()> {
+        if self.doc_type != DocumentType::Folder {
+            return Ok(());
+        }
+        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+            let _ = self.doc.delete(&map_id, child_id.to_string());
+        }
+        Ok(())
+    }
 }
 
 /// Simple filesystem-backed store for `Document` instances.
@@ -289,6 +313,23 @@ impl DocumentStore {
     }
 
     pub fn delete(&mut self, id: Uuid) -> Result<()> {
+        if let Some(doc) = self.docs.get(&id) {
+            let doc_type = doc.doc_type();
+            let parent = doc.parent_folder_id();
+            let children = doc.child_ids();
+            if doc_type == DocumentType::Folder {
+                for child in children {
+                    self.delete(child)?;
+                }
+            }
+            if let Some(pid) = parent {
+                let path = self.path(pid);
+                if let Some(parent_doc) = self.docs.get_mut(&pid) {
+                    parent_doc.remove_child(id)?;
+                    parent_doc.save(&path)?;
+                }
+            }
+        }
         self.docs.remove(&id);
         let _ = std::fs::remove_file(self.path(id));
         Ok(())
@@ -394,5 +435,74 @@ mod tests {
         let store2 = DocumentStore::new(tempdir.path()).unwrap();
         let doc = store2.get(id).unwrap();
         assert_eq!(doc.text(), "changed");
+    }
+
+    #[test]
+    fn delete_folder_recursively() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let child = store
+            .create_folder(root, "child".to_string(), "user1".to_string())
+            .unwrap();
+        let grand = store
+            .create_folder(child, "grand".to_string(), "user1".to_string())
+            .unwrap();
+
+        assert_eq!(store.get(root).unwrap().child_count(), 1);
+        assert_eq!(store.get(child).unwrap().child_count(), 1);
+
+        store.delete(child).unwrap();
+
+        assert!(store.get(child).is_none());
+        assert!(store.get(grand).is_none());
+        assert_eq!(store.get(root).unwrap().child_count(), 0);
+    }
+
+    #[test]
+    fn delete_updates_parent() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let doc_id = store
+            .create(
+                "file.txt".to_string(),
+                "hello",
+                "user1".to_string(),
+                Some(root),
+                DocumentType::Text,
+            )
+            .unwrap();
+        {
+            let path = store.path(root);
+            let root_doc = store.docs.get_mut(&root).unwrap();
+            root_doc
+                .add_child(doc_id, "file.txt", DocumentType::Text)
+                .unwrap();
+            root_doc.save(&path).unwrap();
+        }
+
+        assert_eq!(store.get(root).unwrap().child_count(), 1);
+
+        store.delete(doc_id).unwrap();
+
+        assert!(store.get(doc_id).is_none());
+        assert_eq!(store.get(root).unwrap().child_count(), 0);
     }
 }
