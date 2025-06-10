@@ -421,6 +421,22 @@ impl DocumentStore {
         self.docs.get(&id)
     }
 
+    /// Return the ID of the Index Guide document for the given folder, if one exists.
+    pub fn index_guide_id(&self, folder: Uuid) -> Option<Uuid> {
+        let doc = self.docs.get(&folder)?;
+        if doc.doc_type() != DocumentType::Folder {
+            return None;
+        }
+        for child_id in doc.child_ids() {
+            if let Some(child) = self.docs.get(&child_id) {
+                if child.doc_type() == DocumentType::IndexGuide {
+                    return Some(child_id);
+                }
+            }
+        }
+        None
+    }
+
     pub fn update(&mut self, id: Uuid, text: &str) -> Result<()> {
         let path = self.path(id);
         if let Some(doc) = self.docs.get_mut(&id) {

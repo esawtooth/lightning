@@ -60,7 +60,7 @@ The Context Hub exposes a unified API for agents and user clients. The API is de
 
   * `GET /folders/{folder_id}` – List contents of a folder (returns metadata about subfolders and documents: names, IDs, types).
   * `POST /folders/{folder_id}` – Create a new subfolder or document within the folder (this could be an alternative to `POST /docs` with a parent).
-  * `GET /folders/{folder_id}/index` – Fetch the Index Guide document for that folder (returns its content which contains the guidance metadata). Agents may call this to understand how to use that folder.
+  * `GET /folders/{folder_id}/guide` – Fetch the Index Guide document for that folder (returns its content which contains the guidance metadata). Agents may call this to understand how to use that folder.
 
 * **Pointer Handling (REST):** Since large content is external, the API provides ways to store and retrieve via pointers:
 

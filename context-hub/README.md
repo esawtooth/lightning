@@ -19,6 +19,7 @@ The server exposes the following endpoints:
 - `GET /docs/:id` – fetch a document by UUID.
 - `PUT /docs/:id` – replace document text. Body: `{ "content": "text" }`.
 - `DELETE /docs/:id` – remove a document.
+- `GET /folders/:id/guide` – retrieve the Index Guide for a folder.
 
 Documents are stored as Automerge CRDTs and persisted as binary files under the `data` directory. Each document carries an **owner**. When a document is created, the `X-User-Id` header value is recorded as its owner. Existing files loaded from disk default to the user `user1`. The API responses include this `owner` field.
 
