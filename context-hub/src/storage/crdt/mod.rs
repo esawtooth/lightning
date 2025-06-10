@@ -399,6 +399,11 @@ impl DocumentStore {
         })
     }
 
+    /// Directory where documents are persisted.
+    pub fn data_dir(&self) -> &Path {
+        &self.dir
+    }
+
     fn path(&self, id: Uuid) -> PathBuf {
         self.dir.join(format!("{}.bin", id))
     }
