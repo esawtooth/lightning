@@ -68,6 +68,13 @@ struct DocResponse {
     owner: String,
 }
 
+#[derive(Serialize, Deserialize)]
+struct FolderItem {
+    id: Uuid,
+    name: String,
+    doc_type: DocumentType,
+}
+
 pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
@@ -76,6 +83,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
             "/docs/{id}",
             get(get_doc).put(update_doc).delete(delete_doc),
         )
+        .route("/folders/{id}", get(list_folder))
         .with_state(app_state)
 }
 
@@ -174,6 +182,32 @@ async fn delete_doc(
     }
 }
 
+async fn list_folder(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<FolderItem>>, StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.get(id) {
+        Some(doc) if doc.owner() == auth.user_id && doc.doc_type() == DocumentType::Folder => {
+            let items = doc
+                .children()
+                .into_iter()
+                .map(|(cid, name, typ)| FolderItem {
+                    id: cid,
+                    name,
+                    doc_type: typ,
+                })
+                .collect();
+            Ok(Json(items))
+        }
+        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(_) => Err(StatusCode::BAD_REQUEST),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -250,5 +284,73 @@ mod tests {
         // root folder should exist
         let mut store = shared.lock().await;
         assert!(store.ensure_root("user1").is_ok());
+    }
+
+    #[tokio::test]
+    async fn folder_listing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = DocumentStore::new(tempdir.path()).unwrap();
+        let shared = Arc::new(Mutex::new(store));
+        let app = router(shared.clone());
+
+        let root = {
+            let mut s = shared.lock().await;
+            s.ensure_root("user1").unwrap()
+        };
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "folder",
+                    "content": "",
+                    "parent_folder_id": root,
+                    "doc_type": "Folder"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let folder_id = v["id"].as_str().unwrap();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "file.txt",
+                    "content": "hello",
+                    "parent_folder_id": folder_id,
+                    "doc_type": "Text"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let req = Request::builder()
+            .uri(format!("/folders/{}", folder_id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let arr: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+        assert_eq!(arr.len(), 1); // index guide present
+        let types: Vec<_> = arr
+            .iter()
+            .map(|v| v["doc_type"].as_str().unwrap())
+            .collect();
+        assert!(types.contains(&"IndexGuide"));
     }
 }

@@ -248,6 +248,45 @@ impl Document {
         }
     }
 
+    /// Return information about children stored in this folder.
+    pub fn children(&self) -> Vec<(Uuid, String, DocumentType)> {
+        if self.doc_type != DocumentType::Folder {
+            return Vec::new();
+        }
+        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+            self.doc
+                .keys(&map_id)
+                .filter_map(|k| {
+                    let id = Uuid::parse_str(&k).ok()?;
+                    let (_, obj_id) = self.doc.get(&map_id, &k).ok()??;
+                    let name = match self.doc.get(&obj_id, "name").ok().flatten() {
+                        Some((Value::Scalar(s), _)) => {
+                            if let ScalarValue::Str(n) = s.as_ref() {
+                                n.to_string()
+                            } else {
+                                return None;
+                            }
+                        }
+                        _ => return None,
+                    };
+                    let doc_type = match self.doc.get(&obj_id, "type").ok().flatten() {
+                        Some((Value::Scalar(s), _)) => {
+                            if let ScalarValue::Str(t) = s.as_ref() {
+                                DocumentType::from_str(t)
+                            } else {
+                                DocumentType::Text
+                            }
+                        }
+                        _ => DocumentType::Text,
+                    };
+                    Some((id, name, doc_type))
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     pub fn remove_child(&mut self, child_id: Uuid) -> Result<()> {
         if self.doc_type != DocumentType::Folder {
             return Ok(());
