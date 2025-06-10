@@ -93,6 +93,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
             get(get_doc).put(update_doc).delete(delete_doc),
         )
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
+        .route("/folders/{id}/guide", get(get_index_guide))
         .with_state(app_state)
 }
 
@@ -200,7 +201,9 @@ async fn create_in_folder(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(folder_id) {
-        Some(folder) if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder => {
+        Some(folder)
+            if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder =>
+        {
             if req.item_type.to_lowercase() == "folder" {
                 let id = store
                     .create_folder(folder_id, req.name.clone(), auth.user_id.clone())
@@ -259,6 +262,37 @@ async fn list_folder(
                 })
                 .collect();
             Ok(Json(items))
+        }
+        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(_) => Err(StatusCode::BAD_REQUEST),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+async fn get_index_guide(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+) -> Result<Json<DocResponse>, StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.get(id) {
+        Some(folder)
+            if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder =>
+        {
+            if let Some(guide_id) = store.index_guide_id(id) {
+                if let Some(guide) = store.get(guide_id) {
+                    return Ok(Json(DocResponse {
+                        id: guide_id,
+                        name: guide.name().to_string(),
+                        content: guide.text(),
+                        parent_folder_id: guide.parent_folder_id(),
+                        doc_type: guide.doc_type(),
+                        owner: guide.owner().to_string(),
+                    }));
+                }
+            }
+            Err(StatusCode::NOT_FOUND)
         }
         Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
         Some(_) => Err(StatusCode::BAD_REQUEST),
@@ -469,5 +503,50 @@ mod tests {
             .unwrap();
         let resp = app.clone().oneshot(req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn index_guide_endpoint() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = DocumentStore::new(tempdir.path()).unwrap();
+        let shared = Arc::new(Mutex::new(store));
+        let app = router(shared.clone());
+
+        let root = {
+            let mut s = shared.lock().await;
+            s.ensure_root("user1").unwrap()
+        };
+
+        // create a subfolder so it has an index guide
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "sub", "content": "", "parent_folder_id": root,
+                    "doc_type": "Folder"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let folder_id = v["id"].as_str().unwrap();
+
+        // fetch the index guide
+        let req = Request::builder()
+            .uri(format!("/folders/{}/guide", folder_id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let guide: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(guide["doc_type"], "IndexGuide");
     }
 }
