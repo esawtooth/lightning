@@ -6,6 +6,7 @@ use automerge::{
     transaction::Transactable, AutoCommit, ObjType, ReadDoc, ScalarValue, Value, ROOT,
 };
 use serde::{Deserialize, Serialize};
+use serde_json;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -348,10 +349,12 @@ impl Document {
 }
 
 /// Simple filesystem-backed store for `Document` instances.
+
 pub struct DocumentStore {
     docs: HashMap<Uuid, Document>,
     dir: PathBuf,
     roots: HashMap<String, Uuid>,
+    agent_scopes: HashMap<String, HashMap<String, Vec<Uuid>>>,
 }
 
 impl DocumentStore {
@@ -379,11 +382,51 @@ impl DocumentStore {
                 }
             }
         }
-        Ok(Self { docs, dir, roots })
+
+        let scopes_path = dir.join("agent_scopes.json");
+        let agent_scopes = if scopes_path.exists() {
+            let data = std::fs::read_to_string(&scopes_path)?;
+            serde_json::from_str(&data).unwrap_or_default()
+        } else {
+            HashMap::new()
+        };
+
+        Ok(Self {
+            docs,
+            dir,
+            roots,
+            agent_scopes,
+        })
     }
 
     fn path(&self, id: Uuid) -> PathBuf {
         self.dir.join(format!("{}.bin", id))
+    }
+
+    fn save_agent_scopes(&self) -> Result<()> {
+        let path = self.dir.join("agent_scopes.json");
+        let data = serde_json::to_string(&self.agent_scopes)?;
+        std::fs::write(path, data)?;
+        Ok(())
+    }
+
+    fn agent_allowed(&self, user: &str, agent: Option<&str>, doc_id: Uuid) -> bool {
+        let Some(agent_id) = agent else { return true };
+        let scopes = match self.agent_scopes.get(user).and_then(|m| m.get(agent_id)) {
+            Some(s) => s,
+            None => return true,
+        };
+        if scopes.is_empty() {
+            return false;
+        }
+        let mut current = Some(doc_id);
+        while let Some(id) = current {
+            if scopes.contains(&id) {
+                return true;
+            }
+            current = self.docs.get(&id).and_then(|d| d.parent_folder_id());
+        }
+        false
     }
 
     /// Ensure a root folder exists for the given user and return its ID.
@@ -479,6 +522,9 @@ impl DocumentStore {
         agent: Option<&str>,
         level: AccessLevel,
     ) -> bool {
+        if !self.agent_allowed(user, agent, doc_id) {
+            return false;
+        }
         let mut current = self.docs.get(&doc_id);
         while let Some(doc) = current {
             if doc.owner() == user {
@@ -564,6 +610,28 @@ impl DocumentStore {
             doc.save(&path)?;
         }
         Ok(())
+    }
+
+    /// Restrict an agent acting for a user to the given folders.
+    pub fn set_agent_scope(
+        &mut self,
+        user: String,
+        agent: String,
+        folders: Vec<Uuid>,
+    ) -> Result<()> {
+        self.agent_scopes
+            .entry(user)
+            .or_default()
+            .insert(agent, folders);
+        self.save_agent_scopes()
+    }
+
+    /// Remove any scope restrictions for an agent.
+    pub fn clear_agent_scope(&mut self, user: &str, agent: &str) -> Result<()> {
+        if let Some(map) = self.agent_scopes.get_mut(user) {
+            map.remove(agent);
+        }
+        self.save_agent_scopes()
     }
 }
 
@@ -852,5 +920,54 @@ mod tests {
             });
         }
         assert!(store.has_permission(child, "writer", None, AccessLevel::Write));
+    }
+
+    #[test]
+    fn agent_scope_restriction() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let cal = store
+            .create_folder(root, "calendar".to_string(), "user1".to_string())
+            .unwrap();
+        let note = store
+            .create(
+                "note.txt".to_string(),
+                "hi",
+                "user1".to_string(),
+                Some(cal),
+                DocumentType::Text,
+            )
+            .unwrap();
+        store
+            .set_agent_scope("user1".to_string(), "sched".to_string(), vec![cal])
+            .unwrap();
+
+        assert!(store.has_permission(cal, "user1", Some("sched"), AccessLevel::Read));
+        assert!(store.has_permission(note, "user1", Some("sched"), AccessLevel::Read));
+
+        let private = store
+            .create_folder(root, "private".to_string(), "user1".to_string())
+            .unwrap();
+        let secret = store
+            .create(
+                "secret.txt".to_string(),
+                "no",
+                "user1".to_string(),
+                Some(private),
+                DocumentType::Text,
+            )
+            .unwrap();
+
+        assert!(!store.has_permission(secret, "user1", Some("sched"), AccessLevel::Read));
+        assert!(store.has_permission(secret, "user1", None, AccessLevel::Read));
     }
 }

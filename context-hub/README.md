@@ -25,3 +25,19 @@ Documents are stored as Automerge CRDTs and persisted as binary files under the 
 
 Each document also stores a **name**, optional **parent folder ID**, and a `doc_type` classifying the document (`folder`, `indexGuide`, or `text`).
 Documents and folders maintain an **Access Control List (ACL)** containing zero or more permission entries. Each entry names a user or agent and an access level (`read` or `write`). The ACL defaults empty, meaning only the owner can access the item unless additional principals are added.
+
+Optionally, agents can be restricted to specific folders by creating an
+`agent_scopes.json` file in the data directory. The file maps a user and agent
+to a list of allowed folder UUIDs:
+
+```json
+{
+  "user1": {
+    "scheduler": ["<folder-uuid>"]
+  }
+}
+```
+
+When a request includes `X-Agent-Id`, the configured scope is checked first. If
+the target document lies outside the allowed folders, access is denied even if
+the user would normally have permission.
