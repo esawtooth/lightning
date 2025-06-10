@@ -545,6 +545,26 @@ impl DocumentStore {
         let _ = std::fs::remove_file(self.path(id));
         Ok(())
     }
+
+    /// Add an ACL entry to the given document or folder.
+    pub fn add_acl(&mut self, id: Uuid, principal: String, access: AccessLevel) -> Result<()> {
+        let path = self.path(id);
+        if let Some(doc) = self.docs.get_mut(&id) {
+            doc.add_acl_entry(AclEntry { principal, access });
+            doc.save(&path)?;
+        }
+        Ok(())
+    }
+
+    /// Remove an ACL entry from the given document or folder.
+    pub fn remove_acl(&mut self, id: Uuid, principal: &str) -> Result<()> {
+        let path = self.path(id);
+        if let Some(doc) = self.docs.get_mut(&id) {
+            doc.remove_acl_entry(principal);
+            doc.save(&path)?;
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
