@@ -84,6 +84,17 @@ struct FolderItem {
     doc_type: DocumentType,
 }
 
+#[derive(Serialize, Deserialize)]
+struct ShareRequest {
+    user: String,
+    rights: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct UnshareRequest {
+    user: String,
+}
+
 pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
     let app_state = AppState { store: state };
     Router::new()
@@ -94,6 +105,10 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
         )
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .route("/folders/{id}/guide", get(get_index_guide))
+        .route(
+            "/folders/{id}/share",
+            post(share_folder).delete(unshare_folder),
+        )
         .with_state(app_state)
 }
 
@@ -348,6 +363,51 @@ async fn get_index_guide(
     }
 }
 
+async fn share_folder(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(req): Json<ShareRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Write,
+    ) {
+        return StatusCode::FORBIDDEN;
+    }
+    let level = if req.rights.to_lowercase() == "read" {
+        AccessLevel::Read
+    } else {
+        AccessLevel::Write
+    };
+    let _ = store.add_acl(id, req.user, level);
+    StatusCode::NO_CONTENT
+}
+
+async fn unshare_folder(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(req): Json<UnshareRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Write,
+    ) {
+        return StatusCode::FORBIDDEN;
+    }
+    let _ = store.remove_acl(id, &req.user);
+    StatusCode::NO_CONTENT
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -596,5 +656,95 @@ mod tests {
         let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let guide: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(guide["doc_type"], "IndexGuide");
+    }
+
+    #[tokio::test]
+    async fn folder_sharing() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = DocumentStore::new(tempdir.path()).unwrap();
+        let shared = Arc::new(Mutex::new(store));
+        let app = router(shared.clone());
+
+        let root = {
+            let mut s = shared.lock().await;
+            s.ensure_root("user1").unwrap()
+        };
+
+        // create a folder and a document inside it
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "shared", "content": "", "parent_folder_id": root,
+                    "doc_type": "Folder"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let folder_id = v["id"].as_str().unwrap();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/folders/{}", folder_id))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({"name": "note.txt", "content": "hi", "type": "document"}).to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let doc_id = v["id"].as_str().unwrap();
+
+        // share the folder with user2
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/folders/{}/share", folder_id))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({"user": "user2", "rights": "read"}).to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // user2 should be able to read the document
+        let req = Request::builder()
+            .uri(format!("/docs/{}", doc_id))
+            .header("X-User-Id", "user2")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // revoke access
+        let req = Request::builder()
+            .method("DELETE")
+            .uri(format!("/folders/{}/share", folder_id))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"user": "user2"}).to_string()))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::NO_CONTENT);
+
+        // user2 should now be forbidden
+        let req = Request::builder()
+            .uri(format!("/docs/{}", doc_id))
+            .header("X-User-Id", "user2")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN);
     }
 }
