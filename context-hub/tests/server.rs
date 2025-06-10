@@ -1,5 +1,5 @@
 use axum::{routing::get, Router};
-use context_hub::{api, storage};
+use context_hub::{api, search, storage, indexer};
 use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
@@ -10,8 +10,12 @@ use tower::util::ServiceExt;
 #[tokio::test]
 async fn server_health_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = storage::crdt::DocumentStore::new(tempdir.path()).unwrap();
-    let router = api::router(Arc::new(Mutex::new(store)), tempdir.path().into());
+    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let index_dir = tempdir.path().join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let router = api::router(store.clone(), tempdir.path().into(), indexer);
     let app = Router::new()
         .merge(router)
         .route("/health", get(|| async { "OK" }));
@@ -34,9 +38,12 @@ async fn server_health_endpoint() {
 #[tokio::test]
 async fn root_created_on_use() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = storage::crdt::DocumentStore::new(tempdir.path()).unwrap();
-    let shared = Arc::new(Mutex::new(store));
-    let app = Router::new().merge(api::router(shared.clone(), tempdir.path().into()));
+    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let index_dir = tempdir.path().join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer));
 
     let req = axum::http::Request::builder()
         .method("POST")
@@ -55,6 +62,6 @@ async fn root_created_on_use() {
         .unwrap();
     let _ = app.clone().oneshot(req).await.unwrap();
 
-    let mut store = shared.lock().await;
-    assert!(store.ensure_root("newuser").is_ok());
+    let mut store_guard = store.lock().await;
+    assert!(store_guard.ensure_root("newuser").is_ok());
 }

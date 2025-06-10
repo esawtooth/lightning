@@ -5,7 +5,7 @@ use tantivy::{
     directory::MmapDirectory,
     doc,
     schema::{Schema, STORED, STRING, TEXT},
-    Index, ReloadPolicy,
+    Index, ReloadPolicy, Term,
 };
 use uuid::Uuid;
 
@@ -50,6 +50,14 @@ impl SearchIndex {
             self.content => content,
             self.folder => folders.join(" "),
         ))?;
+        writer.commit()?;
+        writer.wait_merging_threads()?;
+        Ok(())
+    }
+
+    pub fn remove_document(&self, id: Uuid) -> Result<()> {
+        let mut writer = self.index.writer(50_000_000)?;
+        writer.delete_term(Term::from_field_text(self.id, &id.to_string()));
         writer.commit()?;
         writer.wait_merging_threads()?;
         Ok(())
