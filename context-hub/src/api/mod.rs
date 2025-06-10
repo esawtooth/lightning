@@ -117,6 +117,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>, snapshot_dir: PathBuf) -> Router
             post(share_folder).delete(unshare_folder),
         )
         .route("/snapshot", post(snapshot_now))
+        .route("/restore", post(restore_snapshot))
         .with_state(app_state)
 }
 
@@ -427,6 +428,27 @@ async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> Stat
             store.clear_dirty();
             StatusCode::NO_CONTENT
         }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+#[derive(Deserialize)]
+struct RestoreRequest {
+    revision: String,
+}
+
+async fn restore_snapshot(
+    State(state): State<AppState>,
+    _auth: AuthContext,
+    Json(req): Json<RestoreRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let mgr = match SnapshotManager::new(&state.snapshot_dir) {
+        Ok(m) => m,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    match mgr.restore(&mut store, &req.revision) {
+        Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }

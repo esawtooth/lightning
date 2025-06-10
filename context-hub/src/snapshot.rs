@@ -5,8 +5,8 @@ use tokio::time::{interval, Duration};
 
 use crate::storage::crdt::DocumentStore;
 use anyhow::{anyhow, Result};
-use chrono::Utc;
-use git2::{IndexAddOption, Repository, Signature};
+use chrono::{TimeZone, Utc};
+use git2::{IndexAddOption, ObjectType, Repository, Signature, Oid};
 
 pub struct SnapshotManager {
     repo: Repository,
@@ -25,7 +25,7 @@ impl SnapshotManager {
     }
 
     /// Commit the current document store state to the snapshot repository.
-    pub fn snapshot(&self, store: &DocumentStore) -> Result<()> {
+    pub fn snapshot(&self, store: &DocumentStore) -> Result<Oid> {
         let workdir = self
             .repo
             .workdir()
@@ -59,12 +59,60 @@ impl SnapshotManager {
                 .repo
                 .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[])?,
         };
-        let _ = commit_id; // suppress unused warning
-        Ok(())
+        Ok(commit_id)
     }
 
     pub fn repo(&self) -> &Repository {
         &self.repo
+    }
+
+    /// Restore the document store state from the specified revision. The
+    /// `rev` can be any git revspec (commit hash or tag) or an RFC3339
+    /// timestamp, in which case the latest commit at or before that time is
+    /// used.
+    pub fn restore(&self, store: &mut DocumentStore, rev: &str) -> Result<()> {
+        let oid = if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(rev) {
+            let mut walk = self.repo.revwalk()?;
+            walk.push_head()?;
+            let ts = ts.with_timezone(&Utc);
+            let mut found = None;
+            for id in walk {
+                let id = id?;
+                let commit = self.repo.find_commit(id)?;
+                let commit_time = Utc.timestamp_opt(commit.time().seconds(), 0).single().unwrap();
+                if commit_time <= ts {
+                    found = Some(id);
+                    break;
+                }
+            }
+            found.ok_or_else(|| anyhow!("no commit before timestamp"))?
+        } else {
+            self.repo.revparse_single(rev)?.peel_to_commit()?.id()
+        };
+
+        let commit = self.repo.find_commit(oid)?;
+        let tree = commit.tree()?;
+
+        // clear current data directory
+        for entry in std::fs::read_dir(store.data_dir())? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                std::fs::remove_file(entry.path())?;
+            }
+        }
+
+        // materialize files from the tree
+        for entry in tree.iter() {
+            if entry.kind() == Some(ObjectType::Blob) {
+                let blob = self.repo.find_blob(entry.id())?;
+                let name = entry.name().ok_or_else(|| anyhow!("invalid path"))?;
+                std::fs::write(store.data_dir().join(name), blob.content())?;
+            }
+        }
+
+        store.reload()?;
+        store.clear_dirty();
+        Ok(())
     }
 }
 
