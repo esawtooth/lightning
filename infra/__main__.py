@@ -20,6 +20,7 @@ from pulumi_azure_native import (
     network,
     privatedns,
     cognitiveservices,
+    cdn,
 )
 import pulumi_azuread as azuread
 
@@ -871,7 +872,7 @@ ui_container = containerinstance.ContainerGroup(
         opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
     )
 
-pulumi.export("uiUrl", ui_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}"))
+pulumi.export("uiUrl", pulumi.Output.concat("https://www.", domain))
 
 # Container group for the voice agent websocket server
 voice_ws_container = containerinstance.ContainerGroup(
@@ -937,12 +938,182 @@ voice_ws_container = containerinstance.ContainerGroup(
 
 pulumi.export(
     "voiceWsUrl",
-    voice_ws_container.ip_address.apply(lambda ip: f"http://{ip.fqdn}:8081"),
+    pulumi.Output.concat("https://voice-ws.", domain),
 )
 
 if domain:
-    pulumi.export("uiDomain", pulumi.Output.concat("https://", domain))
+    pulumi.export("uiDomain", pulumi.Output.concat("https://www.", domain))
     pulumi.export("apiDomain", pulumi.Output.concat("https://api.", domain))
+
+    # Azure Front Door profile and endpoint
+    fd_profile = cdn.Profile(
+        "frontdoor-profile",
+        resource_group_name=resource_group.name,
+        profile_name="vextir-fd",
+        sku=cdn.SkuArgs(name=cdn.SkuName.STANDARD_AZURE_FRONT_DOOR),
+    )
+
+    fd_endpoint = cdn.afd_endpoint.AFDEndpoint(
+        "frontdoor-endpoint",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name="vextir-endpoint",
+        location="global",
+    )
+
+    ui_group = cdn.afd_origin_group.AFDOriginGroup(
+        "ui-origin-group",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name="uiGroup",
+        health_probe_settings=cdn.HealthProbeParametersArgs(
+            probe_path="/",
+            probe_protocol=cdn.ProbeProtocol.HTTP,
+            probe_request_type=cdn.HealthProbeRequestType.GET,
+            probe_interval_in_seconds=30,
+        ),
+        load_balancing_settings=cdn.LoadBalancingSettingsParametersArgs(
+            sample_size=4,
+            successful_samples_required=3,
+            additional_latency_in_milliseconds=0,
+        ),
+    )
+
+    ui_origin = cdn.afd_origin.AFDOrigin(
+        "ui-origin",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name=ui_group.name,
+        origin_name="uiOrigin",
+        host_name=ui_container.ip_address.apply(lambda ip: ip.fqdn),
+    )
+
+    api_group = cdn.afd_origin_group.AFDOriginGroup(
+        "api-origin-group",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name="apiGroup",
+        health_probe_settings=cdn.HealthProbeParametersArgs(
+            probe_path="/api/health",
+            probe_protocol=cdn.ProbeProtocol.HTTP,
+            probe_request_type=cdn.HealthProbeRequestType.GET,
+            probe_interval_in_seconds=30,
+        ),
+        load_balancing_settings=cdn.LoadBalancingSettingsParametersArgs(
+            sample_size=4,
+            successful_samples_required=3,
+            additional_latency_in_milliseconds=0,
+        ),
+    )
+
+    api_origin = cdn.afd_origin.AFDOrigin(
+        "api-origin",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name=api_group.name,
+        origin_name="apiOrigin",
+        host_name=func_app.default_host_name,
+    )
+
+    voice_group = cdn.afd_origin_group.AFDOriginGroup(
+        "voicews-origin-group",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name="voiceGroup",
+        health_probe_settings=cdn.HealthProbeParametersArgs(
+            probe_path="/",
+            probe_protocol=cdn.ProbeProtocol.HTTP,
+            probe_request_type=cdn.HealthProbeRequestType.GET,
+            probe_interval_in_seconds=30,
+        ),
+        load_balancing_settings=cdn.LoadBalancingSettingsParametersArgs(
+            sample_size=4,
+            successful_samples_required=3,
+            additional_latency_in_milliseconds=0,
+        ),
+    )
+
+    voice_origin = cdn.afd_origin.AFDOrigin(
+        "voicews-origin",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        origin_group_name=voice_group.name,
+        origin_name="voiceOrigin",
+        host_name=voice_ws_container.ip_address.apply(lambda ip: ip.fqdn),
+        http_port=8081,
+        https_port=8081,
+    )
+
+    ui_domain = cdn.custom_domain.CustomDomain(
+        "fd-ui-domain",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        host_name=pulumi.Output.concat("www.", domain),
+    )
+
+    api_domain = cdn.custom_domain.CustomDomain(
+        "fd-api-domain",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        host_name=pulumi.Output.concat("api.", domain),
+    )
+
+    voice_domain = cdn.custom_domain.CustomDomain(
+        "fd-voice-domain",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        host_name=pulumi.Output.concat("voice-ws.", domain),
+    )
+
+    cdn.route.Route(
+        "ui-route",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        route_name="uiRoute",
+        origin_group=cdn.ResourceReferenceArgs(id=ui_group.id),
+        patterns_to_match=["/*"],
+        forwarding_protocol=cdn.ForwardingProtocol.HTTPS_ONLY,
+        https_redirect=cdn.HttpsRedirect.ENABLED,
+        link_to_default_domain=cdn.LinkToDefaultDomain.DISABLED,
+        supported_protocols=[cdn.AFDEndpointProtocols.HTTPS],
+        custom_domains=[cdn.ActivatedResourceReferenceArgs(id=ui_domain.id)],
+    )
+
+    cdn.route.Route(
+        "api-route",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        route_name="apiRoute",
+        origin_group=cdn.ResourceReferenceArgs(id=api_group.id),
+        patterns_to_match=["/api/*"],
+        forwarding_protocol=cdn.ForwardingProtocol.HTTPS_ONLY,
+        https_redirect=cdn.HttpsRedirect.ENABLED,
+        link_to_default_domain=cdn.LinkToDefaultDomain.DISABLED,
+        supported_protocols=[cdn.AFDEndpointProtocols.HTTPS],
+        custom_domains=[cdn.ActivatedResourceReferenceArgs(id=api_domain.id)],
+    )
+
+    cdn.route.Route(
+        "voice-route",
+        resource_group_name=resource_group.name,
+        profile_name=fd_profile.name,
+        endpoint_name=fd_endpoint.name,
+        route_name="voiceRoute",
+        origin_group=cdn.ResourceReferenceArgs(id=voice_group.id),
+        patterns_to_match=["/voice-ws/*"],
+        forwarding_protocol=cdn.ForwardingProtocol.HTTP_ONLY,
+        https_redirect=cdn.HttpsRedirect.DISABLED,
+        link_to_default_domain=cdn.LinkToDefaultDomain.DISABLED,
+        supported_protocols=[cdn.AFDEndpointProtocols.HTTP, cdn.AFDEndpointProtocols.HTTPS],
+        custom_domains=[cdn.ActivatedResourceReferenceArgs(id=voice_domain.id)],
+    )
+
+    pulumi.export("frontdoorHostname", fd_endpoint.host_name)
 
     dns_zone = dns.Zone(
         "domain-zone",
@@ -953,17 +1124,13 @@ if domain:
     pulumi.export("dnsZoneNameServers", dns_zone.name_servers)
 
     dns.RecordSet(
-        "ui-a-record",
+        "ui-cname",
         resource_group_name=resource_group.name,
         zone_name=dns_zone.name,
-        relative_record_set_name="@",
-        record_type="A",
+        relative_record_set_name="www",
+        record_type="CNAME",
         ttl=600,
-        a_records=[
-            dns.ARecordArgs(
-                ipv4_address=ui_container.ip_address.apply(lambda ip: ip.ip)
-            )
-        ],
+        cname_record=dns.CnameRecordArgs(cname=fd_endpoint.host_name),
     )
 
     dns.RecordSet(
@@ -973,7 +1140,7 @@ if domain:
         relative_record_set_name="api",
         record_type="CNAME",
         ttl=600,
-        cname_record=dns.CnameRecordArgs(cname=func_app.default_host_name),
+        cname_record=dns.CnameRecordArgs(cname=fd_endpoint.host_name),
     )
 
     dns.RecordSet(
@@ -983,9 +1150,7 @@ if domain:
         relative_record_set_name="voice-ws",
         record_type="CNAME",
         ttl=600,
-        cname_record=dns.CnameRecordArgs(
-            cname=voice_ws_container.ip_address.apply(lambda ip: ip.fqdn)
-        ),
+        cname_record=dns.CnameRecordArgs(cname=fd_endpoint.host_name),
     )
 
     # Create DNS records required to verify the email sending domain
@@ -1042,8 +1207,8 @@ pulumi.export(
     postgres_container.ip_address.apply(lambda ip: ip.ip),
 )
 
-# Wire the functions back to the Chainlit UI once the container address is known
-notify_url = ui_container.ip_address.apply(lambda ip: f"https://{ip.fqdn}/chat/notify")
+# Wire the functions back to the Chainlit UI through Front Door
+notify_url = pulumi.Output.concat("https://www.", domain, "/chat/notify")
 
 # Function to create and upload Function App package
 def create_function_package():
