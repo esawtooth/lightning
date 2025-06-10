@@ -493,9 +493,7 @@ impl DocumentStore {
                     }
                 }
             }
-            current = doc
-                .parent_folder_id()
-                .and_then(|pid| self.docs.get(&pid));
+            current = doc.parent_folder_id().and_then(|pid| self.docs.get(&pid));
         }
         false
     }
