@@ -11,7 +11,7 @@ use tower::util::ServiceExt;
 async fn server_health_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
     let store = storage::crdt::DocumentStore::new(tempdir.path()).unwrap();
-    let router = api::router(Arc::new(Mutex::new(store)));
+    let router = api::router(Arc::new(Mutex::new(store)), tempdir.path().into());
     let app = Router::new()
         .merge(router)
         .route("/health", get(|| async { "OK" }));
@@ -36,7 +36,7 @@ async fn root_created_on_use() {
     let tempdir = tempfile::tempdir().unwrap();
     let store = storage::crdt::DocumentStore::new(tempdir.path()).unwrap();
     let shared = Arc::new(Mutex::new(store));
-    let app = Router::new().merge(api::router(shared.clone()));
+    let app = Router::new().merge(api::router(shared.clone(), tempdir.path().into()));
 
     let req = axum::http::Request::builder()
         .method("POST")

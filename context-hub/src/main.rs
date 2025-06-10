@@ -1,10 +1,11 @@
 use axum::{routing::get, serve, Router};
+use std::future::IntoFuture;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use tokio::task::LocalSet;
-use std::future::IntoFuture;
+use tokio::time::Duration;
 
 mod api;
 mod snapshot;
@@ -16,7 +17,7 @@ async fn main() -> anyhow::Result<()> {
     let snapshot_mgr = Arc::new(snapshot::SnapshotManager::new("snapshots")?);
 
     let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new("data")?));
-    let router = api::router(store.clone());
+    let router = api::router(store.clone(), PathBuf::from("snapshots"));
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
     local.spawn_local(snapshot::snapshot_task(

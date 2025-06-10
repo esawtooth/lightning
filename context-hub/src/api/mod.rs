@@ -11,7 +11,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
+use crate::snapshot::SnapshotManager;
 use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType};
+use std::path::PathBuf;
 
 /// Authentication context extracted from request headers.
 #[derive(Clone, Debug)]
@@ -46,8 +48,10 @@ where
 
 /// Shared application state containing the document store.
 #[derive(Clone)]
+
 pub struct AppState {
     pub store: Arc<Mutex<DocumentStore>>,
+    pub snapshot_dir: PathBuf,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -95,8 +99,11 @@ struct UnshareRequest {
     user: String,
 }
 
-pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
-    let app_state = AppState { store: state };
+pub fn router(state: Arc<Mutex<DocumentStore>>, snapshot_dir: PathBuf) -> Router {
+    let app_state = AppState {
+        store: state,
+        snapshot_dir,
+    };
     Router::new()
         .route("/docs", post(create_doc))
         .route(
@@ -109,6 +116,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
             "/folders/{id}/share",
             post(share_folder).delete(unshare_folder),
         )
+        .route("/snapshot", post(snapshot_now))
         .with_state(app_state)
 }
 
@@ -408,6 +416,21 @@ async fn unshare_folder(
     StatusCode::NO_CONTENT
 }
 
+async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let mgr = match SnapshotManager::new(&state.snapshot_dir) {
+        Ok(m) => m,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    match mgr.snapshot(&store) {
+        Ok(_) => {
+            store.clear_dirty();
+            StatusCode::NO_CONTENT
+        }
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -423,7 +446,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
         let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone());
+        let app = router(shared.clone(), tempdir.path().into());
 
         let req = Request::builder()
             .method("POST")
@@ -491,7 +514,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
         let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone());
+        let app = router(shared.clone(), tempdir.path().into());
 
         let root = {
             let mut s = shared.lock().await;
@@ -559,7 +582,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
         let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone());
+        let app = router(shared.clone(), tempdir.path().into());
 
         let root = {
             let mut s = shared.lock().await;
@@ -618,7 +641,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
         let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone());
+        let app = router(shared.clone(), tempdir.path().into());
 
         let root = {
             let mut s = shared.lock().await;
@@ -663,7 +686,7 @@ mod tests {
         let tempdir = tempfile::tempdir().unwrap();
         let store = DocumentStore::new(tempdir.path()).unwrap();
         let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone());
+        let app = router(shared.clone(), tempdir.path().into());
 
         let root = {
             let mut s = shared.lock().await;
