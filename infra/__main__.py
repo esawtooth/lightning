@@ -55,6 +55,8 @@ acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 twilio_account_sid = config.require_secret("twilioAccountSid")
 twilio_auth_token = config.require_secret("twilioAuthToken")
 voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:latest"
+ui_dns_label = config.get("uiDnsLabel") or "chat-ui"
+voice_dns_label = config.get("voiceDnsLabel") or "voice-ws"
 
 # Fetch subscription ID early so it can be used anywhere below
 client_config = get_client_config()
@@ -860,6 +862,7 @@ ui_container = containerinstance.ContainerGroup(
                 containerinstance.PortArgs(protocol="TCP", port=443),
             ],
             type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+            dns_name_label=ui_dns_label,
         ),
         diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
             log_analytics=containerinstance.LogAnalyticsArgs(
@@ -924,6 +927,7 @@ voice_ws_container = containerinstance.ContainerGroup(
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=8081)],
         type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
+        dns_name_label=voice_dns_label,
     ),
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
@@ -985,7 +989,7 @@ if domain:
         profile_name=fd_profile.name,
         origin_group_name=ui_group.name,
         origin_name="uiOrigin",
-        host_name=ui_container.ip_address.apply(lambda ip: ip.ip),
+        host_name=pulumi.Output.concat(ui_dns_label, ".", location, ".azurecontainer.io"),
     )
 
     api_group = cdn.afd_origin_group.AFDOriginGroup(
@@ -1039,7 +1043,7 @@ if domain:
         profile_name=fd_profile.name,
         origin_group_name=voice_group.name,
         origin_name="voiceOrigin",
-        host_name=voice_ws_container.ip_address.apply(lambda ip: ip.ip),
+        host_name=pulumi.Output.concat(voice_dns_label, ".", location, ".azurecontainer.io"),
         http_port=8081,
         https_port=8081,
     )
