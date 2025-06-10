@@ -57,7 +57,9 @@ twilio_auth_token = config.require_secret("twilioAuthToken")
 voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:latest"
 
 # Generate a stable random suffix for DNS labels if not provided via config.
-dns_suffix = RandomString("dns-suffix", length=8, special=False, upper=False).result
+# Increase the length to reduce the chance of collisions when allocating
+# public DNS labels for container groups.
+dns_suffix = RandomString("dns-suffix", length=12, special=False, upper=False).result
 
 ui_dns_label = config.get("uiDnsLabel") or pulumi.Output.concat("chat-ui-", dns_suffix)
 voice_dns_label = config.get("voiceDnsLabel") or pulumi.Output.concat("voice-ws-", dns_suffix)
