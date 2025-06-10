@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::snapshot::SnapshotManager;
 use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType};
+use crate::indexer::LiveIndex;
 use std::path::PathBuf;
 
 /// Authentication context extracted from request headers.
@@ -52,6 +53,7 @@ where
 pub struct AppState {
     pub store: Arc<Mutex<DocumentStore>>,
     pub snapshot_dir: PathBuf,
+    pub indexer: Arc<LiveIndex>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -99,10 +101,15 @@ struct UnshareRequest {
     user: String,
 }
 
-pub fn router(state: Arc<Mutex<DocumentStore>>, snapshot_dir: PathBuf) -> Router {
+pub fn router(
+    state: Arc<Mutex<DocumentStore>>,
+    snapshot_dir: PathBuf,
+    indexer: Arc<LiveIndex>,
+) -> Router {
     let app_state = AppState {
         store: state,
         snapshot_dir,
+        indexer,
     };
     Router::new()
         .route("/docs", post(create_doc))
@@ -155,6 +162,16 @@ async fn create_doc(
             )
             .expect("create")
     };
+    let extra = if doc_type == DocumentType::Folder {
+        store.index_guide_id(id)
+    } else {
+        None
+    };
+    drop(store);
+    state.indexer.schedule_update(id).await;
+    if let Some(eid) = extra {
+        state.indexer.schedule_update(eid).await;
+    }
     Ok(Json(DocResponse {
         id,
         name: req.name,
@@ -213,6 +230,8 @@ async fn update_doc(
                 AccessLevel::Write,
             ) {
                 let _ = store.update(id, &req.content);
+                drop(store);
+                state.indexer.schedule_update(id).await;
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -237,7 +256,21 @@ async fn delete_doc(
                 auth.agent_id.as_deref(),
                 AccessLevel::Write,
             ) {
+                let mut ids = Vec::new();
+                fn gather(store: &DocumentStore, id: Uuid, out: &mut Vec<Uuid>) {
+                    out.push(id);
+                    if let Some(doc) = store.get(id) {
+                        if doc.doc_type() == DocumentType::Folder {
+                            for child in doc.child_ids() {
+                                gather(store, child, out);
+                            }
+                        }
+                    }
+                }
+                gather(&store, id, &mut ids);
                 let _ = store.delete(id);
+                drop(store);
+                state.indexer.schedule_recursive_delete(ids).await;
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -269,6 +302,12 @@ async fn create_in_folder(
                 let id = store
                     .create_folder(folder_id, req.name.clone(), auth.user_id.clone())
                     .expect("create_folder");
+                let extra = store.index_guide_id(id);
+                drop(store);
+                state.indexer.schedule_update(id).await;
+                if let Some(eid) = extra {
+                    state.indexer.schedule_update(eid).await;
+                }
                 Ok(Json(DocResponse {
                     id,
                     name: req.name,
@@ -288,6 +327,8 @@ async fn create_in_folder(
                         DocumentType::Text,
                     )
                     .expect("create");
+                drop(store);
+                state.indexer.schedule_update(id).await;
                 Ok(Json(DocResponse {
                     id,
                     name: req.name,
@@ -467,9 +508,12 @@ mod tests {
     #[tokio::test]
     async fn crud_endpoints() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = DocumentStore::new(tempdir.path()).unwrap();
-        let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone(), tempdir.path().into());
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let req = Request::builder()
             .method("POST")
@@ -528,19 +572,22 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
         // root folder should exist
-        let mut store = shared.lock().await;
-        assert!(store.ensure_root("user1").is_ok());
+        let mut store_guard = store.lock().await;
+        assert!(store_guard.ensure_root("user1").is_ok());
     }
 
     #[tokio::test]
     async fn folder_listing() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = DocumentStore::new(tempdir.path()).unwrap();
-        let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone(), tempdir.path().into());
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
-            let mut s = shared.lock().await;
+            let mut s = store.lock().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -603,12 +650,15 @@ mod tests {
     #[tokio::test]
     async fn create_in_folder_endpoint() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = DocumentStore::new(tempdir.path()).unwrap();
-        let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone(), tempdir.path().into());
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
-            let mut s = shared.lock().await;
+            let mut s = store.lock().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -662,12 +712,15 @@ mod tests {
     #[tokio::test]
     async fn index_guide_endpoint() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = DocumentStore::new(tempdir.path()).unwrap();
-        let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone(), tempdir.path().into());
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
-            let mut s = shared.lock().await;
+            let mut s = store.lock().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -707,12 +760,15 @@ mod tests {
     #[tokio::test]
     async fn folder_sharing() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = DocumentStore::new(tempdir.path()).unwrap();
-        let shared = Arc::new(Mutex::new(store));
-        let app = router(shared.clone(), tempdir.path().into());
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
-            let mut s = shared.lock().await;
+            let mut s = store.lock().await;
             s.ensure_root("user1").unwrap()
         };
 

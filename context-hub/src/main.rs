@@ -11,6 +11,7 @@ mod api;
 mod search;
 mod snapshot;
 mod storage;
+mod indexer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,7 +24,8 @@ async fn main() -> anyhow::Result<()> {
         let store_guard = store.lock().await;
         search.index_all(&store_guard)?;
     }
-    let router = api::router(store.clone(), PathBuf::from("snapshots"));
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let router = api::router(store.clone(), PathBuf::from("snapshots"), indexer.clone());
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
     local.spawn_local(snapshot::snapshot_task(

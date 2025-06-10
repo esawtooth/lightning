@@ -1,5 +1,4 @@
-use context_hub::snapshot::SnapshotManager;
-use context_hub::storage::crdt::{DocumentStore, DocumentType};
+use context_hub::{indexer, search, snapshot::SnapshotManager, storage::crdt::{DocumentStore, DocumentType}};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::LocalSet;
@@ -88,7 +87,11 @@ async fn snapshot_endpoint_triggers_commit() {
         )
         .unwrap();
     }
-    let app = context_hub::api::router(store.clone(), repo_dir.clone());
+    let index_dir = repo_dir.join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let app = context_hub::api::router(store.clone(), repo_dir.clone(), indexer);
 
     let req = axum::http::Request::builder()
         .method("POST")
