@@ -426,6 +426,7 @@ async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> Stat
     match mgr.snapshot(&store) {
         Ok(_) => {
             store.clear_dirty();
+            let _ = store.compact_history();
             StatusCode::NO_CONTENT
         }
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,

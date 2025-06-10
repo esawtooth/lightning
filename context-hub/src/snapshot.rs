@@ -6,7 +6,7 @@ use tokio::time::{interval, Duration};
 use crate::storage::crdt::DocumentStore;
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
-use git2::{IndexAddOption, ObjectType, Repository, Signature, Oid};
+use git2::{IndexAddOption, ObjectType, Oid, Repository, Signature};
 
 pub struct SnapshotManager {
     repo: Repository,
@@ -79,7 +79,10 @@ impl SnapshotManager {
             for id in walk {
                 let id = id?;
                 let commit = self.repo.find_commit(id)?;
-                let commit_time = Utc.timestamp_opt(commit.time().seconds(), 0).single().unwrap();
+                let commit_time = Utc
+                    .timestamp_opt(commit.time().seconds(), 0)
+                    .single()
+                    .unwrap();
                 if commit_time <= ts {
                     found = Some(id);
                     break;
@@ -129,6 +132,7 @@ pub async fn snapshot_task(
         if store.is_dirty() {
             let _ = manager.snapshot(&store);
             store.clear_dirty();
+            let _ = store.compact_history();
         }
     }
 }
