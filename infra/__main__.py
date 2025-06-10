@@ -953,6 +953,7 @@ if domain:
     fd_profile = cdn.Profile(
         "frontdoor-profile",
         resource_group_name=resource_group.name,
+        location="global",
         profile_name="vextir-fd",
         sku=cdn.SkuArgs(name=cdn.SkuName.STANDARD_AZURE_FRONT_DOOR),
     )
