@@ -4,8 +4,8 @@ use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 
 mod api;
-mod storage;
 mod snapshot;
+mod storage;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
