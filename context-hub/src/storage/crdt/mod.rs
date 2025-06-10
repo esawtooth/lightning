@@ -414,6 +414,11 @@ impl DocumentStore {
         &self.dir
     }
 
+    /// Iterate over all documents in the store.
+    pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Uuid, Document> {
+        self.docs.iter()
+    }
+
     /// Reload the store contents from disk, discarding any in-memory state.
     pub fn reload(&mut self) -> Result<()> {
         let new_self = Self::new(&self.dir)?;
