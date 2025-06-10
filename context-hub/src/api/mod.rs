@@ -59,6 +59,15 @@ struct DocRequest {
 }
 
 #[derive(Serialize, Deserialize)]
+struct FolderCreateRequest {
+    name: String,
+    #[serde(default)]
+    content: String,
+    #[serde(rename = "type")]
+    item_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
 struct DocResponse {
     id: Uuid,
     name: String,
@@ -83,7 +92,7 @@ pub fn router(state: Arc<Mutex<DocumentStore>>) -> Router {
             "/docs/{id}",
             get(get_doc).put(update_doc).delete(delete_doc),
         )
-        .route("/folders/{id}", get(list_folder))
+        .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .with_state(app_state)
 }
 
@@ -179,6 +188,55 @@ async fn delete_doc(
         }
         Some(_) => StatusCode::FORBIDDEN,
         None => StatusCode::NOT_FOUND,
+    }
+}
+
+async fn create_in_folder(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(folder_id): Path<Uuid>,
+    Json(req): Json<FolderCreateRequest>,
+) -> Result<Json<DocResponse>, StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.get(folder_id) {
+        Some(folder) if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder => {
+            if req.item_type.to_lowercase() == "folder" {
+                let id = store
+                    .create_folder(folder_id, req.name.clone(), auth.user_id.clone())
+                    .expect("create_folder");
+                Ok(Json(DocResponse {
+                    id,
+                    name: req.name,
+                    content: String::new(),
+                    parent_folder_id: Some(folder_id),
+                    doc_type: DocumentType::Folder,
+                    owner: auth.user_id,
+                }))
+            } else {
+                let content = req.content;
+                let id = store
+                    .create(
+                        req.name.clone(),
+                        &content,
+                        auth.user_id.clone(),
+                        Some(folder_id),
+                        DocumentType::Text,
+                    )
+                    .expect("create");
+                Ok(Json(DocResponse {
+                    id,
+                    name: req.name,
+                    content,
+                    parent_folder_id: Some(folder_id),
+                    doc_type: DocumentType::Text,
+                    owner: auth.user_id,
+                }))
+            }
+        }
+        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(_) => Err(StatusCode::BAD_REQUEST),
+        None => Err(StatusCode::NOT_FOUND),
     }
 }
 
@@ -352,5 +410,64 @@ mod tests {
             .map(|v| v["doc_type"].as_str().unwrap())
             .collect();
         assert!(types.contains(&"IndexGuide"));
+    }
+
+    #[tokio::test]
+    async fn create_in_folder_endpoint() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = DocumentStore::new(tempdir.path()).unwrap();
+        let shared = Arc::new(Mutex::new(store));
+        let app = router(shared.clone());
+
+        let root = {
+            let mut s = shared.lock().await;
+            s.ensure_root("user1").unwrap()
+        };
+
+        // create a subfolder under root
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/folders/{}", root))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({"name": "sub", "type": "folder"}).to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let folder_id = v["id"].as_str().unwrap();
+
+        // create a document inside the subfolder
+        let req = Request::builder()
+            .method("POST")
+            .uri(format!("/folders/{}", folder_id))
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "note.txt",
+                    "content": "hello",
+                    "type": "document"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let doc_id = v["id"].as_str().unwrap();
+
+        // ensure document can be fetched
+        let req = Request::builder()
+            .uri(format!("/docs/{}", doc_id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
     }
 }
