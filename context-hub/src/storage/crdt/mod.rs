@@ -221,6 +221,14 @@ impl Document {
         Ok(())
     }
 
+    /// Reload the Automerge document from disk, replacing any in-memory
+    /// change history with the serialized state on disk.
+    pub fn reload(&mut self, path: &Path) -> Result<()> {
+        let bytes = std::fs::read(path)?;
+        self.doc = AutoCommit::load(&bytes)?;
+        Ok(())
+    }
+
     pub fn save(&mut self, path: &Path) -> Result<()> {
         std::fs::write(path, self.doc.save())?;
         Ok(())
@@ -670,6 +678,18 @@ impl DocumentStore {
         }
         self.mark_dirty();
         self.save_agent_scopes()
+    }
+
+    /// Reload all documents from their serialized form to discard old CRDT
+    /// history. This should be invoked after a snapshot to keep in-memory
+    /// state small.
+    pub fn compact_history(&mut self) -> Result<()> {
+        let dir = self.dir.clone();
+        for (id, doc) in self.docs.iter_mut() {
+            let path = dir.join(format!("{}.bin", id));
+            doc.reload(&path)?;
+        }
+        Ok(())
     }
 }
 
