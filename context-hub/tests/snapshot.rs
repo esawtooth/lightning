@@ -2,8 +2,9 @@ use context_hub::snapshot::SnapshotManager;
 use context_hub::storage::crdt::{DocumentStore, DocumentType};
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio::time::Duration;
 use tokio::task::LocalSet;
+use tokio::time::Duration;
+use tower::util::ServiceExt;
 
 #[test]
 fn init_repo_creates_git_dir() {
@@ -61,7 +62,41 @@ async fn snapshot_task_runs() {
         mgr.clone(),
         Duration::from_millis(100),
     ));
-    local.run_until(tokio::time::sleep(Duration::from_millis(150))).await;
+    local
+        .run_until(tokio::time::sleep(Duration::from_millis(150)))
+        .await;
+
+    assert!(repo_dir.join(".git").exists());
+    let repo = git2::Repository::open(repo_dir).unwrap();
+    assert!(repo.revparse_single("HEAD").is_ok());
+}
+
+#[tokio::test]
+async fn snapshot_endpoint_triggers_commit() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let repo_dir = tempdir.path().join("repo");
+    let data_dir = tempdir.path().join("data");
+    let store = Arc::new(Mutex::new(DocumentStore::new(&data_dir).unwrap()));
+    {
+        let mut s = store.lock().await;
+        s.create(
+            "note.txt".to_string(),
+            "hi",
+            "user1".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+    }
+    let app = context_hub::api::router(store.clone(), repo_dir.clone());
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/snapshot")
+        .header("X-User-Id", "user1")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let _ = app.clone().oneshot(req).await.unwrap();
 
     assert!(repo_dir.join(".git").exists());
     let repo = git2::Repository::open(repo_dir).unwrap();
