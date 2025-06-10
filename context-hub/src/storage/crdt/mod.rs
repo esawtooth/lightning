@@ -406,6 +406,13 @@ impl DocumentStore {
         &self.dir
     }
 
+    /// Reload the store contents from disk, discarding any in-memory state.
+    pub fn reload(&mut self) -> Result<()> {
+        let new_self = Self::new(&self.dir)?;
+        *self = new_self;
+        Ok(())
+    }
+
     /// Return whether the store has un-snapshotted changes.
     pub fn is_dirty(&self) -> bool {
         self.dirty

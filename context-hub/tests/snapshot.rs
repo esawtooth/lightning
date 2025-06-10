@@ -31,7 +31,7 @@ fn snapshot_commits_files() {
         .unwrap();
 
     let mgr = SnapshotManager::new(&repo_dir).unwrap();
-    mgr.snapshot(&store).unwrap();
+    let _commit = mgr.snapshot(&store).unwrap();
 
     assert!(repo_dir.join(".git").exists());
     let repo = git2::Repository::open(repo_dir).unwrap();
@@ -101,4 +101,40 @@ async fn snapshot_endpoint_triggers_commit() {
     assert!(repo_dir.join(".git").exists());
     let repo = git2::Repository::open(repo_dir).unwrap();
     assert!(repo.revparse_single("HEAD").is_ok());
+}
+
+#[test]
+fn restore_reverts_state() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let repo_dir = tempdir.path().join("repo");
+    let data_dir = tempdir.path().join("data");
+    let mut store = DocumentStore::new(&data_dir).unwrap();
+    let doc1 = store
+        .create(
+            "one.txt".to_string(),
+            "one",
+            "user1".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+    let doc2 = store
+        .create(
+            "two.txt".to_string(),
+            "two",
+            "user1".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+    let mgr = SnapshotManager::new(&repo_dir).unwrap();
+    let commit = mgr.snapshot(&store).unwrap();
+
+    store.update(doc1, "changed").unwrap();
+    store.delete(doc2).unwrap();
+
+    mgr.restore(&mut store, &commit.to_string()).unwrap();
+
+    assert_eq!(store.get(doc1).unwrap().text(), "one");
+    assert!(store.get(doc2).is_some());
 }
