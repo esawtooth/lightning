@@ -101,14 +101,22 @@ async fn create_doc(
     State(state): State<AppState>,
     auth: AuthContext,
     Json(req): Json<DocRequest>,
-) -> Json<DocResponse> {
+) -> Result<Json<DocResponse>, StatusCode> {
     let mut store = state.store.lock().await;
-    let _ = store.ensure_root(&auth.user_id);
+    let root = store.ensure_root(&auth.user_id).unwrap();
+    let parent = req.parent_folder_id.unwrap_or(root);
+
+    if !store.has_permission(
+        parent,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Write,
+    ) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+
     let doc_type = req.doc_type.unwrap_or(DocumentType::Text);
     let id = if doc_type == DocumentType::Folder {
-        let parent = req
-            .parent_folder_id
-            .unwrap_or_else(|| store.ensure_root(&auth.user_id).unwrap());
         store
             .create_folder(parent, req.name.clone(), auth.user_id.clone())
             .expect("create_folder")
@@ -118,19 +126,19 @@ async fn create_doc(
                 req.name.clone(),
                 &req.content,
                 auth.user_id.clone(),
-                req.parent_folder_id,
+                Some(parent),
                 doc_type,
             )
             .expect("create")
     };
-    Json(DocResponse {
+    Ok(Json(DocResponse {
         id,
         name: req.name,
         content: req.content,
-        parent_folder_id: req.parent_folder_id,
+        parent_folder_id: Some(parent),
         doc_type,
         owner: auth.user_id,
-    })
+    }))
 }
 
 async fn get_doc(
@@ -142,7 +150,12 @@ async fn get_doc(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) => {
-            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+            if store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Read,
+            ) {
                 Ok(Json(DocResponse {
                     id,
                     name: doc.name().to_string(),
@@ -169,7 +182,12 @@ async fn update_doc(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
-            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+            if store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) {
                 let _ = store.update(id, &req.content);
                 StatusCode::NO_CONTENT
             } else {
@@ -189,7 +207,12 @@ async fn delete_doc(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
-            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+            if store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) {
                 let _ = store.delete(id);
                 StatusCode::NO_CONTENT
             } else {
@@ -210,7 +233,12 @@ async fn create_in_folder(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(folder_id) {
         Some(folder) if folder.doc_type() == DocumentType::Folder => {
-            if !store.has_permission(folder_id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+            if !store.has_permission(
+                folder_id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) {
                 return Err(StatusCode::FORBIDDEN);
             }
             if req.item_type.to_lowercase() == "folder" {
@@ -260,7 +288,12 @@ async fn list_folder(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) if doc.doc_type() == DocumentType::Folder => {
-            if !store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+            if !store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Read,
+            ) {
                 return Err(StatusCode::FORBIDDEN);
             }
             let items = doc
@@ -288,7 +321,12 @@ async fn get_index_guide(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(folder) if folder.doc_type() == DocumentType::Folder => {
-            if !store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+            if !store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Read,
+            ) {
                 return Err(StatusCode::FORBIDDEN);
             }
             if let Some(guide_id) = store.index_guide_id(id) {
