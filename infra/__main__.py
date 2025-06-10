@@ -24,7 +24,7 @@ from pulumi_azure_native import (
 )
 import pulumi_azuread as azuread
 
-from pulumi_random import RandomPassword
+from pulumi_random import RandomPassword, RandomString
 from azure.identity import DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from azure.core.exceptions import ResourceNotFoundError
@@ -55,8 +55,12 @@ acs_sender = config.get("acsSender") or f"no-reply@{domain}"
 twilio_account_sid = config.require_secret("twilioAccountSid")
 twilio_auth_token = config.require_secret("twilioAuthToken")
 voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:latest"
-ui_dns_label = config.get("uiDnsLabel") or "chat-ui"
-voice_dns_label = config.get("voiceDnsLabel") or "voice-ws"
+
+# Generate a stable random suffix for DNS labels if not provided via config.
+dns_suffix = RandomString("dns-suffix", length=8, special=False, upper=False).result
+
+ui_dns_label = config.get("uiDnsLabel") or pulumi.Output.concat("chat-ui-", dns_suffix)
+voice_dns_label = config.get("voiceDnsLabel") or pulumi.Output.concat("voice-ws-", dns_suffix)
 
 # Fetch subscription ID early so it can be used anywhere below
 client_config = get_client_config()
