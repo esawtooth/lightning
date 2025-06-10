@@ -1049,28 +1049,40 @@ if domain:
         https_port=8081,
     )
 
-    ui_domain = cdn.custom_domain.CustomDomain(
+    ui_domain = cdn.afd_custom_domain.AFDCustomDomain(
         "fd-ui-domain",
         resource_group_name=resource_group.name,
         profile_name=fd_profile.name,
-        endpoint_name=fd_endpoint.name,
+        custom_domain_name="uiDomain",
         host_name=pulumi.Output.concat("www.", domain),
+        tls_settings=cdn.AFDDomainHttpsParametersArgs(
+            certificate_type=cdn.AfdCertificateType.MANAGED_CERTIFICATE,
+            minimum_tls_version=cdn.AfdMinimumTlsVersion.TLS12,
+        ),
     )
 
-    api_domain = cdn.custom_domain.CustomDomain(
+    api_domain = cdn.afd_custom_domain.AFDCustomDomain(
         "fd-api-domain",
         resource_group_name=resource_group.name,
         profile_name=fd_profile.name,
-        endpoint_name=fd_endpoint.name,
+        custom_domain_name="apiDomain",
         host_name=pulumi.Output.concat("api.", domain),
+        tls_settings=cdn.AFDDomainHttpsParametersArgs(
+            certificate_type=cdn.AfdCertificateType.MANAGED_CERTIFICATE,
+            minimum_tls_version=cdn.AfdMinimumTlsVersion.TLS12,
+        ),
     )
 
-    voice_domain = cdn.custom_domain.CustomDomain(
+    voice_domain = cdn.afd_custom_domain.AFDCustomDomain(
         "fd-voice-domain",
         resource_group_name=resource_group.name,
         profile_name=fd_profile.name,
-        endpoint_name=fd_endpoint.name,
+        custom_domain_name="voiceDomain",
         host_name=pulumi.Output.concat("voice-ws.", domain),
+        tls_settings=cdn.AFDDomainHttpsParametersArgs(
+            certificate_type=cdn.AfdCertificateType.MANAGED_CERTIFICATE,
+            minimum_tls_version=cdn.AfdMinimumTlsVersion.TLS12,
+        ),
     )
 
     cdn.route.Route(
