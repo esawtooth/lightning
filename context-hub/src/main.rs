@@ -8,6 +8,7 @@ use tokio::task::LocalSet;
 use tokio::time::Duration;
 
 mod api;
+mod search;
 mod snapshot;
 mod storage;
 
@@ -17,6 +18,11 @@ async fn main() -> anyhow::Result<()> {
     let snapshot_mgr = Arc::new(snapshot::SnapshotManager::new("snapshots")?);
 
     let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new("data")?));
+    let search = Arc::new(search::SearchIndex::new("index")?);
+    {
+        let store_guard = store.lock().await;
+        search.index_all(&store_guard)?;
+    }
     let router = api::router(store.clone(), PathBuf::from("snapshots"));
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
