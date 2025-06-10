@@ -355,6 +355,7 @@ pub struct DocumentStore {
     dir: PathBuf,
     roots: HashMap<String, Uuid>,
     agent_scopes: HashMap<String, HashMap<String, Vec<Uuid>>>,
+    dirty: bool,
 }
 
 impl DocumentStore {
@@ -396,12 +397,28 @@ impl DocumentStore {
             dir,
             roots,
             agent_scopes,
+            dirty: false,
         })
     }
 
     /// Directory where documents are persisted.
     pub fn data_dir(&self) -> &Path {
         &self.dir
+    }
+
+    /// Return whether the store has un-snapshotted changes.
+    pub fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+
+    /// Mark the store as having pending changes.
+    fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
+    /// Clear the dirty flag after a snapshot has been taken.
+    pub fn clear_dirty(&mut self) {
+        self.dirty = false;
     }
 
     fn path(&self, id: Uuid) -> PathBuf {
@@ -476,6 +493,7 @@ impl DocumentStore {
         if doc_type == DocumentType::Folder && parent_folder_id.is_none() {
             self.roots.insert(owner, id);
         }
+        self.mark_dirty();
         Ok(id)
     }
 
@@ -494,6 +512,7 @@ impl DocumentStore {
             doc.add_child(index_id, &index_name, DocumentType::IndexGuide)?;
             doc.save(&path)?;
         }
+        self.mark_dirty();
         Ok(index_id)
     }
 
@@ -511,6 +530,7 @@ impl DocumentStore {
             parent_doc.save(&path)?;
         }
         let _ = self.create_index_for(id, &name, &owner)?;
+        self.mark_dirty();
         Ok(id)
     }
 
@@ -571,6 +591,7 @@ impl DocumentStore {
             doc.set_text(text)?;
             doc.save(&path)?;
         }
+        self.mark_dirty();
         Ok(())
     }
 
@@ -594,6 +615,7 @@ impl DocumentStore {
         }
         self.docs.remove(&id);
         let _ = std::fs::remove_file(self.path(id));
+        self.mark_dirty();
         Ok(())
     }
 
@@ -604,6 +626,7 @@ impl DocumentStore {
             doc.add_acl_entry(AclEntry { principal, access });
             doc.save(&path)?;
         }
+        self.mark_dirty();
         Ok(())
     }
 
@@ -614,6 +637,7 @@ impl DocumentStore {
             doc.remove_acl_entry(principal);
             doc.save(&path)?;
         }
+        self.mark_dirty();
         Ok(())
     }
 
@@ -628,6 +652,7 @@ impl DocumentStore {
             .entry(user)
             .or_default()
             .insert(agent, folders);
+        self.mark_dirty();
         self.save_agent_scopes()
     }
 
@@ -636,6 +661,7 @@ impl DocumentStore {
         if let Some(map) = self.agent_scopes.get_mut(user) {
             map.remove(agent);
         }
+        self.mark_dirty();
         self.save_agent_scopes()
     }
 }

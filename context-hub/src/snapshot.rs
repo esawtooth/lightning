@@ -1,4 +1,7 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tokio::time::{interval, Duration};
 
 use crate::storage::crdt::DocumentStore;
 use anyhow::{anyhow, Result};
@@ -62,5 +65,22 @@ impl SnapshotManager {
 
     pub fn repo(&self) -> &Repository {
         &self.repo
+    }
+}
+
+/// Spawn a background task that periodically snapshots the document store.
+pub async fn snapshot_task(
+    store: Arc<Mutex<DocumentStore>>,
+    manager: Arc<SnapshotManager>,
+    period: Duration,
+) {
+    let mut ticker = interval(period);
+    loop {
+        ticker.tick().await;
+        let mut store = store.lock().await;
+        if store.is_dirty() {
+            let _ = manager.snapshot(&store);
+            store.clear_dirty();
+        }
     }
 }
