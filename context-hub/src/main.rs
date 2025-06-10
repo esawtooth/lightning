@@ -5,9 +5,13 @@ use tokio::sync::Mutex;
 
 mod api;
 mod storage;
+mod snapshot;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // initialize snapshot repository for durability
+    let _snapshots = snapshot::SnapshotManager::new("snapshots")?;
+
     let store = storage::crdt::DocumentStore::new("data")?;
     let router = api::router(Arc::new(Mutex::new(store)));
     let app = Router::new()
