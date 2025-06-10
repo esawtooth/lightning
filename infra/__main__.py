@@ -985,7 +985,7 @@ if domain:
         profile_name=fd_profile.name,
         origin_group_name=ui_group.name,
         origin_name="uiOrigin",
-        host_name=ui_container.ip_address.apply(lambda ip: ip.fqdn),
+        host_name=ui_container.ip_address.apply(lambda ip: ip.ip),
     )
 
     api_group = cdn.afd_origin_group.AFDOriginGroup(
@@ -1039,7 +1039,7 @@ if domain:
         profile_name=fd_profile.name,
         origin_group_name=voice_group.name,
         origin_name="voiceOrigin",
-        host_name=voice_ws_container.ip_address.apply(lambda ip: ip.fqdn),
+        host_name=voice_ws_container.ip_address.apply(lambda ip: ip.ip),
         http_port=8081,
         https_port=8081,
     )
