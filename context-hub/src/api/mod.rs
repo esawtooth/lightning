@@ -141,14 +141,16 @@ async fn get_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc) if doc.owner() == auth.user_id => Ok(Json(DocResponse {
-            id,
-            name: doc.name().to_string(),
-            content: doc.text(),
-            parent_folder_id: doc.parent_folder_id(),
-            doc_type: doc.doc_type(),
-            owner: doc.owner().to_string(),
-        })),
+        Some(doc) if doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
+            Ok(Json(DocResponse {
+                id,
+                name: doc.name().to_string(),
+                content: doc.text(),
+                parent_folder_id: doc.parent_folder_id(),
+                doc_type: doc.doc_type(),
+                owner: doc.owner().to_string(),
+            }))
+        }
         Some(_) => Err(StatusCode::FORBIDDEN),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -163,7 +165,7 @@ async fn update_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     let allowed = match store.get(id) {
-        Some(doc) if doc.owner() == auth.user_id => true,
+        Some(doc) if doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => true,
         Some(_) => return StatusCode::FORBIDDEN,
         None => return StatusCode::NOT_FOUND,
     };
@@ -183,7 +185,7 @@ async fn delete_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc) if doc.owner() == auth.user_id => {
+        Some(doc) if doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => {
             let _ = store.delete(id);
             StatusCode::NO_CONTENT
         }
@@ -202,7 +204,8 @@ async fn create_in_folder(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(folder_id) {
         Some(folder)
-            if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder =>
+            if folder.can_write(&auth.user_id, auth.agent_id.as_deref())
+                && folder.doc_type() == DocumentType::Folder =>
         {
             if req.item_type.to_lowercase() == "folder" {
                 let id = store
@@ -237,7 +240,9 @@ async fn create_in_folder(
                 }))
             }
         }
-        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(doc) if !doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => {
+            Err(StatusCode::FORBIDDEN)
+        }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -251,7 +256,10 @@ async fn list_folder(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc) if doc.owner() == auth.user_id && doc.doc_type() == DocumentType::Folder => {
+        Some(doc)
+            if doc.can_read(&auth.user_id, auth.agent_id.as_deref())
+                && doc.doc_type() == DocumentType::Folder =>
+        {
             let items = doc
                 .children()
                 .into_iter()
@@ -263,7 +271,9 @@ async fn list_folder(
                 .collect();
             Ok(Json(items))
         }
-        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(doc) if !doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
+            Err(StatusCode::FORBIDDEN)
+        }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -278,7 +288,8 @@ async fn get_index_guide(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(folder)
-            if folder.owner() == auth.user_id && folder.doc_type() == DocumentType::Folder =>
+            if folder.can_read(&auth.user_id, auth.agent_id.as_deref())
+                && folder.doc_type() == DocumentType::Folder =>
         {
             if let Some(guide_id) = store.index_guide_id(id) {
                 if let Some(guide) = store.get(guide_id) {
@@ -294,7 +305,9 @@ async fn get_index_guide(
             }
             Err(StatusCode::NOT_FOUND)
         }
-        Some(doc) if doc.owner() != auth.user_id => Err(StatusCode::FORBIDDEN),
+        Some(doc) if !doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
+            Err(StatusCode::FORBIDDEN)
+        }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }

@@ -24,3 +24,4 @@ The server exposes the following endpoints:
 Documents are stored as Automerge CRDTs and persisted as binary files under the `data` directory. Each document carries an **owner**. When a document is created, the `X-User-Id` header value is recorded as its owner. Existing files loaded from disk default to the user `user1`. The API responses include this `owner` field.
 
 Each document also stores a **name**, optional **parent folder ID**, and a `doc_type` classifying the document (`folder`, `indexGuide`, or `text`).
+Documents and folders maintain an **Access Control List (ACL)** containing zero or more permission entries. Each entry names a user or agent and an access level (`read` or `write`). The ACL defaults empty, meaning only the owner can access the item unless additional principals are added.

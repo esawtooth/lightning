@@ -24,6 +24,18 @@ pub enum DocumentType {
     Text,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AccessLevel {
+    Read,
+    Write,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AclEntry {
+    pub principal: String,
+    pub access: AccessLevel,
+}
+
 impl DocumentType {
     fn as_str(&self) -> &'static str {
         match self {
@@ -58,6 +70,7 @@ pub struct Document {
     name: String,
     parent_folder_id: Option<Uuid>,
     doc_type: DocumentType,
+    acl: Vec<AclEntry>,
 }
 
 impl Document {
@@ -88,6 +101,7 @@ impl Document {
             name,
             parent_folder_id,
             doc_type,
+            acl: Vec::new(),
         })
     }
 
@@ -105,6 +119,40 @@ impl Document {
 
     pub fn parent_folder_id(&self) -> Option<Uuid> {
         self.parent_folder_id
+    }
+
+    pub fn acl(&self) -> &[AclEntry] {
+        &self.acl
+    }
+
+    fn matches_principal(entry: &AclEntry, user: &str, agent: Option<&str>) -> bool {
+        entry.principal == user || agent.map_or(false, |a| entry.principal == a)
+    }
+
+    pub fn can_read(&self, user: &str, agent: Option<&str>) -> bool {
+        if self.owner == user {
+            return true;
+        }
+        self.acl
+            .iter()
+            .any(|e| Self::matches_principal(e, user, agent))
+    }
+
+    pub fn can_write(&self, user: &str, agent: Option<&str>) -> bool {
+        if self.owner == user {
+            return true;
+        }
+        self.acl
+            .iter()
+            .any(|e| Self::matches_principal(e, user, agent) && e.access == AccessLevel::Write)
+    }
+
+    pub fn add_acl_entry(&mut self, entry: AclEntry) {
+        self.acl.push(entry);
+    }
+
+    pub fn remove_acl_entry(&mut self, principal: &str) {
+        self.acl.retain(|e| e.principal != principal);
     }
 
     pub fn doc_type(&self) -> DocumentType {
@@ -206,6 +254,7 @@ impl Document {
             name: id.to_string(),
             parent_folder_id: None,
             doc_type,
+            acl: Vec::new(),
         })
     }
 
@@ -525,6 +574,40 @@ mod tests {
         assert_eq!(doc.text(), "hello");
         doc.set_text("goodbye").unwrap();
         assert_eq!(doc.text(), "goodbye");
+    }
+
+    #[test]
+    fn acl_defaults_and_permissions() {
+        let mut doc = Document::new(
+            Uuid::new_v4(),
+            "note.txt".to_string(),
+            "hi",
+            "owner".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+        // ACL should start empty
+        assert!(doc.acl().is_empty());
+        // owner always has access
+        assert!(doc.can_read("owner", None));
+        assert!(doc.can_write("owner", None));
+        // other user has no access
+        assert!(!doc.can_read("other", None));
+        assert!(!doc.can_write("other", None));
+
+        doc.add_acl_entry(AclEntry {
+            principal: "other".to_string(),
+            access: AccessLevel::Read,
+        });
+        assert!(doc.can_read("other", None));
+        assert!(!doc.can_write("other", None));
+
+        doc.add_acl_entry(AclEntry {
+            principal: "writer".to_string(),
+            access: AccessLevel::Write,
+        });
+        assert!(doc.can_write("writer", None));
     }
 
     #[test]
