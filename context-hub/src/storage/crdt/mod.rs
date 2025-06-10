@@ -470,6 +470,36 @@ impl DocumentStore {
         self.docs.get(&id)
     }
 
+    /// Check if the given user/agent has the requested access to the document.
+    /// This walks up parent folders if needed to inherit permissions.
+    pub fn has_permission(
+        &self,
+        doc_id: Uuid,
+        user: &str,
+        agent: Option<&str>,
+        level: AccessLevel,
+    ) -> bool {
+        let mut current = self.docs.get(&doc_id);
+        while let Some(doc) = current {
+            if doc.owner() == user {
+                return true;
+            }
+            for entry in doc.acl() {
+                let principal_match =
+                    entry.principal == user || agent.map_or(false, |a| entry.principal == a);
+                if principal_match {
+                    if level == AccessLevel::Read || entry.access == AccessLevel::Write {
+                        return true;
+                    }
+                }
+            }
+            current = doc
+                .parent_folder_id()
+                .and_then(|pid| self.docs.get(&pid));
+        }
+        false
+    }
+
     /// Return the ID of the Index Guide document for the given folder, if one exists.
     pub fn index_guide_id(&self, folder: Uuid) -> Option<Uuid> {
         let doc = self.docs.get(&folder)?;
@@ -762,5 +792,47 @@ mod tests {
 
         assert!(store.get(doc_id).is_none());
         assert_eq!(store.get(root).unwrap().child_count(), 0);
+    }
+
+    #[test]
+    fn acl_inheritance() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let folder = store
+            .create(
+                "root".to_string(),
+                "",
+                "owner".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let child = store
+            .create(
+                "note.txt".to_string(),
+                "hi",
+                "owner".to_string(),
+                Some(folder),
+                DocumentType::Text,
+            )
+            .unwrap();
+        {
+            let root_doc = store.docs.get_mut(&folder).unwrap();
+            root_doc.add_acl_entry(AclEntry {
+                principal: "reader".to_string(),
+                access: AccessLevel::Read,
+            });
+        }
+        assert!(store.has_permission(child, "reader", None, AccessLevel::Read));
+        assert!(!store.has_permission(child, "reader", None, AccessLevel::Write));
+        assert!(!store.has_permission(child, "writer", None, AccessLevel::Read));
+        {
+            let root_doc = store.docs.get_mut(&folder).unwrap();
+            root_doc.add_acl_entry(AclEntry {
+                principal: "writer".to_string(),
+                access: AccessLevel::Write,
+            });
+        }
+        assert!(store.has_permission(child, "writer", None, AccessLevel::Write));
     }
 }

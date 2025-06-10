@@ -11,7 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::storage::crdt::{DocumentStore, DocumentType};
+use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType};
 
 /// Authentication context extracted from request headers.
 #[derive(Clone, Debug)]
@@ -141,17 +141,20 @@ async fn get_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc) if doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
-            Ok(Json(DocResponse {
-                id,
-                name: doc.name().to_string(),
-                content: doc.text(),
-                parent_folder_id: doc.parent_folder_id(),
-                doc_type: doc.doc_type(),
-                owner: doc.owner().to_string(),
-            }))
+        Some(doc) => {
+            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+                Ok(Json(DocResponse {
+                    id,
+                    name: doc.name().to_string(),
+                    content: doc.text(),
+                    parent_folder_id: doc.parent_folder_id(),
+                    doc_type: doc.doc_type(),
+                    owner: doc.owner().to_string(),
+                }))
+            } else {
+                Err(StatusCode::FORBIDDEN)
+            }
         }
-        Some(_) => Err(StatusCode::FORBIDDEN),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -164,16 +167,16 @@ async fn update_doc(
 ) -> StatusCode {
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
-    let allowed = match store.get(id) {
-        Some(doc) if doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => true,
-        Some(_) => return StatusCode::FORBIDDEN,
-        None => return StatusCode::NOT_FOUND,
-    };
-    if allowed {
-        let _ = store.update(id, &req.content);
-        StatusCode::NO_CONTENT
-    } else {
-        StatusCode::FORBIDDEN
+    match store.get(id) {
+        Some(_) => {
+            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+                let _ = store.update(id, &req.content);
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        }
+        None => StatusCode::NOT_FOUND,
     }
 }
 
@@ -185,11 +188,14 @@ async fn delete_doc(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc) if doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => {
-            let _ = store.delete(id);
-            StatusCode::NO_CONTENT
+        Some(_) => {
+            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+                let _ = store.delete(id);
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            }
         }
-        Some(_) => StatusCode::FORBIDDEN,
         None => StatusCode::NOT_FOUND,
     }
 }
@@ -203,10 +209,10 @@ async fn create_in_folder(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(folder_id) {
-        Some(folder)
-            if folder.can_write(&auth.user_id, auth.agent_id.as_deref())
-                && folder.doc_type() == DocumentType::Folder =>
-        {
+        Some(folder) if folder.doc_type() == DocumentType::Folder => {
+            if !store.has_permission(folder_id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+                return Err(StatusCode::FORBIDDEN);
+            }
             if req.item_type.to_lowercase() == "folder" {
                 let id = store
                     .create_folder(folder_id, req.name.clone(), auth.user_id.clone())
@@ -240,9 +246,6 @@ async fn create_in_folder(
                 }))
             }
         }
-        Some(doc) if !doc.can_write(&auth.user_id, auth.agent_id.as_deref()) => {
-            Err(StatusCode::FORBIDDEN)
-        }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }
@@ -256,10 +259,10 @@ async fn list_folder(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(doc)
-            if doc.can_read(&auth.user_id, auth.agent_id.as_deref())
-                && doc.doc_type() == DocumentType::Folder =>
-        {
+        Some(doc) if doc.doc_type() == DocumentType::Folder => {
+            if !store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+                return Err(StatusCode::FORBIDDEN);
+            }
             let items = doc
                 .children()
                 .into_iter()
@@ -270,9 +273,6 @@ async fn list_folder(
                 })
                 .collect();
             Ok(Json(items))
-        }
-        Some(doc) if !doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
-            Err(StatusCode::FORBIDDEN)
         }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
@@ -287,10 +287,10 @@ async fn get_index_guide(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(folder)
-            if folder.can_read(&auth.user_id, auth.agent_id.as_deref())
-                && folder.doc_type() == DocumentType::Folder =>
-        {
+        Some(folder) if folder.doc_type() == DocumentType::Folder => {
+            if !store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Read) {
+                return Err(StatusCode::FORBIDDEN);
+            }
             if let Some(guide_id) = store.index_guide_id(id) {
                 if let Some(guide) = store.get(guide_id) {
                     return Ok(Json(DocResponse {
@@ -304,9 +304,6 @@ async fn get_index_guide(
                 }
             }
             Err(StatusCode::NOT_FOUND)
-        }
-        Some(doc) if !doc.can_read(&auth.user_id, auth.agent_id.as_deref()) => {
-            Err(StatusCode::FORBIDDEN)
         }
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
