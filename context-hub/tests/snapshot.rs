@@ -91,7 +91,8 @@ async fn snapshot_endpoint_triggers_commit() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let app = context_hub::api::router(store.clone(), repo_dir.clone(), indexer);
+    let events = context_hub::events::EventBus::new();
+    let app = context_hub::api::router(store.clone(), repo_dir.clone(), indexer, events);
 
     let req = axum::http::Request::builder()
         .method("POST")
