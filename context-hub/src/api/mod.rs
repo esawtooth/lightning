@@ -107,6 +107,11 @@ struct RenameRequest {
 }
 
 #[derive(Deserialize)]
+struct MoveRequest {
+    new_parent_folder_id: Uuid,
+}
+
+#[derive(Deserialize)]
 struct SearchParams {
     q: String,
     limit: Option<usize>,
@@ -135,6 +140,7 @@ pub fn router(
             "/docs/{id}",
             get(get_doc).put(update_doc).delete(delete_doc),
         )
+        .route("/docs/{id}/move", put(move_doc))
         .route("/docs/{id}/rename", put(rename_doc))
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .route("/folders/{id}/guide", get(get_index_guide))
@@ -275,6 +281,32 @@ async fn rename_doc(
                 let _ = store.rename(id, req.name);
                 drop(store);
                 state.indexer.schedule_update(id).await;
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        }
+        None => StatusCode::NOT_FOUND,
+    }
+}
+
+async fn move_doc(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(req): Json<MoveRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.get(id) {
+        Some(_) => {
+            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write)
+                && store.has_permission(req.new_parent_folder_id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write)
+            {
+                let ids = store.descendant_ids(id);
+                let _ = store.move_item(id, req.new_parent_folder_id);
+                drop(store);
+                state.indexer.schedule_recursive_update(ids).await;
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN

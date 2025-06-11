@@ -126,6 +126,10 @@ impl Document {
         self.parent_folder_id
     }
 
+    pub fn set_parent_folder_id(&mut self, parent: Option<Uuid>) {
+        self.parent_folder_id = parent;
+    }
+
     pub fn acl(&self) -> &[AclEntry] {
         &self.acl
     }
@@ -637,6 +641,56 @@ impl DocumentStore {
         }
         self.mark_dirty();
         Ok(())
+    }
+
+    pub fn move_item(&mut self, id: Uuid, new_parent: Uuid) -> Result<()> {
+        if self.docs.get(&new_parent).map(|d| d.doc_type()) != Some(DocumentType::Folder) {
+            return Ok(());
+        }
+        let old_parent = match self.docs.get(&id) {
+            Some(d) => d.parent_folder_id(),
+            None => return Ok(()),
+        };
+        let doc_path = self.path(id);
+        let dest_path = self.path(new_parent);
+        let (name, doc_type) = {
+            let doc = self.docs.get_mut(&id).unwrap();
+            if doc.parent_folder_id().is_none() {
+                return Ok(());
+            }
+            doc.set_parent_folder_id(Some(new_parent));
+            doc.save(&doc_path)?;
+            (doc.name().to_string(), doc.doc_type())
+        };
+        if let Some(pid) = old_parent {
+            let parent_path = self.path(pid);
+            if let Some(parent_doc) = self.docs.get_mut(&pid) {
+                parent_doc.remove_child(id)?;
+                parent_doc.save(&parent_path)?;
+            }
+        }
+        if let Some(dest) = self.docs.get_mut(&new_parent) {
+            dest.add_child(id, &name, doc_type)?;
+            dest.save(&dest_path)?;
+        }
+        self.mark_dirty();
+        Ok(())
+    }
+
+    pub fn descendant_ids(&self, id: Uuid) -> Vec<Uuid> {
+        fn gather(store: &DocumentStore, id: Uuid, out: &mut Vec<Uuid>) {
+            out.push(id);
+            if let Some(doc) = store.get(id) {
+                if doc.doc_type() == DocumentType::Folder {
+                    for child in doc.child_ids() {
+                        gather(store, child, out);
+                    }
+                }
+            }
+        }
+        let mut ids = Vec::new();
+        gather(self, id, &mut ids);
+        ids
     }
 
     pub fn update(&mut self, id: Uuid, text: &str) -> Result<()> {
