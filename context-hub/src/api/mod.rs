@@ -3,7 +3,7 @@
 use axum::{
     extract::{FromRequestParts, Path, State, Query},
     http::{request::Parts, StatusCode},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -102,6 +102,11 @@ struct UnshareRequest {
 }
 
 #[derive(Deserialize)]
+struct RenameRequest {
+    name: String,
+}
+
+#[derive(Deserialize)]
 struct SearchParams {
     q: String,
     limit: Option<usize>,
@@ -130,6 +135,7 @@ pub fn router(
             "/docs/{id}",
             get(get_doc).put(update_doc).delete(delete_doc),
         )
+        .route("/docs/{id}/rename", put(rename_doc))
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .route("/folders/{id}/guide", get(get_index_guide))
         .route(
@@ -244,6 +250,29 @@ async fn update_doc(
                 AccessLevel::Write,
             ) {
                 let _ = store.update(id, &req.content);
+                drop(store);
+                state.indexer.schedule_update(id).await;
+                StatusCode::NO_CONTENT
+            } else {
+                StatusCode::FORBIDDEN
+            }
+        }
+        None => StatusCode::NOT_FOUND,
+    }
+}
+
+async fn rename_doc(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(req): Json<RenameRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.get(id) {
+        Some(_) => {
+            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+                let _ = store.rename(id, req.name);
                 drop(store);
                 state.indexer.schedule_update(id).await;
                 StatusCode::NO_CONTENT
