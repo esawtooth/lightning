@@ -106,3 +106,59 @@ async fn search_endpoint() {
     let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(v.as_array().unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn rename_endpoint() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let index_dir = tempdir.path().join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone()));
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/docs")
+        .header("X-User-Id", "user1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "name": "note.txt",
+                "content": "hello",
+                "parent_folder_id": null,
+                "doc_type": "Text"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let doc_id = v["id"].as_str().unwrap();
+
+    let req = axum::http::Request::builder()
+        .method("PUT")
+        .uri(format!("/docs/{}/rename", doc_id))
+        .header("X-User-Id", "user1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({"name": "renamed.txt"}).to_string(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::NO_CONTENT);
+
+    let req = axum::http::Request::builder()
+        .uri("/search?q=renamed")
+        .header("X-User-Id", "user1")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let arr: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
+    assert_eq!(arr.len(), 1);
+    assert_eq!(arr[0]["name"].as_str().unwrap(), "renamed.txt");
+}

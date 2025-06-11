@@ -118,6 +118,10 @@ impl Document {
         &self.name
     }
 
+    pub fn set_name(&mut self, name: String) {
+        self.name = name;
+    }
+
     pub fn parent_folder_id(&self) -> Option<Uuid> {
         self.parent_folder_id
     }
@@ -351,6 +355,19 @@ impl Document {
         }
         if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
             let _ = self.doc.delete(&map_id, child_id.to_string());
+        }
+        Ok(())
+    }
+
+    pub fn rename_child(&mut self, child_id: Uuid, name: &str) -> Result<()> {
+        if self.doc_type != DocumentType::Folder {
+            return Ok(());
+        }
+        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+            let key = child_id.to_string();
+            if let Ok(Some((_, obj_id))) = self.doc.get(&map_id, &key) {
+                self.doc.put(&obj_id, "name", name.to_string())?;
+            }
         }
         Ok(())
     }
@@ -603,6 +620,23 @@ impl DocumentStore {
             }
         }
         None
+    }
+
+    pub fn rename(&mut self, id: Uuid, name: String) -> Result<()> {
+        let doc_path = self.path(id);
+        if let Some(doc) = self.docs.get_mut(&id) {
+            doc.set_name(name.clone());
+            doc.save(&doc_path)?;
+            if let Some(pid) = doc.parent_folder_id() {
+                let parent_path = self.path(pid);
+                if let Some(parent_doc) = self.docs.get_mut(&pid) {
+                    parent_doc.rename_child(id, &name)?;
+                    parent_doc.save(&parent_path)?;
+                }
+            }
+        }
+        self.mark_dirty();
+        Ok(())
     }
 
     pub fn update(&mut self, id: Uuid, text: &str) -> Result<()> {
@@ -872,6 +906,44 @@ mod tests {
         assert_ne!(root1, root2);
         let doc2 = store.get(root2).unwrap();
         assert_eq!(doc2.owner(), "user2");
+    }
+
+    #[test]
+    fn rename_updates_parent() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let doc_id = store
+            .create(
+                "file.txt".to_string(),
+                "hello",
+                "user1".to_string(),
+                Some(root),
+                DocumentType::Text,
+            )
+            .unwrap();
+        {
+            let path = store.path(root);
+            let parent = store.docs.get_mut(&root).unwrap();
+            parent.add_child(doc_id, "file.txt", DocumentType::Text).unwrap();
+            parent.save(&path).unwrap();
+        }
+
+        store.rename(doc_id, "renamed.txt".to_string()).unwrap();
+
+        let doc = store.get(doc_id).unwrap();
+        assert_eq!(doc.name(), "renamed.txt");
+        let parent = store.get(root).unwrap();
+        let child_names: Vec<_> = parent.children().into_iter().map(|c| c.1).collect();
+        assert!(child_names.contains(&"renamed.txt".to_string()));
     }
 
     #[test]
