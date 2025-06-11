@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::snapshot::SnapshotManager;
 use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType};
 use crate::indexer::LiveIndex;
+use crate::events::{EventBus, Event};
 use std::path::PathBuf;
 
 /// Authentication context extracted from request headers.
@@ -54,6 +55,7 @@ pub struct AppState {
     pub store: Arc<Mutex<DocumentStore>>,
     pub snapshot_dir: PathBuf,
     pub indexer: Arc<LiveIndex>,
+    pub events: crate::events::EventBus,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -128,11 +130,13 @@ pub fn router(
     state: Arc<Mutex<DocumentStore>>,
     snapshot_dir: PathBuf,
     indexer: Arc<LiveIndex>,
+    events: EventBus,
 ) -> Router {
     let app_state = AppState {
         store: state,
         snapshot_dir,
         indexer,
+        events,
     };
     Router::new()
         .route("/docs", post(create_doc))
@@ -151,6 +155,7 @@ pub fn router(
         .route("/search", get(search_docs))
         .route("/snapshot", post(snapshot_now))
         .route("/restore", post(restore_snapshot))
+        .route("/ws", get(ws_stream))
         .with_state(app_state)
 }
 
@@ -198,6 +203,7 @@ async fn create_doc(
     if let Some(eid) = extra {
         state.indexer.schedule_update(eid).await;
     }
+    state.events.send(Event::Created { id });
     Ok(Json(DocResponse {
         id,
         name: req.name,
@@ -258,6 +264,7 @@ async fn update_doc(
                 let _ = store.update(id, &req.content);
                 drop(store);
                 state.indexer.schedule_update(id).await;
+                state.events.send(Event::Updated { id });
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -281,6 +288,7 @@ async fn rename_doc(
                 let _ = store.rename(id, req.name);
                 drop(store);
                 state.indexer.schedule_update(id).await;
+                state.events.send(Event::Updated { id });
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -307,6 +315,7 @@ async fn move_doc(
                 let _ = store.move_item(id, req.new_parent_folder_id);
                 drop(store);
                 state.indexer.schedule_recursive_update(ids).await;
+                state.events.send(Event::Moved { id, new_parent: req.new_parent_folder_id });
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -346,6 +355,7 @@ async fn delete_doc(
                 let _ = store.delete(id);
                 drop(store);
                 state.indexer.schedule_recursive_delete(ids).await;
+                state.events.send(Event::Deleted { id });
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -383,6 +393,7 @@ async fn create_in_folder(
                 if let Some(eid) = extra {
                     state.indexer.schedule_update(eid).await;
                 }
+                state.events.send(Event::Created { id });
                 Ok(Json(DocResponse {
                     id,
                     name: req.name,
@@ -404,6 +415,7 @@ async fn create_in_folder(
                     .expect("create");
                 drop(store);
                 state.indexer.schedule_update(id).await;
+                state.events.send(Event::Created { id });
                 Ok(Json(DocResponse {
                     id,
                     name: req.name,
@@ -541,7 +553,9 @@ async fn share_folder(
     } else {
         AccessLevel::Write
     };
+    let principal = req.user.clone();
     let _ = store.add_acl(id, req.user, level);
+    state.events.send(Event::Shared { id, principal });
     StatusCode::NO_CONTENT
 }
 
@@ -561,7 +575,9 @@ async fn unshare_folder(
     ) {
         return StatusCode::FORBIDDEN;
     }
+    let principal = req.user.clone();
     let _ = store.remove_acl(id, &req.user);
+    state.events.send(Event::Unshared { id, principal });
     StatusCode::NO_CONTENT
 }
 
@@ -602,6 +618,26 @@ async fn restore_snapshot(
     }
 }
 
+use axum::response::sse::{self, Sse};
+use futures::{Stream, StreamExt};
+use std::convert::Infallible;
+
+async fn ws_stream(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<sse::Event, Infallible>>> {
+    let rx = state.events.subscribe();
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|res| async move {
+        match res {
+            Ok(evt) => {
+                let data = serde_json::to_string(&evt).ok()?;
+                Some(Ok(sse::Event::default().data(data)))
+            }
+            Err(_) => None,
+        }
+    });
+    Sse::new(stream)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,7 +656,8 @@ mod tests {
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
         let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
-        let app = router(store.clone(), tempdir.path().into(), indexer);
+        let events = crate::events::EventBus::new();
+        let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
         let req = Request::builder()
             .method("POST")
@@ -691,7 +728,8 @@ mod tests {
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
         let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
-        let app = router(store.clone(), tempdir.path().into(), indexer);
+        let events = crate::events::EventBus::new();
+        let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
         let root = {
             let mut s = store.lock().await;
@@ -762,7 +800,8 @@ mod tests {
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
         let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
-        let app = router(store.clone(), tempdir.path().into(), indexer);
+        let events = crate::events::EventBus::new();
+        let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
         let root = {
             let mut s = store.lock().await;
@@ -824,7 +863,8 @@ mod tests {
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
         let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
-        let app = router(store.clone(), tempdir.path().into(), indexer);
+        let events = crate::events::EventBus::new();
+        let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
         let root = {
             let mut s = store.lock().await;
@@ -872,7 +912,8 @@ mod tests {
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
         let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
-        let app = router(store.clone(), tempdir.path().into(), indexer);
+        let events = crate::events::EventBus::new();
+        let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
         let root = {
             let mut s = store.lock().await;

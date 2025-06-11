@@ -15,7 +15,8 @@ async fn server_health_endpoint() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let router = api::router(store.clone(), tempdir.path().into(), indexer);
+    let events = context_hub::events::EventBus::new();
+    let router = api::router(store.clone(), tempdir.path().into(), indexer, events);
     let app = Router::new()
         .merge(router)
         .route("/health", get(|| async { "OK" }));
@@ -43,7 +44,8 @@ async fn root_created_on_use() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer));
+    let events = context_hub::events::EventBus::new();
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer, events));
 
     let req = axum::http::Request::builder()
         .method("POST")
@@ -74,7 +76,8 @@ async fn search_endpoint() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone()));
+    let events = context_hub::events::EventBus::new();
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone(), events));
 
     let req = axum::http::Request::builder()
         .method("POST")
@@ -115,7 +118,8 @@ async fn rename_endpoint() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone()));
+    let events = context_hub::events::EventBus::new();
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone(), events));
 
     let req = axum::http::Request::builder()
         .method("POST")
@@ -171,7 +175,8 @@ async fn move_endpoint() {
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
-    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone()));
+    let events = context_hub::events::EventBus::new();
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone(), events));
 
     let root = {
         let mut s = store.lock().await;
