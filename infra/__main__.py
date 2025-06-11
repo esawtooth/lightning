@@ -877,7 +877,10 @@ ui_container = containerinstance.ContainerGroup(
                 log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,
             )
         ),
-        opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
+        opts=pulumi.ResourceOptions(
+            replace_on_changes=["containers"],
+            delete_before_replace=True,
+        ),
     )
 
 pulumi.export("uiUrl", pulumi.Output.concat("https://www.", domain))
@@ -943,7 +946,10 @@ voice_ws_container = containerinstance.ContainerGroup(
             log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,
         )
     ),
-    opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
+    opts=pulumi.ResourceOptions(
+        replace_on_changes=["containers"],
+        delete_before_replace=True,
+    ),
 )
 
 pulumi.export(
