@@ -18,6 +18,7 @@ The server exposes the following endpoints:
 - `POST /docs` – create a new document. Body: `{ "name": "file.txt", "content": "text", "parent_folder_id": null, "doc_type": "text" }`.
 - `GET /docs/:id` – fetch a document by UUID.
 - `PUT /docs/:id` – replace document text. Body: `{ "content": "text" }`.
+- `PUT /docs/:id/move` – move a document or folder to a new parent folder. Body: `{ "new_parent_folder_id": "<uuid>" }`.
 - `DELETE /docs/:id` – remove a document.
 - `GET /folders/:id/guide` – retrieve the Index Guide for a folder.
 - `GET /search?q=term` – search documents using a keyword query. Returns only

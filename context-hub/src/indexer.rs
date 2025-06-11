@@ -67,6 +67,12 @@ impl LiveIndex {
         }
     }
 
+    pub async fn schedule_recursive_update(&self, ids: Vec<Uuid>) {
+        for id in ids {
+            self.schedule_update(id).await;
+        }
+    }
+
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<Uuid>> {
         self.index.search(query, limit)
     }
