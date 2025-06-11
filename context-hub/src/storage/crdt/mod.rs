@@ -250,7 +250,7 @@ impl Document {
         let doc = LoroDoc::new();
         doc.import(&bytes).map_err(|e| anyhow!(e))?;
         doc.commit();
-        let doc_type = if doc.get_map(CHILDREN_KEY).is_attached() {
+        let doc_type = if doc.get_by_str_path(CHILDREN_KEY).is_some() {
             DocumentType::Folder
         } else if let Some(t) = doc
             .get_by_str_path("meta/doc_type")
