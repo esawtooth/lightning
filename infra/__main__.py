@@ -58,8 +58,15 @@ voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:la
 
 # Generate a stable random suffix for DNS labels if not provided via config.
 # Increase the length to reduce the chance of collisions when allocating
-# public DNS labels for container groups.
-dns_suffix = RandomString("dns-suffix", length=12, special=False, upper=False).result
+# public DNS labels for container groups. Mark the result as a secret so it
+# doesn't get logged in plaintext during CI runs.
+dns_suffix = RandomString(
+    "dns-suffix",
+    length=12,
+    special=False,
+    upper=False,
+    additional_secret_outputs=["result"],
+).result
 
 ui_dns_label = config.get("uiDnsLabel") or pulumi.Output.concat("chat-ui-", dns_suffix)
 
@@ -884,6 +891,10 @@ ui_container = containerinstance.ContainerGroup(
     )
 
 pulumi.export("uiUrl", pulumi.Output.concat("https://www.", domain))
+pulumi.export(
+    "uiContainerFqdn",
+    ui_container.ip_address.apply(lambda ip: ip.fqdn),
+)
 
 # Container group for the voice agent websocket server
 voice_ws_container = containerinstance.ContainerGroup(
@@ -935,7 +946,6 @@ voice_ws_container = containerinstance.ContainerGroup(
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=8081)],
         type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-        dns_name_label="voice-ws",
         auto_generated_domain_name_label_scope="SubscriptionReuse",
     ),
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
@@ -955,6 +965,10 @@ voice_ws_container = containerinstance.ContainerGroup(
 pulumi.export(
     "voiceWsUrl",
     pulumi.Output.concat("https://voice-ws.", domain),
+)
+pulumi.export(
+    "voiceWsContainerFqdn",
+    voice_ws_container.ip_address.apply(lambda ip: ip.fqdn),
 )
 
 if domain:
