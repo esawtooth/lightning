@@ -1,10 +1,8 @@
-//! CRDT-based document storage built on [Automerge](https://crates.io/crates/automerge).
+//! CRDT-based document storage built on [Loro](https://crates.io/crates/loro).
 //! Documents are stored individually on disk and loaded at startup.
 
-use anyhow::Result;
-use automerge::{
-    transaction::Transactable, AutoCommit, ObjType, ReadDoc, ScalarValue, Value, ROOT,
-};
+use anyhow::{anyhow, Result};
+use loro::{LoroDoc, LoroMap, ToJson};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{
@@ -63,10 +61,10 @@ pub struct Pointer {
     pub name: Option<String>,
     pub preview_text: Option<String>,
 }
-/// In-memory wrapper around an Automerge document.
+/// In-memory wrapper around a Loro document.
 pub struct Document {
     id: Uuid,
-    doc: AutoCommit,
+    doc: LoroDoc,
     owner: String,
     name: String,
     parent_folder_id: Option<Uuid>,
@@ -84,17 +82,20 @@ impl Document {
         parent_folder_id: Option<Uuid>,
         doc_type: DocumentType,
     ) -> Result<Self> {
-        let mut doc = AutoCommit::new();
+        let doc = LoroDoc::new();
         match doc_type {
             DocumentType::Folder => {
-                doc.put_object(ROOT, CHILDREN_KEY, ObjType::Map)?;
+                doc.get_map(CHILDREN_KEY);
             }
             _ => {
-                let list_id = doc.put_object(ROOT, CONTENT_KEY, ObjType::List)?;
-                doc.insert(&list_id, 0, text)?;
+                let list = doc.get_list(CONTENT_KEY);
+                list.insert(0, text).map_err(|e| anyhow!(e))?;
             }
         }
-        doc.put(ROOT, "doc_type", doc_type.as_str())?;
+        doc.get_map("meta")
+            .insert("doc_type", doc_type.as_str())
+            .map_err(|e| anyhow!(e))?;
+        doc.commit();
         Ok(Self {
             id,
             doc,
@@ -172,15 +173,15 @@ impl Document {
         if self.doc_type == DocumentType::Folder {
             return String::new();
         }
-        let list_id = self.doc.get(ROOT, CONTENT_KEY).unwrap().unwrap().1;
-        let len = self.doc.length(&list_id);
+        let list = self.doc.get_list(CONTENT_KEY);
         let mut out = String::new();
-        for i in 0..len {
-            if let Ok(Some((val, _))) = self.doc.get(&list_id, i) {
-                match val {
-                    Value::Scalar(s) => {
-                        if let ScalarValue::Str(s) = s.as_ref() {
-                            out.push_str(s);
+        for i in 0..list.len() {
+            if let Some(item) = list.get(i) {
+                match item {
+                    loro::ValueOrContainer::Value(v) => {
+                        match v.to_json_value() {
+                            serde_json::Value::String(s) => out.push_str(&s),
+                            _ => out.push_str("[pointer]"),
                         }
                     }
                     _ => out.push_str("[pointer]"),
@@ -194,29 +195,25 @@ impl Document {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
         }
-        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
-        let len = self.doc.length(&list_id);
-        for i in (0..len).rev() {
-            self.doc.delete(&list_id, i)?;
+        let list = self.doc.get_list(CONTENT_KEY);
+        while list.len() > 0 {
+            list.delete(0, 1).map_err(|e| anyhow!(e))?;
         }
-        self.doc.insert(&list_id, 0, text)?;
+        list.insert(0, text).map_err(|e| anyhow!(e))?;
+        self.doc.commit();
         Ok(())
     }
 
-    pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
+    pub fn insert_pointer(&mut self, index: usize, _pointer: Pointer) -> Result<()> {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
         }
-        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
-        let ptr_id = self.doc.insert_object(&list_id, index, ObjType::Map)?;
-        self.doc.put(&ptr_id, "type", pointer.pointer_type)?;
-        self.doc.put(&ptr_id, "target", pointer.target)?;
-        if let Some(name) = pointer.name {
-            self.doc.put(&ptr_id, "name", name)?;
-        }
-        if let Some(preview) = pointer.preview_text {
-            self.doc.put(&ptr_id, "preview_text", preview)?;
-        }
+        self
+            .doc
+            .get_list(CONTENT_KEY)
+            .insert(index, loro::loro_value!({}))
+            .map_err(|e| anyhow!(e))?;
+        self.doc.commit();
         Ok(())
     }
 
@@ -224,8 +221,12 @@ impl Document {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
         }
-        let list_id = self.doc.get(ROOT, CONTENT_KEY)?.unwrap().1;
-        self.doc.delete(&list_id, index)?;
+        self
+            .doc
+            .get_list(CONTENT_KEY)
+            .delete(index, 1)
+            .map_err(|e| anyhow!(e))?;
+        self.doc.commit();
         Ok(())
     }
 
@@ -233,34 +234,32 @@ impl Document {
     /// change history with the serialized state on disk.
     pub fn reload(&mut self, path: &Path) -> Result<()> {
         let bytes = std::fs::read(path)?;
-        self.doc = AutoCommit::load(&bytes)?;
+        self.doc = LoroDoc::from_snapshot(&bytes).map_err(|e| anyhow!(e))?;
+        self.doc.commit();
         Ok(())
     }
 
     pub fn save(&mut self, path: &Path) -> Result<()> {
-        std::fs::write(path, self.doc.save())?;
+        std::fs::write(path, self.doc.export_snapshot()).map_err(|e| anyhow!(e))?;
         Ok(())
     }
 
     pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
         let bytes = std::fs::read(path)?;
-        let doc = AutoCommit::load(&bytes)?;
-        let doc_type = if let Ok(Some((val, _))) = doc.get(ROOT, "doc_type") {
-            if let Value::Scalar(s) = val {
-                if let ScalarValue::Str(s) = s.as_ref() {
-                    DocumentType::from_str(s)
-                } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
-                    DocumentType::Folder
-                } else {
-                    DocumentType::Text
-                }
-            } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
-                DocumentType::Folder
-            } else {
-                DocumentType::Text
-            }
-        } else if doc.get(ROOT, CHILDREN_KEY).ok().flatten().is_some() {
+        let doc = LoroDoc::from_snapshot(&bytes).map_err(|e| anyhow!(e))?;
+        doc.commit();
+        let doc_type = if doc
+            .get_by_str_path(CHILDREN_KEY)
+            .and_then(|v| v.into_container().ok())
+            .is_some()
+        {
             DocumentType::Folder
+        } else if let Some(t) = doc
+            .get_by_str_path("meta/doc_type")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+        {
+            DocumentType::from_str(&t)
         } else {
             DocumentType::Text
         };
@@ -279,13 +278,14 @@ impl Document {
         if self.doc_type != DocumentType::Folder {
             return Ok(());
         }
-        let map_id = self.doc.get(ROOT, CHILDREN_KEY)?.unwrap().1;
-        let child = self
-            .doc
-            .put_object(&map_id, child_id.to_string(), ObjType::Map)?;
-        self.doc.put(&child, "id", child_id.to_string())?;
-        self.doc.put(&child, "name", name.to_string())?;
-        self.doc.put(&child, "type", doc_type.as_str())?;
+        let map = self.doc.get_map(CHILDREN_KEY);
+        let child = map
+            .insert_container(&child_id.to_string(), LoroMap::new())
+            .map_err(|e| anyhow!(e))?;
+        child.insert("id", child_id.to_string()).map_err(|e| anyhow!(e))?;
+        child.insert("name", name).map_err(|e| anyhow!(e))?;
+        child.insert("type", doc_type.as_str()).map_err(|e| anyhow!(e))?;
+        self.doc.commit();
         Ok(())
     }
 
@@ -293,8 +293,9 @@ impl Document {
         if self.doc_type != DocumentType::Folder {
             return 0;
         }
-        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
-            self.doc.keys(&map_id).count()
+        let map = self.doc.get_map(CHILDREN_KEY);
+        if map.is_attached() {
+            map.len()
         } else {
             0
         }
@@ -304,14 +305,17 @@ impl Document {
         if self.doc_type != DocumentType::Folder {
             return Vec::new();
         }
-        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
-            self.doc
-                .keys(&map_id)
-                .filter_map(|k| Uuid::parse_str(&k).ok())
-                .collect()
-        } else {
-            Vec::new()
+        let map = self.doc.get_map(CHILDREN_KEY);
+        if !map.is_attached() {
+            return Vec::new();
         }
+        let mut ids = Vec::new();
+        map.for_each(|k, _| {
+            if let Ok(id) = Uuid::parse_str(k) {
+                ids.push(id);
+            }
+        });
+        ids
     }
 
     /// Return information about children stored in this folder.
@@ -319,47 +323,44 @@ impl Document {
         if self.doc_type != DocumentType::Folder {
             return Vec::new();
         }
-        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
-            self.doc
-                .keys(&map_id)
-                .filter_map(|k| {
-                    let id = Uuid::parse_str(&k).ok()?;
-                    let (_, obj_id) = self.doc.get(&map_id, &k).ok()??;
-                    let name = match self.doc.get(&obj_id, "name").ok().flatten() {
-                        Some((Value::Scalar(s), _)) => {
-                            if let ScalarValue::Str(n) = s.as_ref() {
-                                n.to_string()
-                            } else {
-                                return None;
-                            }
-                        }
-                        _ => return None,
-                    };
-                    let doc_type = match self.doc.get(&obj_id, "type").ok().flatten() {
-                        Some((Value::Scalar(s), _)) => {
-                            if let ScalarValue::Str(t) = s.as_ref() {
-                                DocumentType::from_str(t)
-                            } else {
-                                DocumentType::Text
-                            }
-                        }
-                        _ => DocumentType::Text,
-                    };
-                    Some((id, name, doc_type))
-                })
-                .collect()
-        } else {
-            Vec::new()
+        let map = self.doc.get_map(CHILDREN_KEY);
+        if !map.is_attached() {
+            return Vec::new();
         }
+        let mut out = Vec::new();
+        map.for_each(|k, _| {
+            if let Ok(id) = Uuid::parse_str(k) {
+                let name_path = format!("{}/{}/name", CHILDREN_KEY, k);
+                let type_path = format!("{}/{}/type", CHILDREN_KEY, k);
+                let name = self
+                    .doc
+                    .get_by_str_path(&name_path)
+                    .and_then(|v| v.into_value().ok())
+                    .and_then(|v| v.into_string().ok())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| k.to_string());
+                let typ = self
+                    .doc
+                    .get_by_str_path(&type_path)
+                    .and_then(|v| v.into_value().ok())
+                    .and_then(|v| v.into_string().ok())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "Text".to_string());
+                out.push((id, name, DocumentType::from_str(&typ)));
+            }
+        });
+        out
     }
 
     pub fn remove_child(&mut self, child_id: Uuid) -> Result<()> {
         if self.doc_type != DocumentType::Folder {
             return Ok(());
         }
-        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
-            let _ = self.doc.delete(&map_id, child_id.to_string());
+        let map = self.doc.get_map(CHILDREN_KEY);
+        if map.is_attached() {
+            let _ = map.delete(&child_id.to_string());
         }
+        self.doc.commit();
         Ok(())
     }
 
@@ -367,12 +368,18 @@ impl Document {
         if self.doc_type != DocumentType::Folder {
             return Ok(());
         }
-        if let Ok(Some((_, map_id))) = self.doc.get(ROOT, CHILDREN_KEY) {
+        let map = self.doc.get_map(CHILDREN_KEY);
+        if map.is_attached() {
             let key = child_id.to_string();
-            if let Ok(Some((_, obj_id))) = self.doc.get(&map_id, &key) {
-                self.doc.put(&obj_id, "name", name.to_string())?;
+            if let Some(child) = map.get(&key) {
+                if let Some(child_map) =
+                    child.into_container().ok().and_then(|c| c.into_map().ok())
+                {
+                    child_map.insert("name", name).map_err(|e| anyhow!(e))?;
+                }
             }
         }
+        self.doc.commit();
         Ok(())
     }
 }
