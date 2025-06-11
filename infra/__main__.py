@@ -933,7 +933,7 @@ voice_ws_container = containerinstance.ContainerGroup(
         ports=[containerinstance.PortArgs(protocol="TCP", port=8081)],
         type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
         dns_name_label="voice-ws",
-        dns_name_label_reuse_policy="SubscriptionReuse",
+        auto_generated_domain_name_label_scope=containerinstance.DnsNameLabelReusePolicy.SUBSCRIPTION_REUSE,
     ),
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
