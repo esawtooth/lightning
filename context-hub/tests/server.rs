@@ -1,5 +1,5 @@
 use axum::{routing::get, Router};
-use context_hub::{api, search, storage, indexer, vector};
+use context_hub::{api, search, storage, indexer};
 use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,8 +14,7 @@ async fn server_health_endpoint() {
     let index_dir = tempdir.path().join("index");
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
-    let vectors = Arc::new(Mutex::new(context_hub::vector::VectorIndex::new().unwrap()));
-    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let router = api::router(store.clone(), tempdir.path().into(), indexer);
     let app = Router::new()
         .merge(router)
@@ -43,8 +42,7 @@ async fn root_created_on_use() {
     let index_dir = tempdir.path().join("index");
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
-    let vectors = Arc::new(Mutex::new(context_hub::vector::VectorIndex::new().unwrap()));
-    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer));
 
     let req = axum::http::Request::builder()

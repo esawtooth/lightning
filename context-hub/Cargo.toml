@@ -14,8 +14,6 @@ anyhow = "1"
 git2 = "0.18"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 tantivy = { version = "0.19", default-features = false, features = ["lz4-compression", "mmap"] }
-fastembed = "4"
-hnsw_rs = "0.3"
 
 [dev-dependencies]
 tempfile = "3"

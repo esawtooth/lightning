@@ -12,7 +12,6 @@ mod search;
 mod snapshot;
 mod storage;
 mod indexer;
-mod vector;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,16 +20,11 @@ async fn main() -> anyhow::Result<()> {
 
     let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new("data")?));
     let search = Arc::new(search::SearchIndex::new("index")?);
-    let vectors = Arc::new(Mutex::new(vector::VectorIndex::new()?));
     {
         let store_guard = store.lock().await;
         search.index_all(&store_guard)?;
-        let mut v = vectors.lock().await;
-        for (id, doc) in store_guard.iter() {
-            let _ = v.index_document(*id, &doc.text());
-        }
     }
-    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let router = api::router(store.clone(), PathBuf::from("snapshots"), indexer.clone());
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();

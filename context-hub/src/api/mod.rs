@@ -512,8 +512,7 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let vectors = Arc::new(Mutex::new(crate::vector::VectorIndex::new().unwrap()));
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
         let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let req = Request::builder()
@@ -584,8 +583,7 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let vectors = Arc::new(Mutex::new(crate::vector::VectorIndex::new().unwrap()));
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
         let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
@@ -656,8 +654,7 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let vectors = Arc::new(Mutex::new(crate::vector::VectorIndex::new().unwrap()));
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
         let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
@@ -719,8 +716,7 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let vectors = Arc::new(Mutex::new(crate::vector::VectorIndex::new().unwrap()));
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
         let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
@@ -768,8 +764,7 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let vectors = Arc::new(Mutex::new(crate::vector::VectorIndex::new().unwrap()));
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), vectors.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
         let app = router(store.clone(), tempdir.path().into(), indexer);
 
         let root = {
