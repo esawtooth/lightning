@@ -1,5 +1,5 @@
 pulumi>=3.0.0
-pulumi-azure-native>=2.0.0
+pulumi-azure-native>=2.49.0
 requests>=2.0.0
 pulumi-random>=2.0.0
 azure-identity>=1.8.0
