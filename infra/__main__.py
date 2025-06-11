@@ -62,7 +62,6 @@ voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:la
 dns_suffix = RandomString("dns-suffix", length=12, special=False, upper=False).result
 
 ui_dns_label = config.get("uiDnsLabel") or pulumi.Output.concat("chat-ui-", dns_suffix)
-voice_dns_label = config.get("voiceDnsLabel") or pulumi.Output.concat("voice-ws-", dns_suffix)
 
 # Fetch subscription ID early so it can be used anywhere below
 client_config = get_client_config()
@@ -933,7 +932,8 @@ voice_ws_container = containerinstance.ContainerGroup(
     ip_address=containerinstance.IpAddressArgs(
         ports=[containerinstance.PortArgs(protocol="TCP", port=8081)],
         type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-        dns_name_label=voice_dns_label,
+        dns_name_label="voice-ws",
+        dns_name_label_reuse_policy="SubscriptionReuse",
     ),
     diagnostics=containerinstance.ContainerGroupDiagnosticsArgs(
         log_analytics=containerinstance.LogAnalyticsArgs(
@@ -1050,7 +1050,7 @@ if domain:
         profile_name=fd_profile.name,
         origin_group_name=voice_group.name,
         origin_name="voiceOrigin",
-        host_name=pulumi.Output.concat(voice_dns_label, ".", location, ".azurecontainer.io"),
+        host_name=pulumi.Output.concat("voice-ws", ".", location, ".azurecontainer.io"),
         http_port=8081,
         https_port=8081,
     )
