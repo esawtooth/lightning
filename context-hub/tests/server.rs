@@ -65,3 +65,44 @@ async fn root_created_on_use() {
     let mut store_guard = store.lock().await;
     assert!(store_guard.ensure_root("newuser").is_ok());
 }
+
+#[tokio::test]
+async fn search_endpoint() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let index_dir = tempdir.path().join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let app = Router::new().merge(api::router(store.clone(), tempdir.path().into(), indexer.clone()));
+
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/docs")
+        .header("X-User-Id", "user1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "name": "note.txt",
+                "content": "hello world",
+                "parent_folder_id": null,
+                "doc_type": "Text"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let _ = app.clone().oneshot(req).await.unwrap();
+
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let req = axum::http::Request::builder()
+        .uri("/search?q=hello")
+        .header("X-User-Id", "user1")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(v.as_array().unwrap().len(), 1);
+}

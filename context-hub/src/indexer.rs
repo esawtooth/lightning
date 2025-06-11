@@ -4,6 +4,8 @@ use tokio::sync::{Mutex, Mutex as AsyncMutex};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
+use anyhow::Result;
+
 use crate::search::SearchIndex;
 use crate::storage::crdt::DocumentStore;
 
@@ -63,5 +65,9 @@ impl LiveIndex {
         for id in ids {
             self.schedule_update(id).await;
         }
+    }
+
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<Uuid>> {
+        self.index.search(query, limit)
     }
 }

@@ -1,7 +1,7 @@
 //! HTTP API layer exposing document CRUD endpoints.
 
 use axum::{
-    extract::{FromRequestParts, Path, State},
+    extract::{FromRequestParts, Path, State, Query},
     http::{request::Parts, StatusCode},
     routing::{get, post},
     Json, Router,
@@ -101,6 +101,19 @@ struct UnshareRequest {
     user: String,
 }
 
+#[derive(Deserialize)]
+struct SearchParams {
+    q: String,
+    limit: Option<usize>,
+}
+
+#[derive(Serialize)]
+struct SearchResult {
+    id: Uuid,
+    name: String,
+    snippet: String,
+}
+
 pub fn router(
     state: Arc<Mutex<DocumentStore>>,
     snapshot_dir: PathBuf,
@@ -123,6 +136,7 @@ pub fn router(
             "/folders/{id}/share",
             post(share_folder).delete(unshare_folder),
         )
+        .route("/search", get(search_docs))
         .route("/snapshot", post(snapshot_now))
         .route("/restore", post(restore_snapshot))
         .with_state(app_state)
@@ -411,6 +425,38 @@ async fn get_index_guide(
         Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+async fn search_docs(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Query(params): Query<SearchParams>,
+) -> Result<Json<Vec<SearchResult>>, StatusCode> {
+    let limit = params.limit.unwrap_or(10);
+    let ids = state
+        .indexer
+        .search(&params.q, limit)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let store_guard = state.store.lock().await;
+    let mut results = Vec::new();
+    for id in ids {
+        if let Some(doc) = store_guard.get(id) {
+            if store_guard.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Read,
+            ) {
+                let snippet: String = doc.text().chars().take(100).collect();
+                results.push(SearchResult {
+                    id,
+                    name: doc.name().to_string(),
+                    snippet,
+                });
+            }
+        }
+    }
+    Ok(Json(results))
 }
 
 async fn share_folder(
