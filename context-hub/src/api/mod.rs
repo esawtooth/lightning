@@ -28,7 +28,10 @@ pub struct AuthContext {
 impl FromRequestParts<AppState> for AuthContext {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        parts: &mut Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
         let headers = &parts.headers;
         if let Some(auth) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
             if let Some(token) = auth.strip_prefix("Bearer ") {
@@ -165,8 +168,8 @@ pub fn router(
         .route("/docs/{id}/content", post(upload_blob))
         .route("/docs/{id}/content/{idx}", get(get_blob))
         .route("/docs/{id}/resolve_pointer", get(resolve_pointer))
+        .route("/docs/{id}/guide", get(get_index_guide))
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
-        .route("/folders/{id}/guide", get(get_index_guide))
         .route(
             "/folders/{id}/share",
             post(share_folder).delete(unshare_folder),
@@ -512,7 +515,7 @@ async fn get_index_guide(
     let mut store = state.store.lock().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
-        Some(folder) if folder.doc_type() == DocumentType::Folder => {
+        Some(doc) => {
             if !store.has_permission(
                 id,
                 &auth.user_id,
@@ -521,12 +524,25 @@ async fn get_index_guide(
             ) {
                 return Err(StatusCode::FORBIDDEN);
             }
-            if let Some(guide_id) = store.index_guide_id(id) {
+            let folder_id = if doc.doc_type() == DocumentType::Folder {
+                id
+            } else {
+                match doc.parent_folder_id() {
+                    Some(fid) => fid,
+                    None => return Err(StatusCode::NOT_FOUND),
+                }
+            };
+            if let Some(guide_id) = store.index_guide_id(folder_id) {
                 if let Some(guide) = store.get(guide_id) {
+                    let guides = store.collect_index_guides(id);
+                    let mut content = String::new();
+                    for (path, text) in guides {
+                        content.push_str(&format!("# {}\n{}\n\n", path, text));
+                    }
                     return Ok(Json(DocResponse {
                         id: guide_id,
                         name: guide.name().to_string(),
-                        content: guide.text(),
+                        content,
                         parent_folder_id: guide.parent_folder_id(),
                         doc_type: guide.doc_type(),
                         owner: guide.owner().to_string(),
@@ -535,10 +551,10 @@ async fn get_index_guide(
             }
             Err(StatusCode::NOT_FOUND)
         }
-        Some(_) => Err(StatusCode::BAD_REQUEST),
         None => Err(StatusCode::NOT_FOUND),
     }
 }
+
 
 async fn search_docs(
     State(state): State<AppState>,
@@ -1140,7 +1156,7 @@ mod tests {
 
         // fetch the index guide
         let req = Request::builder()
-            .uri(format!("/folders/{}/guide", folder_id))
+            .uri(format!("/docs/{}/guide", folder_id))
             .header("X-User-Id", "user1")
             .body(Body::empty())
             .unwrap();
@@ -1149,6 +1165,82 @@ mod tests {
         let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let guide: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(guide["doc_type"], "IndexGuide");
+    }
+
+    #[tokio::test]
+    async fn guide_chain_via_index_endpoint() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let index_dir = tempdir.path().join("index");
+        std::fs::create_dir_all(&index_dir).unwrap();
+        let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
+        let events = crate::events::EventBus::new();
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
+
+        let root = {
+            let mut s = store.lock().await;
+            s.ensure_root("user1").unwrap()
+        };
+
+        // create nested folders so both have guides
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "parent", "content": "", "parent_folder_id": root,
+                    "doc_type": "Folder"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let parent_id = v["id"].as_str().unwrap();
+
+        let req = Request::builder()
+            .method("POST")
+            .uri("/docs")
+            .header("X-User-Id", "user1")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                json!({
+                    "name": "child", "content": "", "parent_folder_id": parent_id,
+                    "doc_type": "Folder"
+                })
+                .to_string(),
+            ))
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        let child_id = v["id"].as_str().unwrap();
+
+        // call the guide endpoint for the child folder which returns the chain
+        let req = Request::builder()
+            .uri(format!("/docs/{}/guide", child_id))
+            .header("X-User-Id", "user1")
+            .body(Body::empty())
+            .unwrap();
+        let resp = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let guide: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert!(guide["content"].as_str().unwrap().contains("parent"));
     }
 
     #[tokio::test]
