@@ -285,6 +285,30 @@ impl Document {
         })
     }
 
+    /// Return the index of the pointer with the given name.
+    pub fn pointer_index_by_name(&self, name: &str) -> Option<usize> {
+        if self.doc_type == DocumentType::Folder {
+            return None;
+        }
+        let list = self.doc.get_list(CONTENT_KEY);
+        for i in 0..list.len() {
+            let Some(item) = list.get(i) else { continue };
+            let container = item.into_container().ok()?;
+            let map = container.into_map().ok()?;
+            let n = map
+                .get("name")
+                .and_then(|v| v.into_value().ok())
+                .and_then(|v| v.into_string().ok())
+                .map(|s| s.to_string());
+            if let Some(n) = n {
+                if n == name {
+                    return Some(i);
+                }
+            }
+        }
+        None
+    }
+
     /// Reload the Automerge document from disk, replacing any in-memory
     /// change history with the serialized state on disk.
     pub fn reload(&mut self, path: &Path) -> Result<()> {
@@ -580,6 +604,25 @@ impl DocumentStore {
         let pointer = doc
             .pointer_at(index)
             .ok_or_else(|| anyhow!("no pointer at index"))?;
+        let resolver = self
+            .resolvers
+            .get(&pointer.pointer_type)
+            .ok_or_else(|| anyhow!("no resolver for type"))?;
+        resolver.fetch(&pointer)
+    }
+
+    /// Resolve a pointer by its name attribute.
+    pub fn resolve_pointer_by_name(&self, doc_id: Uuid, name: &str) -> Result<Vec<u8>> {
+        let doc = self
+            .docs
+            .get(&doc_id)
+            .ok_or_else(|| anyhow!("document not found"))?;
+        let idx = doc
+            .pointer_index_by_name(name)
+            .ok_or_else(|| anyhow!("pointer not found"))?;
+        let pointer = doc
+            .pointer_at(idx)
+            .ok_or_else(|| anyhow!("pointer not found"))?;
         let resolver = self
             .resolvers
             .get(&pointer.pointer_type)

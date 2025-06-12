@@ -153,6 +153,7 @@ pub fn router(
         .route("/docs/{id}/rename", put(rename_doc))
         .route("/docs/{id}/content", post(upload_blob))
         .route("/docs/{id}/content/{idx}", get(get_blob))
+        .route("/docs/{id}/resolve_pointer", get(resolve_pointer))
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .route("/folders/{id}/guide", get(get_index_guide))
         .route(
@@ -613,6 +614,33 @@ async fn get_blob(
     }
     let data = store
         .resolve_pointer(id, idx)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    Ok((StatusCode::OK, axum::body::Bytes::from(data)))
+}
+
+#[derive(Deserialize)]
+struct ResolveParams {
+    name: String,
+}
+
+async fn resolve_pointer(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Query(params): Query<ResolveParams>,
+) -> Result<(StatusCode, axum::body::Bytes), StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Read,
+    ) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let data = store
+        .resolve_pointer_by_name(id, &params.name)
         .map_err(|_| StatusCode::NOT_FOUND)?;
     Ok((StatusCode::OK, axum::body::Bytes::from(data)))
 }
