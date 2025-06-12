@@ -335,3 +335,21 @@ The `agents/` directory contains agent implementations that the worker container
 invoke to process tasks. Each agent registers itself in `agents.AGENT_REGISTRY`
 and exposes a `run()` method used to handle the commands from a
 `WorkerTaskEvent`.
+
+## Tests
+
+Install the Python dependencies and run unit tests with `pytest`:
+
+```bash
+pip install -r requirements-worker.txt
+pytest
+```
+
+Performance benchmarks use the `pytest-benchmark` plugin. Generate a
+benchmark report for core functionality with:
+
+```bash
+pytest tests/test_performance.py --benchmark-only
+```
+
+The command prints a summary table of timing results to the console.
