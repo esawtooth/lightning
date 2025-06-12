@@ -352,14 +352,18 @@ async fn move_doc(
                 AccessLevel::Write,
             ) {
                 let ids = store.descendant_ids(id);
-                let _ = store.move_item(id, req.new_parent_folder_id);
-                drop(store);
-                state.indexer.schedule_recursive_update(ids).await;
-                state.events.send(Event::Moved {
-                    id,
-                    new_parent: req.new_parent_folder_id,
-                });
-                StatusCode::NO_CONTENT
+                match store.move_item(id, req.new_parent_folder_id) {
+                    Ok(_) => {
+                        drop(store);
+                        state.indexer.schedule_recursive_update(ids).await;
+                        state.events.send(Event::Moved {
+                            id,
+                            new_parent: req.new_parent_folder_id,
+                        });
+                        StatusCode::NO_CONTENT
+                    }
+                    Err(_) => StatusCode::BAD_REQUEST,
+                }
             } else {
                 StatusCode::FORBIDDEN
             }
@@ -395,11 +399,15 @@ async fn delete_doc(
                     }
                 }
                 gather(&store, id, &mut ids);
-                let _ = store.delete(id);
-                drop(store);
-                state.indexer.schedule_recursive_delete(ids).await;
-                state.events.send(Event::Deleted { id });
-                StatusCode::NO_CONTENT
+                match store.delete(id) {
+                    Ok(_) => {
+                        drop(store);
+                        state.indexer.schedule_recursive_delete(ids).await;
+                        state.events.send(Event::Deleted { id });
+                        StatusCode::NO_CONTENT
+                    }
+                    Err(_) => StatusCode::BAD_REQUEST,
+                }
             } else {
                 StatusCode::FORBIDDEN
             }

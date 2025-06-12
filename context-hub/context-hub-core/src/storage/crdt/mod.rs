@@ -890,6 +890,19 @@ impl DocumentStore {
             Some(d) => d.parent_folder_id(),
             None => return Ok(()),
         };
+        // perform invariant checks before mutating anything
+        if let Some(doc) = self.docs.get(&id) {
+            if doc.doc_type() == DocumentType::IndexGuide {
+                return Err(anyhow!("cannot move index guide"));
+            }
+            if doc.doc_type() == DocumentType::Folder {
+                let descendants = self.descendant_ids(id);
+                if descendants.contains(&new_parent) {
+                    return Err(anyhow!("cannot move folder into its own descendant"));
+                }
+            }
+        }
+
         let doc_path = self.path(id);
         let dest_path = self.path(new_parent);
         let (name, doc_type) = {
@@ -942,14 +955,18 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub fn delete(&mut self, id: Uuid) -> Result<()> {
+    fn delete_internal(&mut self, id: Uuid, allow_index: bool) -> Result<()> {
         if let Some(doc) = self.docs.get(&id) {
+            if doc.doc_type() == DocumentType::IndexGuide && !allow_index {
+                return Err(anyhow!("cannot delete index guide directly"));
+            }
             let doc_type = doc.doc_type();
             let parent = doc.parent_folder_id();
             let children = doc.child_ids();
             if doc_type == DocumentType::Folder {
                 for child in children {
-                    self.delete(child)?;
+                    // allow deleting index guides when their parent folder is removed
+                    self.delete_internal(child, true)?;
                 }
             }
             if let Some(pid) = parent {
@@ -964,6 +981,10 @@ impl DocumentStore {
         let _ = std::fs::remove_file(self.path(id));
         self.mark_dirty();
         Ok(())
+    }
+
+    pub fn delete(&mut self, id: Uuid) -> Result<()> {
+        self.delete_internal(id, false)
     }
 
     /// Add an ACL entry to the given document or folder.
@@ -1502,5 +1523,60 @@ mod tests {
             .unwrap();
         assert!(!store.has_permission(root, "user1", Some("bot"), AccessLevel::Read));
         assert!(store.has_permission(root, "user1", None, AccessLevel::Read));
+    }
+
+    #[test]
+    fn cannot_move_folder_into_descendant() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let child = store
+            .create_folder(root, "child".to_string(), "user1".to_string())
+            .unwrap();
+        let grand = store
+            .create_folder(child, "grand".to_string(), "user1".to_string())
+            .unwrap();
+
+        let res = store.move_item(child, grand);
+        assert!(res.is_err());
+        assert_eq!(store.get(child).unwrap().parent_folder_id(), Some(root));
+    }
+
+    #[test]
+    fn index_guide_cannot_be_moved_or_deleted_directly() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let folder = store
+            .create_folder(root, "project".to_string(), "user1".to_string())
+            .unwrap();
+        let guide = store.index_guide_id(folder).unwrap();
+
+        let mv_res = store.move_item(guide, root);
+        assert!(mv_res.is_err());
+
+        let del_res = store.delete(guide);
+        assert!(del_res.is_err());
+        assert!(store.get(guide).is_some());
+
+        // deleting the folder should remove the guide
+        store.delete(folder).unwrap();
+        assert!(store.get(guide).is_none());
     }
 }
