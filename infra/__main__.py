@@ -98,6 +98,7 @@ vault = keyvault.Vault(
 authorization.RoleAssignment(
     "kv-admin",
     principal_id = client_cfg.object_id,                  # who is running Pulumi
+    principal_type = "ServicePrincipal",          
     role_definition_id = (
         "/subscriptions/" + subscription_id +
         "/providers/Microsoft.Authorization/roleDefinitions/" +
@@ -172,6 +173,7 @@ cosmos_zone = privatedns.PrivateZone(
     "cosmos-zone",
     resource_group_name=rg.name,
     private_zone_name="privatelink.documents.azure.com",
+    location            = "global",
 )
 
 privatedns.VirtualNetworkLink(
@@ -391,16 +393,25 @@ def aci_group(
     mem: float = 1.5,
     public: bool = False,
 ):
-    ip_cfg = (
-        containerinstance.IpAddressArgs(
-            type=containerinstance.ContainerGroupIpAddressType.PUBLIC,
-            ports=[containerinstance.PortArgs(protocol="TCP", port=port)],
-            dns_name_label=pulumi.Output.concat(name, "-", dns_suffix),
+    ip_cfg, subnet_ids = (
+        # PUBLIC ✔ – no VNet attachment
+        (
+            containerinstance.IpAddressArgs(
+                type = containerinstance.ContainerGroupIpAddressType.PUBLIC,
+                ports=[containerinstance.PortArgs(protocol="TCP", port=port)],
+                dns_name_label=pulumi.Output.concat(name, "-", dns_suffix),
+            ),
+            None,                                       # ← no subnet_ids
         )
         if public
-        else containerinstance.IpAddressArgs(
-            type=containerinstance.ContainerGroupIpAddressType.PRIVATE,
-            ports=[containerinstance.PortArgs(protocol="TCP", port=port)],
+        else
+        # PRIVATE ✔ – inside VNet
+        (
+            containerinstance.IpAddressArgs(
+                type = containerinstance.ContainerGroupIpAddressType.PRIVATE,
+                ports=[containerinstance.PortArgs(protocol="TCP", port=port)],
+            ),
+            [containerinstance.ContainerGroupSubnetIdArgs(id=aci_subnet.id)],
         )
     )
 
@@ -422,7 +433,7 @@ def aci_group(
         resource_group_name=rg.name,
         location=rg.location,
         os_type="Linux",
-        subnet_ids=[containerinstance.ContainerGroupSubnetIdArgs(id=aci_subnet.id)],
+        subnet_ids=subnet_ids,
         ip_address=ip_cfg,
         containers=[
             containerinstance.ContainerArgs(
@@ -558,7 +569,7 @@ func_app = web.WebApp(
     server_farm_id=plan.id,
     kind="FunctionApp",
     identity=web.ManagedServiceIdentityArgs(type=web.ManagedServiceIdentityType.SYSTEM_ASSIGNED),
-    site_config=web.SiteConfigArgs(linux_fx_version="Python|3.10"),
+    site_config=web.SiteConfigArgs(linux_fx_version="PYTHON|3.10"),
 )
 
 # Role assignment: Storage Blob Data Reader
