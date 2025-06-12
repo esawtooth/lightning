@@ -94,9 +94,17 @@ impl Document {
                 list.insert(0, text).map_err(|e| anyhow!(e))?;
             }
         }
-        doc.get_map("meta")
-            .insert("doc_type", doc_type.as_str())
+        let meta = doc.get_map("meta");
+        meta.insert("doc_type", doc_type.as_str())
             .map_err(|e| anyhow!(e))?;
+        meta.insert("owner", owner.as_str())
+            .map_err(|e| anyhow!(e))?;
+        meta.insert("name", name.as_str())
+            .map_err(|e| anyhow!(e))?;
+        if let Some(parent) = parent_folder_id {
+            meta.insert("parent_folder_id", parent.to_string())
+                .map_err(|e| anyhow!(e))?;
+        }
         doc.commit();
         Ok(Self {
             id,
@@ -320,6 +328,20 @@ impl Document {
     }
 
     pub fn save(&mut self, path: &Path) -> Result<()> {
+        let meta = self.doc.get_map("meta");
+        meta.insert("doc_type", self.doc_type.as_str())
+            .map_err(|e| anyhow!(e))?;
+        meta.insert("owner", self.owner.as_str())
+            .map_err(|e| anyhow!(e))?;
+        meta.insert("name", self.name.as_str())
+            .map_err(|e| anyhow!(e))?;
+        if let Some(pid) = self.parent_folder_id {
+            meta.insert("parent_folder_id", pid.to_string())
+                .map_err(|e| anyhow!(e))?;
+        } else {
+            let _ = meta.delete("parent_folder_id");
+        }
+        self.doc.commit();
         std::fs::write(
             path,
             self.doc
@@ -329,7 +351,7 @@ impl Document {
         Ok(())
     }
 
-    pub fn load(id: Uuid, path: &Path, owner: String) -> Result<Self> {
+    pub fn load(id: Uuid, path: &Path) -> Result<Self> {
         let bytes = std::fs::read(path)?;
         let doc = LoroDoc::new();
         doc.import(&bytes).map_err(|e| anyhow!(e))?;
@@ -345,12 +367,29 @@ impl Document {
         } else {
             DocumentType::Text
         };
+        let owner = doc
+            .get_by_str_path("meta/owner")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| DEFAULT_USER.to_string());
+        let name = doc
+            .get_by_str_path("meta/name")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| id.to_string());
+        let parent_folder_id = doc
+            .get_by_str_path("meta/parent_folder_id")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .and_then(|s| Uuid::parse_str(&s).ok());
         Ok(Self {
             id,
             doc,
             owner,
-            name: id.to_string(),
-            parent_folder_id: None,
+            name,
+            parent_folder_id,
             doc_type,
             acl: Vec::new(),
         })
@@ -492,7 +531,7 @@ impl DocumentStore {
             if entry.file_type()?.is_file() {
                 if let Some(name) = entry.path().file_stem().and_then(|s| s.to_str()) {
                     if let Ok(id) = Uuid::parse_str(name) {
-                        if let Ok(doc) = Document::load(id, &entry.path(), DEFAULT_USER.to_string())
+                        if let Ok(doc) = Document::load(id, &entry.path())
                         {
                             if doc.doc_type() == DocumentType::Folder
                                 && doc.parent_folder_id().is_none()
@@ -851,6 +890,19 @@ impl DocumentStore {
             Some(d) => d.parent_folder_id(),
             None => return Ok(()),
         };
+        // perform invariant checks before mutating anything
+        if let Some(doc) = self.docs.get(&id) {
+            if doc.doc_type() == DocumentType::IndexGuide {
+                return Err(anyhow!("cannot move index guide"));
+            }
+            if doc.doc_type() == DocumentType::Folder {
+                let descendants = self.descendant_ids(id);
+                if descendants.contains(&new_parent) {
+                    return Err(anyhow!("cannot move folder into its own descendant"));
+                }
+            }
+        }
+
         let doc_path = self.path(id);
         let dest_path = self.path(new_parent);
         let (name, doc_type) = {
@@ -903,14 +955,18 @@ impl DocumentStore {
         Ok(())
     }
 
-    pub fn delete(&mut self, id: Uuid) -> Result<()> {
+    fn delete_internal(&mut self, id: Uuid, allow_index: bool) -> Result<()> {
         if let Some(doc) = self.docs.get(&id) {
+            if doc.doc_type() == DocumentType::IndexGuide && !allow_index {
+                return Err(anyhow!("cannot delete index guide directly"));
+            }
             let doc_type = doc.doc_type();
             let parent = doc.parent_folder_id();
             let children = doc.child_ids();
             if doc_type == DocumentType::Folder {
                 for child in children {
-                    self.delete(child)?;
+                    // allow deleting index guides when their parent folder is removed
+                    self.delete_internal(child, true)?;
                 }
             }
             if let Some(pid) = parent {
@@ -925,6 +981,10 @@ impl DocumentStore {
         let _ = std::fs::remove_file(self.path(id));
         self.mark_dirty();
         Ok(())
+    }
+
+    pub fn delete(&mut self, id: Uuid) -> Result<()> {
+        self.delete_internal(id, false)
     }
 
     /// Add an ACL entry to the given document or folder.
@@ -1272,6 +1332,89 @@ mod tests {
     }
 
     #[test]
+    fn metadata_survives_reload() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let doc_id = store
+            .create(
+                "file.txt".to_string(),
+                "hi",
+                "user1".to_string(),
+                Some(root),
+                DocumentType::Text,
+            )
+            .unwrap();
+        {
+            let path = store.path(root);
+            let parent = store.docs.get_mut(&root).unwrap();
+            parent
+                .add_child(doc_id, "file.txt", DocumentType::Text)
+                .unwrap();
+            parent.save(&path).unwrap();
+        }
+        drop(store);
+
+        let store2 = DocumentStore::new(tempdir.path()).unwrap();
+        let doc = store2.get(doc_id).unwrap();
+        assert_eq!(doc.name(), "file.txt");
+        assert_eq!(doc.owner(), "user1");
+        assert_eq!(doc.parent_folder_id(), Some(root));
+    }
+
+    #[test]
+    fn rename_move_persist() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let dest = store
+            .create_folder(root, "dest".to_string(), "user1".to_string())
+            .unwrap();
+        let doc_id = store
+            .create(
+                "orig.txt".to_string(),
+                "hi",
+                "user1".to_string(),
+                Some(root),
+                DocumentType::Text,
+            )
+            .unwrap();
+        {
+            let path = store.path(root);
+            let parent = store.docs.get_mut(&root).unwrap();
+            parent
+                .add_child(doc_id, "orig.txt", DocumentType::Text)
+                .unwrap();
+            parent.save(&path).unwrap();
+        }
+
+        store.rename(doc_id, "renamed.txt".to_string()).unwrap();
+        store.move_item(doc_id, dest).unwrap();
+        drop(store);
+
+        let store2 = DocumentStore::new(tempdir.path()).unwrap();
+        let doc = store2.get(doc_id).unwrap();
+        assert_eq!(doc.name(), "renamed.txt");
+        assert_eq!(doc.parent_folder_id(), Some(dest));
+    }
+
+    #[test]
     fn acl_inheritance() {
         let tempdir = tempfile::tempdir().unwrap();
         let mut store = DocumentStore::new(tempdir.path()).unwrap();
@@ -1380,5 +1523,60 @@ mod tests {
             .unwrap();
         assert!(!store.has_permission(root, "user1", Some("bot"), AccessLevel::Read));
         assert!(store.has_permission(root, "user1", None, AccessLevel::Read));
+    }
+
+    #[test]
+    fn cannot_move_folder_into_descendant() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let child = store
+            .create_folder(root, "child".to_string(), "user1".to_string())
+            .unwrap();
+        let grand = store
+            .create_folder(child, "grand".to_string(), "user1".to_string())
+            .unwrap();
+
+        let res = store.move_item(child, grand);
+        assert!(res.is_err());
+        assert_eq!(store.get(child).unwrap().parent_folder_id(), Some(root));
+    }
+
+    #[test]
+    fn index_guide_cannot_be_moved_or_deleted_directly() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        let folder = store
+            .create_folder(root, "project".to_string(), "user1".to_string())
+            .unwrap();
+        let guide = store.index_guide_id(folder).unwrap();
+
+        let mv_res = store.move_item(guide, root);
+        assert!(mv_res.is_err());
+
+        let del_res = store.delete(guide);
+        assert!(del_res.is_err());
+        assert!(store.get(guide).is_some());
+
+        // deleting the folder should remove the guide
+        store.delete(folder).unwrap();
+        assert!(store.get(guide).is_none());
     }
 }
