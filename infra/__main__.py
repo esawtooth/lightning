@@ -561,6 +561,7 @@ plan = web.AppServicePlan(
     kind="FunctionApp",
     sku=web.SkuDescriptionArgs(tier="Dynamic", name="Y1"),
     location=rg.location,
+    reserved=True,  # Required for Linux plans
 )
 func_app = web.WebApp(
     "func",
@@ -569,7 +570,7 @@ func_app = web.WebApp(
     server_farm_id=plan.id,
     kind="FunctionApp",
     identity=web.ManagedServiceIdentityArgs(type=web.ManagedServiceIdentityType.SYSTEM_ASSIGNED),
-    site_config=web.SiteConfigArgs(linux_fx_version="PYTHON|3.10"),
+    site_config=web.SiteConfigArgs(linux_fx_version="python|3.10"),
 )
 
 # Role assignment: Storage Blob Data Reader
@@ -734,6 +735,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         host_name=host,
         https_port=port,
         http_port=80 if port == 443 else port,
+        enabled_state=cdn.EnabledState.ENABLED,
     )
     return og
 
@@ -772,6 +774,7 @@ def afd_route(name, pattern, og, cd, fp):
         link_to_default_domain=cdn.LinkToDefaultDomain.DISABLED,
         supported_protocols=[cdn.AFDEndpointProtocols.HTTPS],
         custom_domains=[cdn.ActivatedResourceReferenceArgs(id=cd.id)],
+        opts=pulumi.ResourceOptions(depends_on=[og]),
     )
 afd_route("ui",    "/*",           ui_og,   ui_cd,   cdn.ForwardingProtocol.HTTPS_ONLY)
 afd_route("api",   "/api/*",       api_og,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
