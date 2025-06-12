@@ -8,8 +8,10 @@ use serde_json;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use uuid::Uuid;
+use crate::pointer::PointerResolver;
 
 const DEFAULT_USER: &str = "user1";
 const CONTENT_KEY: &str = "content";
@@ -204,15 +206,20 @@ impl Document {
         Ok(())
     }
 
-    pub fn insert_pointer(&mut self, index: usize, _pointer: Pointer) -> Result<()> {
+    pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
         }
-        self
-            .doc
-            .get_list(CONTENT_KEY)
-            .insert(index, loro::loro_value!({}))
-            .map_err(|e| anyhow!(e))?;
+        let list = self.doc.get_list(CONTENT_KEY);
+        let map = list.insert_container(index, LoroMap::new()).map_err(|e| anyhow!(e))?;
+        map.insert("type", pointer.pointer_type).map_err(|e| anyhow!(e))?;
+        map.insert("target", pointer.target).map_err(|e| anyhow!(e))?;
+        if let Some(name) = pointer.name {
+            map.insert("name", name).map_err(|e| anyhow!(e))?;
+        }
+        if let Some(preview) = pointer.preview_text {
+            map.insert("preview", preview).map_err(|e| anyhow!(e))?;
+        }
         self.doc.commit();
         Ok(())
     }
@@ -228,6 +235,42 @@ impl Document {
             .map_err(|e| anyhow!(e))?;
         self.doc.commit();
         Ok(())
+    }
+
+    pub fn pointer_at(&self, index: usize) -> Option<Pointer> {
+        if self.doc_type == DocumentType::Folder {
+            return None;
+        }
+        let list = self.doc.get_list(CONTENT_KEY);
+        let Some(item) = list.get(index) else { return None };
+        let container = item.into_container().ok()?;
+        let map = container.into_map().ok()?;
+        let typ = map
+            .get("type")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())?
+            .to_string();
+        let target = map
+            .get("target")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())?
+            .to_string();
+        let name = map
+            .get("name")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string());
+        let preview_text = map
+            .get("preview")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string());
+        Some(Pointer {
+            pointer_type: typ,
+            target,
+            name,
+            preview_text,
+        })
     }
 
     /// Reload the Automerge document from disk, replacing any in-memory
@@ -389,6 +432,7 @@ pub struct DocumentStore {
     dir: PathBuf,
     roots: HashMap<String, Uuid>,
     agent_scopes: HashMap<String, HashMap<String, Vec<Uuid>>>,
+    resolvers: HashMap<String, Arc<dyn PointerResolver>>,
     dirty: bool,
 }
 
@@ -431,6 +475,7 @@ impl DocumentStore {
             dir,
             roots,
             agent_scopes,
+            resolvers: HashMap::new(),
             dirty: false,
         })
     }
@@ -447,7 +492,8 @@ impl DocumentStore {
 
     /// Reload the store contents from disk, discarding any in-memory state.
     pub fn reload(&mut self) -> Result<()> {
-        let new_self = Self::new(&self.dir)?;
+        let mut new_self = Self::new(&self.dir)?;
+        new_self.resolvers = self.resolvers.clone();
         *self = new_self;
         Ok(())
     }
@@ -469,6 +515,42 @@ impl DocumentStore {
 
     fn path(&self, id: Uuid) -> PathBuf {
         self.dir.join(format!("{}.bin", id))
+    }
+
+    /// Register a resolver for a pointer type.
+    pub fn register_resolver(
+        &mut self,
+        kind: impl Into<String>,
+        resolver: Arc<dyn PointerResolver>,
+    ) {
+        self.resolvers.insert(kind.into(), resolver);
+    }
+
+    /// Insert a pointer into the specified document.
+    pub fn insert_pointer(&mut self, doc_id: Uuid, index: usize, ptr: Pointer) -> Result<()> {
+        let path = self.path(doc_id);
+        if let Some(doc) = self.docs.get_mut(&doc_id) {
+            doc.insert_pointer(index, ptr)?;
+            doc.save(&path)?;
+            self.mark_dirty();
+        }
+        Ok(())
+    }
+
+    /// Resolve the pointer at the given index of a document using registered resolvers.
+    pub fn resolve_pointer(&self, doc_id: Uuid, index: usize) -> Result<Vec<u8>> {
+        let doc = self
+            .docs
+            .get(&doc_id)
+            .ok_or_else(|| anyhow!("document not found"))?;
+        let pointer = doc
+            .pointer_at(index)
+            .ok_or_else(|| anyhow!("no pointer at index"))?;
+        let resolver = self
+            .resolvers
+            .get(&pointer.pointer_type)
+            .ok_or_else(|| anyhow!("no resolver for type"))?;
+        resolver.fetch(&pointer)
     }
 
     fn save_agent_scopes(&self) -> Result<()> {
