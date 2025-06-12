@@ -91,3 +91,39 @@ fn resolve_git_pointer() {
     let data2 = store.resolve_pointer_by_name(doc_id, "file.txt").unwrap();
     assert_eq!(data2, b"hello git".to_vec());
 }
+
+#[test]
+fn blob_resolver_roundtrip() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let mut store = DocumentStore::new(tempdir.path()).unwrap();
+    let resolver = Arc::new(context_hub::pointer::BlobPointerResolver::new(
+        tempdir.path().join("blobs"),
+    )
+    .unwrap());
+    store.register_resolver("blob", resolver.clone());
+
+    let doc_id = store
+        .create(
+            "file.txt".to_string(),
+            "hello",
+            "user1".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+
+    let ptr = Pointer {
+        pointer_type: "blob".to_string(),
+        target: "a1".to_string(),
+        name: Some("file.bin".to_string()),
+        preview_text: None,
+    };
+    store.store_data(&ptr, b"data").unwrap();
+    store.insert_pointer(doc_id, 0, ptr.clone()).unwrap();
+
+    let data = store.resolve_pointer(doc_id, 0).unwrap();
+    assert_eq!(data, b"data".to_vec());
+
+    let data2 = resolver.fetch(&ptr).unwrap();
+    assert_eq!(data2, b"data".to_vec());
+}

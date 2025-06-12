@@ -4,6 +4,7 @@ use context_hub::{
     storage::crdt::{DocumentStore, DocumentType},
 };
 use context_hub::auth::Hs256Verifier;
+use chrono::TimeZone;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::LocalSet;
@@ -153,4 +154,39 @@ fn restore_reverts_state() {
 
     assert_eq!(store.get(doc1).unwrap().text(), "one");
     assert!(store.get(doc2).is_some());
+}
+
+#[test]
+fn restore_by_timestamp() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let repo_dir = tempdir.path().join("repo");
+    let data_dir = tempdir.path().join("data");
+    let mut store = DocumentStore::new(&data_dir).unwrap();
+    let doc = store
+        .create(
+            "ts.txt".to_string(),
+            "v1",
+            "user1".to_string(),
+            None,
+            DocumentType::Text,
+        )
+        .unwrap();
+    let mgr = SnapshotManager::new(&repo_dir).unwrap();
+    let commit = mgr.snapshot(&store).unwrap();
+
+    std::thread::sleep(std::time::Duration::from_secs(1));
+
+    store.update(doc, "v2").unwrap();
+    let _c2 = mgr.snapshot(&store).unwrap();
+
+    let repo = git2::Repository::open(&repo_dir).unwrap();
+    let commit_obj = repo.find_commit(commit).unwrap();
+    let ts = chrono::Utc
+        .timestamp(commit_obj.time().seconds(), 0)
+        .to_rfc3339();
+
+    store.update(doc, "v3").unwrap();
+
+    mgr.restore(&mut store, &ts).unwrap();
+    assert_eq!(store.get(doc).unwrap().text(), "v1");
 }
