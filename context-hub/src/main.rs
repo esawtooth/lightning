@@ -20,14 +20,19 @@ mod api;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // initialize snapshot repository for durability
-    let snapshot_mgr = Arc::new(snapshot::SnapshotManager::new("snapshots")?);
+    let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| "data".into());
+    let snapshot_dir = std::env::var("SNAPSHOT_DIR").unwrap_or_else(|_| "snapshots".into());
+    let index_dir = std::env::var("INDEX_DIR").unwrap_or_else(|_| "index".into());
+    let blob_dir = std::env::var("BLOB_DIR").unwrap_or_else(|_| "blobs".into());
 
-    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new("data")?));
-    let search = Arc::new(search::SearchIndex::new("index")?);
+    // initialize snapshot repository for durability
+    let snapshot_mgr = Arc::new(snapshot::SnapshotManager::new(&snapshot_dir)?);
+
+    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(&data_dir)?));
+    let search = Arc::new(search::SearchIndex::new(&index_dir)?);
     {
         let mut guard = store.lock().await;
-        let blob_resolver = Arc::new(BlobPointerResolver::new("blobs")?);
+        let blob_resolver = Arc::new(BlobPointerResolver::new(&blob_dir)?);
         guard.register_resolver("blob", blob_resolver);
     }
     {
@@ -44,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
     };
     let router = api::router(
         store.clone(),
-        PathBuf::from("snapshots"),
+        PathBuf::from(&snapshot_dir),
         indexer.clone(),
         events.clone(),
         verifier,
@@ -58,8 +63,11 @@ async fn main() -> anyhow::Result<()> {
     ));
     let app = Router::new().merge(router).route("/health", get(|| async { "OK" }));
 
-    let listener = TcpListener::bind("127.0.0.1:3000").await?;
-    println!("Listening on 127.0.0.1:3000");
+    let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());
+    let addr = format!("{}:{}", host, port);
+    let listener = TcpListener::bind(&addr).await?;
+    println!("Listening on {}", addr);
     local
         .run_until(serve(listener, app.into_make_service()).into_future())
         .await?;
