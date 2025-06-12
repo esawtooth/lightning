@@ -12,6 +12,12 @@ All API calls require an `X-User-Id` HTTP header identifying the current user.
 An optional `X-Agent-Id` header can be supplied when the request originates from
 an agent acting on behalf of the user.
 
+Alternatively clients may authenticate with a bearer token using the
+`Authorization` header. Tokens are verified with either a shared secret
+(`JWT_SECRET`) or against an Azure Entra ID JWKS endpoint specified by
+`AZURE_JWKS_URL`. The token must contain a `sub` claim with the user ID and may
+include an `agent` claim naming the acting agent.
+
 The server exposes the following endpoints:
 
 - `GET /health` – simple health check returning `OK`.
@@ -48,3 +54,16 @@ to a list of allowed folder UUIDs:
 When a request includes `X-Agent-Id`, the configured scope is checked first. If
 the target document lies outside the allowed folders, access is denied even if
 the user would normally have permission.
+
+Agent scopes can now be managed via the API:
+
+```
+POST /agents/{agentId}/scopes   # body: {"folders": ["<folder-uuid>"]}
+DELETE /agents/{agentId}/scopes # remove any scope restrictions
+```
+
+You can also list sharing information on a document or folder with:
+
+```
+GET /docs/{id}/sharing
+```

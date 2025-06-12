@@ -2,8 +2,8 @@ use context_hub::{
     pointer::{GitPointerResolver, InMemoryResolver, PointerResolver},
     storage::crdt::{DocumentStore, DocumentType, Pointer},
 };
-use std::sync::Arc;
 use git2::Repository;
+use std::sync::Arc;
 
 #[test]
 fn resolve_pointer_with_memory_resolver() {
@@ -50,7 +50,8 @@ fn resolve_git_pointer() {
         let tree_id = index.write_tree().unwrap();
         let tree = repo.find_tree(tree_id).unwrap();
         let sig = repo.signature().unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[]).unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
+            .unwrap();
     }
 
     let mut store = DocumentStore::new(tempdir.path().join("data")).unwrap();
