@@ -358,6 +358,9 @@ pulumi.export("aadClientSecret", pulumi.Output.secret(aad_password.value))
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. HELPER – ACI CONTAINER GROUP
 # ─────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. HELPER – ACI CONTAINER GROUP
+# ─────────────────────────────────────────────────────────────────────────────
 def aci_group(
     name: str,
     image: pulumi.Input[str],
@@ -366,7 +369,7 @@ def aci_group(
     volumes=None,
     cpu: float = 1,
     mem: float = 1.5,
-    public=False,
+    public: bool = False,
 ):
     ip_cfg = (
         containerinstance.IpAddressArgs(
@@ -380,6 +383,20 @@ def aci_group(
             ports=[containerinstance.PortArgs(protocol="TCP", port=port)],
         )
     )
+
+    # ---------- decide lazily whether we need ACR creds ---------------------
+    # ‑ Pulumi resolves both `image` and `acr.login_server` first,
+    #   then the lambda runs.
+    cred_obj = containerinstance.ImageRegistryCredentialArgs(
+        server   = acr.login_server,
+        username = acr_creds.username,
+        password = acr_creds.passwords[0].value,
+    )
+    registry_creds = pulumi.Output.all(image, acr.login_server).apply(
+        lambda pair: [cred_obj] if str(pair[0]).startswith(pair[1]) else []
+    )
+    # ------------------------------------------------------------------------
+
     return containerinstance.ContainerGroup(
         name,
         resource_group_name=rg.name,
@@ -414,15 +431,7 @@ def aci_group(
                 workspace_resource_id=workspace.id,
             )
         ),
-        image_registry_credentials=[
-            containerinstance.ImageRegistryCredentialArgs(
-                server=acr.login_server,
-                username=acr_creds.username,
-                password=acr_creds.passwords[0].value,
-            )
-        ]
-        if image.startswith(acr.login_server)
-        else None,
+        image_registry_credentials=registry_creds,
         opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
     )
 
