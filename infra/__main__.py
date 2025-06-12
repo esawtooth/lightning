@@ -1112,6 +1112,11 @@ if domain:
         ),
     )
 
+    # Export the domain validation tokens so they are visible in stack outputs
+    pulumi.export("uiDomainValidationToken", ui_domain.validation_properties.validation_token)
+    pulumi.export("apiDomainValidationToken", api_domain.validation_properties.validation_token)
+    pulumi.export("voiceDomainValidationToken", voice_domain.validation_properties.validation_token)
+
     cdn.route.Route(
         "ui-route",
         resource_group_name=resource_group.name,
@@ -1195,6 +1200,43 @@ if domain:
         record_type="CNAME",
         ttl=600,
         cname_record=dns.CnameRecordArgs(cname=fd_endpoint.host_name),
+    )
+
+    # DNS TXT records used by Azure Front Door to verify custom domain ownership
+    dns.RecordSet(
+        "ui-domain-verification",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="asuid.www",
+        record_type="TXT",
+        ttl=3600,
+        txt_records=[
+            dns.TxtRecordArgs(value=[ui_domain.validation_properties.validation_token])
+        ],
+    )
+
+    dns.RecordSet(
+        "api-domain-verification",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="asuid.api",
+        record_type="TXT",
+        ttl=3600,
+        txt_records=[
+            dns.TxtRecordArgs(value=[api_domain.validation_properties.validation_token])
+        ],
+    )
+
+    dns.RecordSet(
+        "voice-domain-verification",
+        resource_group_name=resource_group.name,
+        zone_name=dns_zone.name,
+        relative_record_set_name="asuid.voice-ws",
+        record_type="TXT",
+        ttl=3600,
+        txt_records=[
+            dns.TxtRecordArgs(value=[voice_domain.validation_properties.validation_token])
+        ],
     )
 
     # Create DNS records required to verify the email sending domain
