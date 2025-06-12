@@ -95,6 +95,21 @@ vault = keyvault.Vault(
     ),
 )
 
+authorization.RoleAssignment(
+    "kv-admin",
+    principal_id = client_cfg.object_id,                  # who is running Pulumi
+    role_definition_id = (
+        "/subscriptions/" + subscription_id +
+        "/providers/Microsoft.Authorization/roleDefinitions/" +
+        "00482a5a-887f-4fb3-b363-3b7fe8e74483"            # Key Vault Administrator
+    ),
+    scope = rg.id,
+    role_assignment_name = str(uuid.uuid5(
+        uuid.NAMESPACE_URL, f"{rg.name}-kv-admin-{client_cfg.object_id}"
+    )),
+)
+
+
 def _ensure_pg_secret():
     if runtime.is_dry_run():
         pwd = RandomPassword("pg-preview", length=16, special=True).result
@@ -635,7 +650,7 @@ pulumi.export("functionEndpoint", pulumi.Output.concat("https://", func_app.defa
 comm_svc = communication.CommunicationService(
     "comm",
     resource_group_name=rg.name,
-    location=location,
+    location="global",
     communication_service_name=f"vextir-comm-{stack_suffix}",
     data_location="United States",
 )
