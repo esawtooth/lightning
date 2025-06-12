@@ -1,24 +1,23 @@
 [package]
-name = "context-hub"
+name = "context-hub-core"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-context-hub-core = { path = "./context-hub-core" }
-axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+loro = "1"
 uuid = { version = "1", features = ["v4"] }
 anyhow = "1"
-tokio-stream = { version = "0.1", features = ["sync"] }
-futures = "0.3"
-
-[dev-dependencies]
 git2 = "0.18"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
+tantivy = { version = "0.19", default-features = false, features = ["lz4-compression", "mmap"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = "0.3"
+jsonwebtoken = "9"
+async-trait = "0.1"
+reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+
+[dev-dependencies]
 tempfile = "3"
-reqwest = { version = "0.11", features = ["json", "stream"] }
-tower = "0.5"
-futures-util = "0.3"
-bytes = "1"
