@@ -1,4 +1,8 @@
-use context_hub::{indexer, search, snapshot::SnapshotManager, storage::crdt::{DocumentStore, DocumentType}};
+use context_hub::{
+    indexer, search,
+    snapshot::SnapshotManager,
+    storage::crdt::{DocumentStore, DocumentType},
+};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::LocalSet;

@@ -41,6 +41,33 @@ impl PointerResolver for InMemoryResolver {
     }
 }
 
+/// Simple filesystem-backed resolver storing blobs under a directory.
+pub struct BlobPointerResolver {
+    dir: std::path::PathBuf,
+}
+
+impl BlobPointerResolver {
+    /// Create a new resolver writing files to the given directory.
+    pub fn new(dir: impl Into<std::path::PathBuf>) -> Result<Self> {
+        let dir = dir.into();
+        std::fs::create_dir_all(&dir)?;
+        Ok(Self { dir })
+    }
+}
+
+impl PointerResolver for BlobPointerResolver {
+    fn store(&self, pointer: &Pointer, data: &[u8]) -> Result<()> {
+        let path = self.dir.join(&pointer.target);
+        std::fs::write(path, data)?;
+        Ok(())
+    }
+
+    fn fetch(&self, pointer: &Pointer) -> Result<Vec<u8>> {
+        let path = self.dir.join(&pointer.target);
+        Ok(std::fs::read(path)?)
+    }
+}
+
 /// Registry mapping pointer types to concrete resolvers.
 #[derive(Default)]
 pub struct ResolverRegistry {

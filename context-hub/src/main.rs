@@ -1,3 +1,4 @@
+use crate::pointer::BlobPointerResolver;
 use axum::{routing::get, serve, Router};
 use std::future::IntoFuture;
 use std::path::PathBuf;
@@ -8,12 +9,12 @@ use tokio::task::LocalSet;
 use tokio::time::Duration;
 
 mod api;
+mod events;
+mod indexer;
+mod pointer;
 mod search;
 mod snapshot;
 mod storage;
-mod indexer;
-mod events;
-mod pointer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -23,12 +24,22 @@ async fn main() -> anyhow::Result<()> {
     let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new("data")?));
     let search = Arc::new(search::SearchIndex::new("index")?);
     {
+        let mut guard = store.lock().await;
+        let blob_resolver = Arc::new(BlobPointerResolver::new("blobs")?);
+        guard.register_resolver("blob", blob_resolver);
+    }
+    {
         let store_guard = store.lock().await;
         search.index_all(&store_guard)?;
     }
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = events::EventBus::new();
-    let router = api::router(store.clone(), PathBuf::from("snapshots"), indexer.clone(), events.clone());
+    let router = api::router(
+        store.clone(),
+        PathBuf::from("snapshots"),
+        indexer.clone(),
+        events.clone(),
+    );
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
     local.spawn_local(snapshot::snapshot_task(
