@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Ensure we run from the repository root regardless of the CWD
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+# Load variables from a local .env file if present
+if [[ -f .env ]]; then
+    set -o allexport
+    # shellcheck source=/dev/null
+    source .env
+    set +o allexport
+fi
+
 # Replicates the steps from .github/workflows/deploy.yml
 # Requires: az cli, docker with buildx, pulumi, python3 with pip
 
