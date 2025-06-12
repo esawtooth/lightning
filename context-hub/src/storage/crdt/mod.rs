@@ -1325,4 +1325,24 @@ mod tests {
         assert!(!store.has_permission(secret, "user1", Some("sched"), AccessLevel::Read));
         assert!(store.has_permission(secret, "user1", None, AccessLevel::Read));
     }
+
+    #[test]
+    fn empty_agent_scope_denies_all() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let mut store = DocumentStore::new(tempdir.path()).unwrap();
+        let root = store
+            .create(
+                "root".to_string(),
+                "",
+                "user1".to_string(),
+                None,
+                DocumentType::Folder,
+            )
+            .unwrap();
+        store
+            .set_agent_scope("user1".to_string(), "bot".to_string(), Vec::new())
+            .unwrap();
+        assert!(!store.has_permission(root, "user1", Some("bot"), AccessLevel::Read));
+        assert!(store.has_permission(root, "user1", None, AccessLevel::Read));
+    }
 }
