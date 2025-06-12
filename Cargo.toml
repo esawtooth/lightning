@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "context-hub",
+    "context-hub/context-hub-core"
+]

@@ -1,4 +1,12 @@
-use crate::pointer::BlobPointerResolver;
+use context_hub_core::{
+    auth,
+    events,
+    indexer,
+    pointer::BlobPointerResolver,
+    search,
+    snapshot,
+    storage,
+};
 use axum::{routing::get, serve, Router};
 use std::future::IntoFuture;
 use std::path::PathBuf;
@@ -9,13 +17,6 @@ use tokio::task::LocalSet;
 use tokio::time::Duration;
 
 mod api;
-mod events;
-mod indexer;
-mod pointer;
-mod search;
-mod snapshot;
-mod storage;
-mod auth;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -55,9 +56,7 @@ async fn main() -> anyhow::Result<()> {
         snapshot_mgr.clone(),
         Duration::from_secs(3600),
     ));
-    let app = Router::new()
-        .merge(router)
-        .route("/health", get(|| async { "OK" }));
+    let app = Router::new().merge(router).route("/health", get(|| async { "OK" }));
 
     let listener = TcpListener::bind("127.0.0.1:3000").await?;
     println!("Listening on 127.0.0.1:3000");
