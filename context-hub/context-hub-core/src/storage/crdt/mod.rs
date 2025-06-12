@@ -790,6 +790,42 @@ impl DocumentStore {
         None
     }
 
+    /// Collect index guides from the given document or folder up to the root.
+    /// Returns a vector of `(path, content)` pairs starting from the root folder.
+    pub fn collect_index_guides(&self, id: Uuid) -> Vec<(String, String)> {
+        let folder_id = match self.docs.get(&id) {
+            Some(doc) if doc.doc_type() == DocumentType::Folder => Some(id),
+            Some(doc) => doc.parent_folder_id(),
+            None => None,
+        };
+        let Some(mut current_id) = folder_id else {
+            return Vec::new();
+        };
+        let mut ids = Vec::new();
+        while let Some(doc) = self.docs.get(&current_id) {
+            ids.push(current_id);
+            match doc.parent_folder_id() {
+                Some(pid) => current_id = pid,
+                None => break,
+            }
+        }
+        ids.reverse();
+
+        let mut path = Vec::new();
+        let mut out = Vec::new();
+        for fid in ids {
+            if let Some(fdoc) = self.docs.get(&fid) {
+                path.push(fdoc.name().to_string());
+                if let Some(gid) = self.index_guide_id(fid) {
+                    if let Some(guide) = self.docs.get(&gid) {
+                        out.push((path.join("/"), guide.text()));
+                    }
+                }
+            }
+        }
+        out
+    }
+
     pub fn rename(&mut self, id: Uuid, name: String) -> Result<()> {
         let doc_path = self.path(id);
         if let Some(doc) = self.docs.get_mut(&id) {
