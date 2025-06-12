@@ -1,6 +1,7 @@
 //! CRDT-based document storage built on [Loro](https://crates.io/crates/loro).
 //! Documents are stored individually on disk and loaded at startup.
 
+use crate::pointer::PointerResolver;
 use anyhow::{anyhow, Result};
 use loro::{LoroDoc, LoroMap, ToJson};
 use serde::{Deserialize, Serialize};
@@ -11,7 +12,6 @@ use std::{
     sync::Arc,
 };
 use uuid::Uuid;
-use crate::pointer::PointerResolver;
 
 const DEFAULT_USER: &str = "user1";
 const CONTENT_KEY: &str = "content";
@@ -171,6 +171,15 @@ impl Document {
         self.doc_type
     }
 
+    /// Number of content items in this document.
+    pub fn content_len(&self) -> usize {
+        if self.doc_type == DocumentType::Folder {
+            0
+        } else {
+            self.doc.get_list(CONTENT_KEY).len()
+        }
+    }
+
     pub fn text(&self) -> String {
         if self.doc_type == DocumentType::Folder {
             return String::new();
@@ -180,12 +189,10 @@ impl Document {
         for i in 0..list.len() {
             if let Some(item) = list.get(i) {
                 match item {
-                    loro::ValueOrContainer::Value(v) => {
-                        match v.to_json_value() {
-                            serde_json::Value::String(s) => out.push_str(&s),
-                            _ => out.push_str("[pointer]"),
-                        }
-                    }
+                    loro::ValueOrContainer::Value(v) => match v.to_json_value() {
+                        serde_json::Value::String(s) => out.push_str(&s),
+                        _ => out.push_str("[pointer]"),
+                    },
                     _ => out.push_str("[pointer]"),
                 }
             }
@@ -211,9 +218,13 @@ impl Document {
             return Ok(());
         }
         let list = self.doc.get_list(CONTENT_KEY);
-        let map = list.insert_container(index, LoroMap::new()).map_err(|e| anyhow!(e))?;
-        map.insert("type", pointer.pointer_type).map_err(|e| anyhow!(e))?;
-        map.insert("target", pointer.target).map_err(|e| anyhow!(e))?;
+        let map = list
+            .insert_container(index, LoroMap::new())
+            .map_err(|e| anyhow!(e))?;
+        map.insert("type", pointer.pointer_type)
+            .map_err(|e| anyhow!(e))?;
+        map.insert("target", pointer.target)
+            .map_err(|e| anyhow!(e))?;
         if let Some(name) = pointer.name {
             map.insert("name", name).map_err(|e| anyhow!(e))?;
         }
@@ -228,8 +239,7 @@ impl Document {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
         }
-        self
-            .doc
+        self.doc
             .get_list(CONTENT_KEY)
             .delete(index, 1)
             .map_err(|e| anyhow!(e))?;
@@ -242,7 +252,9 @@ impl Document {
             return None;
         }
         let list = self.doc.get_list(CONTENT_KEY);
-        let Some(item) = list.get(index) else { return None };
+        let Some(item) = list.get(index) else {
+            return None;
+        };
         let container = item.into_container().ok()?;
         let map = container.into_map().ok()?;
         let typ = map
@@ -284,7 +296,12 @@ impl Document {
     }
 
     pub fn save(&mut self, path: &Path) -> Result<()> {
-        std::fs::write(path, self.doc.export(loro::ExportMode::Snapshot).map_err(|e| anyhow!(e))?)?;
+        std::fs::write(
+            path,
+            self.doc
+                .export(loro::ExportMode::Snapshot)
+                .map_err(|e| anyhow!(e))?,
+        )?;
         Ok(())
     }
 
@@ -323,9 +340,13 @@ impl Document {
         let child = map
             .insert_container(&child_id.to_string(), LoroMap::new())
             .map_err(|e| anyhow!(e))?;
-        child.insert("id", child_id.to_string()).map_err(|e| anyhow!(e))?;
+        child
+            .insert("id", child_id.to_string())
+            .map_err(|e| anyhow!(e))?;
         child.insert("name", name).map_err(|e| anyhow!(e))?;
-        child.insert("type", doc_type.as_str()).map_err(|e| anyhow!(e))?;
+        child
+            .insert("type", doc_type.as_str())
+            .map_err(|e| anyhow!(e))?;
         self.doc.commit();
         Ok(())
     }
@@ -413,8 +434,7 @@ impl Document {
         if map.is_attached() {
             let key = child_id.to_string();
             if let Some(child) = map.get(&key) {
-                if let Some(child_map) =
-                    child.into_container().ok().and_then(|c| c.into_map().ok())
+                if let Some(child_map) = child.into_container().ok().and_then(|c| c.into_map().ok())
                 {
                     child_map.insert("name", name).map_err(|e| anyhow!(e))?;
                 }
@@ -524,6 +544,20 @@ impl DocumentStore {
         resolver: Arc<dyn PointerResolver>,
     ) {
         self.resolvers.insert(kind.into(), resolver);
+    }
+
+    /// Store external data via a registered resolver.
+    pub fn store_data(&self, pointer: &Pointer, data: &[u8]) -> Result<()> {
+        let resolver = self
+            .resolvers
+            .get(&pointer.pointer_type)
+            .ok_or_else(|| anyhow!("no resolver for type"))?;
+        resolver.store(pointer, data)
+    }
+
+    /// Get the number of content items in a document.
+    pub fn content_len(&self, doc_id: Uuid) -> Option<usize> {
+        self.docs.get(&doc_id).map(|d| d.content_len())
     }
 
     /// Insert a pointer into the specified document.
@@ -1074,7 +1108,9 @@ mod tests {
         {
             let path = store.path(root);
             let parent = store.docs.get_mut(&root).unwrap();
-            parent.add_child(doc_id, "file.txt", DocumentType::Text).unwrap();
+            parent
+                .add_child(doc_id, "file.txt", DocumentType::Text)
+                .unwrap();
             parent.save(&path).unwrap();
         }
 

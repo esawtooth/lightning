@@ -1,7 +1,7 @@
 //! HTTP API layer exposing document CRUD endpoints.
 
 use axum::{
-    extract::{FromRequestParts, Path, State, Query},
+    extract::{FromRequestParts, Path, Query, State},
     http::{request::Parts, StatusCode},
     routing::{get, post, put},
     Json, Router,
@@ -11,10 +11,10 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
 
-use crate::snapshot::SnapshotManager;
-use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType};
+use crate::events::{Event, EventBus};
 use crate::indexer::LiveIndex;
-use crate::events::{EventBus, Event};
+use crate::snapshot::SnapshotManager;
+use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType, Pointer};
 use std::path::PathBuf;
 
 /// Authentication context extracted from request headers.
@@ -85,6 +85,11 @@ struct DocResponse {
     owner: String,
 }
 
+#[derive(Serialize)]
+struct BlobResponse {
+    id: String,
+}
+
 #[derive(Serialize, Deserialize)]
 struct FolderItem {
     id: Uuid,
@@ -146,6 +151,8 @@ pub fn router(
         )
         .route("/docs/{id}/move", put(move_doc))
         .route("/docs/{id}/rename", put(rename_doc))
+        .route("/docs/{id}/content", post(upload_blob))
+        .route("/docs/{id}/content/{idx}", get(get_blob))
         .route("/folders/{id}", get(list_folder).post(create_in_folder))
         .route("/folders/{id}/guide", get(get_index_guide))
         .route(
@@ -284,7 +291,12 @@ async fn rename_doc(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
-            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write) {
+            if store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) {
                 let _ = store.rename(id, req.name);
                 drop(store);
                 state.indexer.schedule_update(id).await;
@@ -308,14 +320,25 @@ async fn move_doc(
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
-            if store.has_permission(id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write)
-                && store.has_permission(req.new_parent_folder_id, &auth.user_id, auth.agent_id.as_deref(), AccessLevel::Write)
-            {
+            if store.has_permission(
+                id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) && store.has_permission(
+                req.new_parent_folder_id,
+                &auth.user_id,
+                auth.agent_id.as_deref(),
+                AccessLevel::Write,
+            ) {
                 let ids = store.descendant_ids(id);
                 let _ = store.move_item(id, req.new_parent_folder_id);
                 drop(store);
                 state.indexer.schedule_recursive_update(ids).await;
-                state.events.send(Event::Moved { id, new_parent: req.new_parent_folder_id });
+                state.events.send(Event::Moved {
+                    id,
+                    new_parent: req.new_parent_folder_id,
+                });
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -532,6 +555,68 @@ async fn search_docs(
     Ok(Json(results))
 }
 
+#[derive(Deserialize)]
+struct UploadParams {
+    name: Option<String>,
+}
+
+async fn upload_blob(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Query(params): Query<UploadParams>,
+    body: axum::body::Bytes,
+) -> Result<Json<BlobResponse>, StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Write,
+    ) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let blob_id = Uuid::new_v4().to_string();
+    let pointer = Pointer {
+        pointer_type: "blob".to_string(),
+        target: blob_id.clone(),
+        name: params.name,
+        preview_text: None,
+    };
+    store
+        .store_data(&pointer, &body)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let index = store.content_len(id).unwrap_or(0);
+    store
+        .insert_pointer(id, index, pointer)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    drop(store);
+    state.indexer.schedule_update(id).await;
+    Ok(Json(BlobResponse { id: blob_id }))
+}
+
+async fn get_blob(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path((id, idx)): Path<(Uuid, usize)>,
+) -> Result<(StatusCode, axum::body::Bytes), StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Read,
+    ) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    let data = store
+        .resolve_pointer(id, idx)
+        .map_err(|_| StatusCode::NOT_FOUND)?;
+    Ok((StatusCode::OK, axum::body::Bytes::from(data)))
+}
+
 async fn share_folder(
     State(state): State<AppState>,
     auth: AuthContext,
@@ -655,7 +740,10 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
         let events = crate::events::EventBus::new();
         let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
@@ -727,7 +815,10 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
         let events = crate::events::EventBus::new();
         let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
@@ -799,7 +890,10 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
         let events = crate::events::EventBus::new();
         let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
@@ -862,7 +956,10 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
         let events = crate::events::EventBus::new();
         let app = router(store.clone(), tempdir.path().into(), indexer, events);
 
@@ -911,7 +1008,10 @@ mod tests {
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
-        let indexer = Arc::new(crate::indexer::LiveIndex::new(search.clone(), store.clone()));
+        let indexer = Arc::new(crate::indexer::LiveIndex::new(
+            search.clone(),
+            store.clone(),
+        ));
         let events = crate::events::EventBus::new();
         let app = router(store.clone(), tempdir.path().into(), indexer, events);
 

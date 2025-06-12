@@ -1,4 +1,7 @@
-use context_hub::{storage::crdt::{DocumentStore, DocumentType, Pointer}, pointer::{InMemoryResolver, PointerResolver}};
+use context_hub::{
+    pointer::{InMemoryResolver, PointerResolver},
+    storage::crdt::{DocumentStore, DocumentType, Pointer},
+};
 use std::sync::Arc;
 
 #[test]
