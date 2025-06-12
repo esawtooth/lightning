@@ -13,6 +13,7 @@ mod snapshot;
 mod storage;
 mod indexer;
 mod events;
+mod pointer;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
