@@ -7,6 +7,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use crate::auth::TokenVerifier;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -24,14 +25,21 @@ pub struct AuthContext {
     pub agent_id: Option<String>,
 }
 
-impl<S> FromRequestParts<S> for AuthContext
-where
-    S: Send + Sync,
-{
+impl FromRequestParts<AppState> for AuthContext {
     type Rejection = StatusCode;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let headers = &parts.headers;
+        if let Some(auth) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
+            if let Some(token) = auth.strip_prefix("Bearer ") {
+                if let Some(claims) = state.verifier.verify(token).await {
+                    return Ok(Self {
+                        user_id: claims.sub,
+                        agent_id: claims.agent,
+                    });
+                }
+            }
+        }
         let user = headers
             .get("X-User-Id")
             .and_then(|v| v.to_str().ok())
@@ -56,6 +64,7 @@ pub struct AppState {
     pub snapshot_dir: PathBuf,
     pub indexer: Arc<LiveIndex>,
     pub events: crate::events::EventBus,
+    pub verifier: Arc<dyn TokenVerifier>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -136,12 +145,14 @@ pub fn router(
     snapshot_dir: PathBuf,
     indexer: Arc<LiveIndex>,
     events: EventBus,
+    verifier: Arc<dyn TokenVerifier>,
 ) -> Router {
     let app_state = AppState {
         store: state,
         snapshot_dir,
         indexer,
         events,
+        verifier,
     };
     Router::new()
         .route("/docs", post(create_doc))
@@ -160,6 +171,11 @@ pub fn router(
             "/folders/{id}/share",
             post(share_folder).delete(unshare_folder),
         )
+        .route(
+            "/agents/{id}/scopes",
+            post(set_agent_scope).delete(clear_agent_scope),
+        )
+        .route("/docs/{id}/sharing", get(list_sharing))
         .route("/search", get(search_docs))
         .route("/snapshot", post(snapshot_now))
         .route("/restore", post(restore_snapshot))
@@ -694,6 +710,59 @@ async fn unshare_folder(
     StatusCode::NO_CONTENT
 }
 
+#[derive(Deserialize)]
+struct AgentScopeRequest {
+    folders: Vec<Uuid>,
+}
+
+async fn set_agent_scope(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(agent): Path<String>,
+    Json(req): Json<AgentScopeRequest>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.set_agent_scope(auth.user_id.clone(), agent, req.folders) {
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+async fn clear_agent_scope(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(agent): Path<String>,
+) -> StatusCode {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    match store.clear_agent_scope(&auth.user_id, &agent) {
+        Ok(_) => StatusCode::NO_CONTENT,
+        Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+async fn list_sharing(
+    State(state): State<AppState>,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+) -> Result<Json<Vec<crate::storage::crdt::AclEntry>>, StatusCode> {
+    let mut store = state.store.lock().await;
+    let _ = store.ensure_root(&auth.user_id);
+    if !store.has_permission(
+        id,
+        &auth.user_id,
+        auth.agent_id.as_deref(),
+        AccessLevel::Read,
+    ) {
+        return Err(StatusCode::FORBIDDEN);
+    }
+    match store.get(id) {
+        Some(doc) => Ok(Json(doc.acl().to_vec())),
+        None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
 async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> StatusCode {
     let mut store = state.store.lock().await;
     let mgr = match SnapshotManager::new(&state.snapshot_dir) {
@@ -737,15 +806,40 @@ use std::convert::Infallible;
 
 async fn ws_stream(
     State(state): State<AppState>,
+    auth: AuthContext,
 ) -> Sse<impl Stream<Item = Result<sse::Event, Infallible>>> {
     let rx = state.events.subscribe();
-    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(|res| async move {
-        match res {
-            Ok(evt) => {
-                let data = serde_json::to_string(&evt).ok()?;
-                Some(Ok(sse::Event::default().data(data)))
+    let store = state.store.clone();
+    let user = auth.user_id.clone();
+    let agent = auth.agent_id.clone();
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx).filter_map(move |res| {
+        let store = store.clone();
+        let user = user.clone();
+        let agent = agent.clone();
+        async move {
+            match res {
+                Ok(evt) => {
+                    let id = match &evt {
+                        Event::Created { id }
+                        | Event::Updated { id }
+                        | Event::Deleted { id }
+                        | Event::Moved { id, .. }
+                        | Event::Shared { id, .. }
+                        | Event::Unshared { id, .. } => *id,
+                    };
+                    let allow = {
+                        let store_guard = store.lock().await;
+                        store_guard.has_permission(id, &user, agent.as_deref(), AccessLevel::Read)
+                    };
+                    if allow {
+                        let data = serde_json::to_string(&evt).ok()?;
+                        Some(Ok(sse::Event::default().data(data)))
+                    } else {
+                        None
+                    }
+                }
+                Err(_) => None,
             }
-            Err(_) => None,
         }
     });
     Sse::new(stream)
@@ -773,7 +867,14 @@ mod tests {
             store.clone(),
         ));
         let events = crate::events::EventBus::new();
-        let app = router(store.clone(), tempdir.path().into(), indexer, events);
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
 
         let req = Request::builder()
             .method("POST")
@@ -848,7 +949,14 @@ mod tests {
             store.clone(),
         ));
         let events = crate::events::EventBus::new();
-        let app = router(store.clone(), tempdir.path().into(), indexer, events);
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
 
         let root = {
             let mut s = store.lock().await;
@@ -923,7 +1031,14 @@ mod tests {
             store.clone(),
         ));
         let events = crate::events::EventBus::new();
-        let app = router(store.clone(), tempdir.path().into(), indexer, events);
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
 
         let root = {
             let mut s = store.lock().await;
@@ -989,7 +1104,14 @@ mod tests {
             store.clone(),
         ));
         let events = crate::events::EventBus::new();
-        let app = router(store.clone(), tempdir.path().into(), indexer, events);
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
 
         let root = {
             let mut s = store.lock().await;
@@ -1041,7 +1163,14 @@ mod tests {
             store.clone(),
         ));
         let events = crate::events::EventBus::new();
-        let app = router(store.clone(), tempdir.path().into(), indexer, events);
+        let verifier = Arc::new(crate::auth::Hs256Verifier::new("secret".into()));
+        let app = router(
+            store.clone(),
+            tempdir.path().into(),
+            indexer,
+            events,
+            verifier,
+        );
 
         let root = {
             let mut s = store.lock().await;

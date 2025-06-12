@@ -3,6 +3,7 @@ use context_hub::{
     snapshot::SnapshotManager,
     storage::crdt::{DocumentStore, DocumentType},
 };
+use context_hub::auth::Hs256Verifier;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::LocalSet;
@@ -96,7 +97,14 @@ async fn snapshot_endpoint_triggers_commit() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
-    let app = context_hub::api::router(store.clone(), repo_dir.clone(), indexer, events);
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
+    let app = context_hub::api::router(
+        store.clone(),
+        repo_dir.clone(),
+        indexer,
+        events,
+        verifier,
+    );
 
     let req = axum::http::Request::builder()
         .method("POST")

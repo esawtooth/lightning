@@ -1,6 +1,6 @@
 use axum::{routing::get, Router};
 use context_hub::pointer::BlobPointerResolver;
-use context_hub::{api, indexer, search, storage};
+use context_hub::{api, auth::Hs256Verifier, indexer, search, storage};
 use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +19,14 @@ async fn server_health_endpoint() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
-    let router = api::router(store.clone(), tempdir.path().into(), indexer, events);
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
+    let router = api::router(
+        store.clone(),
+        tempdir.path().into(),
+        indexer,
+        events,
+        verifier,
+    );
     let app = Router::new()
         .merge(router)
         .route("/health", get(|| async { "OK" }));
@@ -50,11 +57,13 @@ async fn root_created_on_use() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
         indexer,
         events,
+        verifier,
     ));
 
     let req = axum::http::Request::builder()
@@ -89,11 +98,13 @@ async fn search_endpoint() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
         indexer.clone(),
         events,
+        verifier,
     ));
 
     let req = axum::http::Request::builder()
@@ -140,11 +151,13 @@ async fn rename_endpoint() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
         indexer.clone(),
         events,
+        verifier,
     ));
 
     let req = axum::http::Request::builder()
@@ -208,11 +221,13 @@ async fn move_endpoint() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
         indexer.clone(),
         events,
+        verifier,
     ));
 
     let root = {
@@ -346,7 +361,7 @@ async fn blob_attach_and_fetch() {
     {
         let mut s = store.lock().await;
         let resolver = Arc::new(
-            context_hub::pointer::BlobPointerResolver::new(tempdir.path().join("blobs")).unwrap(),
+            BlobPointerResolver::new(tempdir.path().join("blobs")).unwrap(),
         );
         s.register_resolver("blob", resolver);
     }
@@ -355,11 +370,13 @@ async fn blob_attach_and_fetch() {
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
         indexer.clone(),
         events,
+        verifier,
     ));
 
     let req = axum::http::Request::builder()
@@ -405,3 +422,96 @@ async fn blob_attach_and_fetch() {
         .unwrap();
     assert_eq!(data, axum::body::Bytes::from_static(b"payload"));
 }
+
+#[tokio::test]
+async fn agent_scope_api() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let store = Arc::new(Mutex::new(
+        storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
+    ));
+    let index_dir = tempdir.path().join("index");
+    std::fs::create_dir_all(&index_dir).unwrap();
+    let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());
+    let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
+    let events = context_hub::events::EventBus::new();
+    let verifier = Arc::new(Hs256Verifier::new("secret".into()));
+    let app = Router::new().merge(api::router(
+        store.clone(),
+        tempdir.path().into(),
+        indexer.clone(),
+        events,
+        verifier,
+    ));
+
+    let root = {
+        let mut s = store.lock().await;
+        s.ensure_root("user1").unwrap()
+    };
+
+    // set scope for agent
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/agents/bot/scopes")
+        .header("X-User-Id", "user1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({"folders": [root]}).to_string(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::NO_CONTENT);
+
+    // create doc under root
+    let req = axum::http::Request::builder()
+        .method("POST")
+        .uri("/docs")
+        .header("X-User-Id", "user1")
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::json!({
+                "name": "note.txt",
+                "content": "hi",
+                "parent_folder_id": root,
+                "doc_type": "Text"
+            })
+            .to_string(),
+        ))
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    let doc_id = v["id"].as_str().unwrap();
+
+    // agent should read doc
+    let req = axum::http::Request::builder()
+        .uri(format!("/docs/{}", doc_id))
+        .header("X-User-Id", "user1")
+        .header("X-Agent-Id", "bot")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+
+    // clear scope
+    let req = axum::http::Request::builder()
+        .method("DELETE")
+        .uri("/agents/bot/scopes")
+        .header("X-User-Id", "user1")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::NO_CONTENT);
+
+    // agent should now be unrestricted
+    let req = axum::http::Request::builder()
+        .uri(format!("/docs/{}", doc_id))
+        .header("X-User-Id", "user1")
+        .header("X-Agent-Id", "bot")
+        .body(axum::body::Body::empty())
+        .unwrap();
+    let resp = app.clone().oneshot(req).await.unwrap();
+    assert_eq!(resp.status(), axum::http::StatusCode::OK);
+}
+

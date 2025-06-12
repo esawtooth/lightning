@@ -15,6 +15,7 @@ mod pointer;
 mod search;
 mod snapshot;
 mod storage;
+mod auth;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -34,11 +35,18 @@ async fn main() -> anyhow::Result<()> {
     }
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = events::EventBus::new();
+    let verifier: Arc<dyn auth::TokenVerifier> = if let Ok(url) = std::env::var("AZURE_JWKS_URL") {
+        Arc::new(auth::AzureEntraIdVerifier::new(url))
+    } else {
+        let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
+        Arc::new(auth::Hs256Verifier::new(secret))
+    };
     let router = api::router(
         store.clone(),
         PathBuf::from("snapshots"),
         indexer.clone(),
         events.clone(),
+        verifier,
     );
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
