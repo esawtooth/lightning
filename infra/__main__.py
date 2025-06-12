@@ -60,13 +60,14 @@ voice_ws_image = config.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:la
 # Increase the length to reduce the chance of collisions when allocating
 # public DNS labels for container groups. Mark the result as a secret so it
 # doesn't get logged in plaintext during CI runs.
-dns_suffix = RandomString(
-    "dns-suffix",
-    length=12,
-    special=False,
-    upper=False,
-    additional_secret_outputs=["result"],
-).result
+dns_suffix = pulumi.Output.secret(
+    RandomString(
+        "dns-suffix",
+        length=12,
+        special=False,
+        upper=False,
+    ).result
+)
 
 ui_dns_label = config.get("uiDnsLabel") or pulumi.Output.concat("chat-ui-", dns_suffix)
 
