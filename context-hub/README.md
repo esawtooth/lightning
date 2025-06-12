@@ -24,6 +24,9 @@ The server exposes the following endpoints:
 - `GET /search?q=term` – search documents using a keyword query. Returns only
   results the caller has permission to read.
 - `GET /ws` – subscribe to a server-sent events stream of document changes.
+- `POST /docs/{id}/content?name=FILE` – attach a binary blob to a document.
+- `GET /docs/{id}/content/{idx}` – download an attached blob.
+- `GET /docs/{id}/resolve_pointer?name=FILE` – resolve a named pointer such as a git reference.
 
 Documents are stored as Automerge CRDTs and persisted as binary files under the `data` directory. Each document carries an **owner**. When a document is created, the `X-User-Id` header value is recorded as its owner. Existing files loaded from disk default to the user `user1`. The API responses include this `owner` field.
 
