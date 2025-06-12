@@ -570,6 +570,13 @@ def build_zip():
     shutil.make_archive(zip_path.with_suffix(""), "zip", build_dir)
     return str(zip_path)
 
+if runtime.is_dry_run():
+    # Preview phase – create an in‑memory empty asset
+    zip_asset = pulumi.StringAsset("")          # <── NEW
+else:
+    zip_path  = build_zip()
+    zip_asset = pulumi.FileAsset(zip_path)      # <── NEW
+
 zip_path = build_zip() if not runtime.is_dry_run() else tempfile.mktemp()
 deploy_container = storage.BlobContainer(
     "deploy",
@@ -585,7 +592,7 @@ storage.Blob(
     container_name=deploy_container.name,
     blob_name="function.zip",
     type=storage.BlobType.BLOCK,
-    source=pulumi.FileAsset(zip_path),
+    source=zip_asset,
 )
 pkg_url = pulumi.Output.format(
     "https://{0}.blob.core.windows.net/{1}/function.zip", func_sa.name, deploy_container.name
