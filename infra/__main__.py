@@ -161,6 +161,10 @@ aci_subnet = network.Subnet(
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
         network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
     ],
+    opts=pulumi.ResourceOptions(
+        delete_before_replace=False,  # ← prevents forced replacement
+        ignore_changes=["addressPrefix", "delegations"],  # ← no diff noise
+    ),
 )
 
 # **Only** Cosmos gets a private endpoint / private‑DNS zone
@@ -719,7 +723,35 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
 
 ui_og   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
 api_og  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
-voice_og= origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
+
+voice_og = cdn.afd_origin_group.AFDOriginGroup(
+    "voice-og",
+    resource_group_name=rg.name,
+    profile_name=fd_profile.name,
+    origin_group_name="voice",
+    health_probe_settings=cdn.HealthProbeParametersArgs(
+        probe_path="/",
+        probe_protocol=cdn.ProbeProtocol.HTTP,
+        probe_request_type=cdn.HealthProbeRequestType.GET,
+        probe_interval_in_seconds=30,
+    ),
+    load_balancing_settings=cdn.LoadBalancingSettingsParametersArgs(   # ← NEW
+        sample_size=4,
+        successful_samples_required=3,
+        additional_latency_in_milliseconds=0,
+    ),
+)
+cdn.afd_origin.AFDOrigin(
+    "voice-origin",
+    resource_group_name=rg.name,
+    profile_name=fd_profile.name,
+    origin_group_name=voice_og.name,
+    origin_name="voiceOrigin",
+    host_name=voice_cg.ip_address.apply(lambda ip: ip.fqdn),
+    http_port=8081,
+    https_port=8081,
+)
+
 
 def afd_domain(label, sub):
     return cdn.afd_custom_domain.AFDCustomDomain(
