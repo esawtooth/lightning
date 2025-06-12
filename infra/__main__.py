@@ -413,7 +413,7 @@ def aci_group(
         password = acr_creds.passwords[0].value,
     )
     registry_creds = pulumi.Output.all(image, acr.login_server).apply(
-        lambda pair: [cred_obj] if str(pair[0]).startswith(pair[1]) else None
+        lambda pair: [cred_obj] if pair[0].startswith(pair[1]) else None
     )
     # ------------------------------------------------------------------------
 
@@ -729,17 +729,6 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
 ui_og   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
 api_og  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
 voice_og = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
-
-cdn.afd_origin.AFDOrigin(
-    "voice-origin",
-    resource_group_name=rg.name,
-    profile_name=fd_profile.name,
-    origin_group_name=voice_og.name,
-    origin_name="voiceOrigin",
-    host_name=voice_cg.ip_address.apply(lambda ip: ip.fqdn),
-    http_port=8081,
-    https_port=8081,
-)
 
 
 def afd_domain(label, sub):
