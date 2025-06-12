@@ -333,6 +333,7 @@ sb_ns = servicebus.Namespace(
     sku=servicebus.SBSkuArgs(name="Standard", tier="Standard"),
     location=rg.location,
 )
+
 sb_queue = servicebus.Queue(
     "queue",
     resource_group_name=rg.name,
@@ -340,6 +341,7 @@ sb_queue = servicebus.Queue(
     queue_name="events",
     enable_partitioning=True,
 )
+
 sb_send_rule = servicebus.NamespaceAuthorizationRule(
     "send",
     resource_group_name=rg.name,
@@ -347,6 +349,7 @@ sb_send_rule = servicebus.NamespaceAuthorizationRule(
     authorization_rule_name="Send",
     rights=["Send"],
 )
+
 sb_keys = servicebus.list_namespace_keys_output(
     resource_group_name=rg.name,
     namespace_name=sb_ns.name,
@@ -363,6 +366,7 @@ aad_app = azuread.Application(
         redirect_uris=[pulumi.Output.concat("https://", domain, "/auth/callback")]
     ),
 )
+
 aad_sp = azuread.ServicePrincipal("aad-sp", client_id=aad_app.client_id)
 aad_password = azuread.ApplicationPassword(
     "aad-pwd",
@@ -374,9 +378,6 @@ aad_password = azuread.ApplicationPassword(
 pulumi.export("aadClientId", aad_app.client_id)
 pulumi.export("aadClientSecret", pulumi.Output.secret(aad_password.value))
 
-# ─────────────────────────────────────────────────────────────────────────────
-# 11. HELPER – ACI CONTAINER GROUP
-# ─────────────────────────────────────────────────────────────────────────────
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. HELPER – ACI CONTAINER GROUP
 # ─────────────────────────────────────────────────────────────────────────────
@@ -412,7 +413,7 @@ def aci_group(
         password = acr_creds.passwords[0].value,
     )
     registry_creds = pulumi.Output.all(image, acr.login_server).apply(
-        lambda pair: [cred_obj] if str(pair[0]).startswith(pair[1]) else []
+        lambda pair: [cred_obj] if str(pair[0]).startswith(pair[1]) else None
     )
     # ------------------------------------------------------------------------
 
@@ -596,7 +597,6 @@ else:
     zip_path  = build_zip()
     zip_asset = pulumi.FileAsset(zip_path)      # <── NEW
 
-zip_path = build_zip() if not runtime.is_dry_run() else tempfile.mktemp()
 deploy_container = storage.BlobContainer(
     "deploy",
     resource_group_name=rg.name,
@@ -708,6 +708,11 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
             probe_request_type=cdn.HealthProbeRequestType.GET,
             probe_interval_in_seconds=30,
         ),
+        load_balancing_settings = cdn.LoadBalancingSettingsParametersArgs(
+            sample_size                 = 4,
+            successful_samples_required = 3,
+            additional_latency_in_milliseconds = 0,
+        ),
     )
     cdn.afd_origin.AFDOrigin(
         f"{name}-origin",
@@ -723,24 +728,8 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
 
 ui_og   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
 api_og  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
+voice_og = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
 
-voice_og = cdn.afd_origin_group.AFDOriginGroup(
-    "voice-og",
-    resource_group_name=rg.name,
-    profile_name=fd_profile.name,
-    origin_group_name="voice",
-    health_probe_settings=cdn.HealthProbeParametersArgs(
-        probe_path="/",
-        probe_protocol=cdn.ProbeProtocol.HTTP,
-        probe_request_type=cdn.HealthProbeRequestType.GET,
-        probe_interval_in_seconds=30,
-    ),
-    load_balancing_settings=cdn.LoadBalancingSettingsParametersArgs(   # ← NEW
-        sample_size=4,
-        successful_samples_required=3,
-        additional_latency_in_milliseconds=0,
-    ),
-)
 cdn.afd_origin.AFDOrigin(
     "voice-origin",
     resource_group_name=rg.name,
