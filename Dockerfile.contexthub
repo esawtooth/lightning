@@ -1,0 +1,11 @@
+FROM rust:1.72-slim AS build
+WORKDIR /build
+COPY context-hub ./context-hub
+WORKDIR /build/context-hub
+RUN cargo build --release
+
+FROM debian:bullseye-slim
+COPY --from=build /build/context-hub/target/release/context-hub /usr/local/bin/context-hub
+WORKDIR /app
+EXPOSE 3000
+CMD ["context-hub"]
