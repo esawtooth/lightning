@@ -6,7 +6,7 @@ use context_hub::{
 use context_hub::auth::Hs256Verifier;
 use chrono::TimeZone;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::task::LocalSet;
 use tokio::time::Duration;
 use tower::util::ServiceExt;
@@ -48,9 +48,9 @@ async fn snapshot_task_runs() {
     let tempdir = tempfile::tempdir().unwrap();
     let repo_dir = tempdir.path().join("repo");
     let data_dir = tempdir.path().join("data");
-    let store = Arc::new(Mutex::new(DocumentStore::new(&data_dir).unwrap()));
+    let store = Arc::new(RwLock::new(DocumentStore::new(&data_dir).unwrap()));
     {
-        let mut s = store.lock().await;
+        let mut s = store.write().await;
         s.create(
             "note.txt".to_string(),
             "hi",
@@ -81,9 +81,9 @@ async fn snapshot_endpoint_triggers_commit() {
     let tempdir = tempfile::tempdir().unwrap();
     let repo_dir = tempdir.path().join("repo");
     let data_dir = tempdir.path().join("data");
-    let store = Arc::new(Mutex::new(DocumentStore::new(&data_dir).unwrap()));
+    let store = Arc::new(RwLock::new(DocumentStore::new(&data_dir).unwrap()));
     {
-        let mut s = store.lock().await;
+        let mut s = store.write().await;
         s.create(
             "note.txt".to_string(),
             "hi",

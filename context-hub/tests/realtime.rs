@@ -6,7 +6,7 @@ use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 async fn next_event<S>(stream: &mut S) -> String
 where
@@ -32,7 +32,7 @@ where
 #[tokio::test]
 async fn realtime_updates_stream() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let store = Arc::new(RwLock::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
     let index_dir = tempdir.path().join("index");
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());

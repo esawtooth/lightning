@@ -5,14 +5,14 @@ use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 #[tokio::test]
 async fn doc_websocket_broadcasts_updates() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
+    let store = Arc::new(RwLock::new(storage::crdt::DocumentStore::new(tempdir.path()).unwrap()));
     let index_dir = tempdir.path().join("index");
     std::fs::create_dir_all(&index_dir).unwrap();
     let search = Arc::new(search::SearchIndex::new(&index_dir).unwrap());

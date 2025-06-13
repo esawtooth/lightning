@@ -12,7 +12,7 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use uuid::Uuid;
 
 use crate::events::{Event, EventBus};
@@ -70,7 +70,7 @@ impl FromRequestParts<AppState> for AuthContext {
 #[derive(Clone)]
 
 pub struct AppState {
-    pub store: Arc<Mutex<DocumentStore>>,
+    pub store: Arc<RwLock<DocumentStore>>,
     pub snapshot_dir: PathBuf,
     pub indexer: Arc<LiveIndex>,
     pub events: crate::events::EventBus,
@@ -152,7 +152,7 @@ struct SearchResult {
 }
 
 pub fn router(
-    state: Arc<Mutex<DocumentStore>>,
+    state: Arc<RwLock<DocumentStore>>,
     snapshot_dir: PathBuf,
     indexer: Arc<LiveIndex>,
     events: EventBus,
@@ -201,7 +201,7 @@ async fn create_doc(
     auth: AuthContext,
     Json(req): Json<DocRequest>,
 ) -> Result<Json<DocResponse>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let root = store.ensure_root(&auth.user_id).unwrap();
     let parent = req.parent_folder_id.unwrap_or(root);
 
@@ -256,7 +256,7 @@ async fn get_doc(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocResponse>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) => {
@@ -288,7 +288,7 @@ async fn update_doc(
     Path(id): Path<Uuid>,
     Json(req): Json<DocRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
@@ -320,7 +320,7 @@ async fn rename_doc(
     Path(id): Path<Uuid>,
     Json(req): Json<RenameRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
@@ -349,7 +349,7 @@ async fn move_doc(
     Path(id): Path<Uuid>,
     Json(req): Json<MoveRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
@@ -390,7 +390,7 @@ async fn delete_doc(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(_) => {
@@ -435,7 +435,7 @@ async fn create_in_folder(
     Path(folder_id): Path<Uuid>,
     Json(req): Json<FolderCreateRequest>,
 ) -> Result<Json<DocResponse>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(folder_id) {
         Some(folder) if folder.doc_type() == DocumentType::Folder => {
@@ -500,7 +500,7 @@ async fn list_folder(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<FolderItem>>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) if doc.doc_type() == DocumentType::Folder => {
@@ -533,7 +533,7 @@ async fn get_index_guide(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<DocResponse>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.get(id) {
         Some(doc) => {
@@ -586,7 +586,7 @@ async fn search_docs(
         .indexer
         .search(&params.q, limit)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    let store_guard = state.store.lock().await;
+    let store_guard = state.store.read().await;
     let mut results = Vec::new();
     for id in ids {
         if let Some(doc) = store_guard.get(id) {
@@ -620,7 +620,7 @@ async fn upload_blob(
     Query(params): Query<UploadParams>,
     body: axum::body::Bytes,
 ) -> Result<Json<BlobResponse>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -654,7 +654,7 @@ async fn get_blob(
     auth: AuthContext,
     Path((id, idx)): Path<(Uuid, usize)>,
 ) -> Result<(StatusCode, axum::body::Bytes), StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -681,7 +681,7 @@ async fn resolve_pointer(
     Path(id): Path<Uuid>,
     Query(params): Query<ResolveParams>,
 ) -> Result<(StatusCode, axum::body::Bytes), StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -703,7 +703,7 @@ async fn share_folder(
     Path(id): Path<Uuid>,
     Json(req): Json<ShareRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -730,7 +730,7 @@ async fn unshare_folder(
     Path(id): Path<Uuid>,
     Json(req): Json<UnshareRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -757,7 +757,7 @@ async fn set_agent_scope(
     Path(agent): Path<String>,
     Json(req): Json<AgentScopeRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.set_agent_scope(auth.user_id.clone(), agent, req.folders) {
         Ok(_) => StatusCode::NO_CONTENT,
@@ -770,7 +770,7 @@ async fn clear_agent_scope(
     auth: AuthContext,
     Path(agent): Path<String>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     match store.clear_agent_scope(&auth.user_id, &agent) {
         Ok(_) => StatusCode::NO_CONTENT,
@@ -783,7 +783,7 @@ async fn list_sharing(
     auth: AuthContext,
     Path(id): Path<Uuid>,
 ) -> Result<Json<Vec<crate::storage::crdt::AclEntry>>, StatusCode> {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let _ = store.ensure_root(&auth.user_id);
     if !store.has_permission(
         id,
@@ -800,7 +800,7 @@ async fn list_sharing(
 }
 
 async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let mgr = match SnapshotManager::new(&state.snapshot_dir) {
         Ok(m) => m,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
@@ -825,7 +825,7 @@ async fn restore_snapshot(
     _auth: AuthContext,
     Json(req): Json<RestoreRequest>,
 ) -> StatusCode {
-    let mut store = state.store.lock().await;
+    let mut store = state.store.write().await;
     let mgr = match SnapshotManager::new(&state.snapshot_dir) {
         Ok(m) => m,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR,
@@ -864,7 +864,7 @@ async fn ws_stream(
                         | Event::Unshared { id, .. } => *id,
                     };
                     let allow = {
-                        let store_guard = store.lock().await;
+                        let store_guard = store.read().await;
                         store_guard.has_permission(id, &user, agent.as_deref(), AccessLevel::Read)
                     };
                     if allow {
@@ -894,7 +894,7 @@ async fn doc_ws(
 
 async fn handle_doc_ws(mut socket: WebSocket, id: Uuid, state: AppState, auth: AuthContext) {
     let allow = {
-        let store = state.store.lock().await;
+        let store = state.store.read().await;
         store.has_permission(
             id,
             &auth.user_id,
@@ -919,7 +919,7 @@ async fn handle_doc_ws(mut socket: WebSocket, id: Uuid, state: AppState, auth: A
     let mut rx = tx.subscribe();
 
     if let Some(text) = {
-        let store = state.store.lock().await;
+        let store = state.store.read().await;
         store.get(id).map(|d| d.text())
     } {
         let _ = socket.send(Message::Text(text.clone().into())).await;
@@ -931,7 +931,7 @@ async fn handle_doc_ws(mut socket: WebSocket, id: Uuid, state: AppState, auth: A
                 match msg {
                     Some(Ok(Message::Text(text))) => {
                         let text_str = text.to_string();
-                        let mut store = state.store.lock().await;
+                        let mut store = state.store.write().await;
                         let _ = store.update(id, &text_str);
                         let _ = tx.send(text_str.into_bytes());
                         state.events.send(Event::Updated { id });
@@ -966,7 +966,7 @@ mod tests {
     #[tokio::test]
     async fn crud_endpoints() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1041,14 +1041,14 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::NO_CONTENT);
 
         // root folder should exist
-        let mut store_guard = store.lock().await;
+        let mut store_guard = store.write().await;
         assert!(store_guard.ensure_root("user1").is_ok());
     }
 
     #[tokio::test]
     async fn folder_listing() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1067,7 +1067,7 @@ mod tests {
         );
 
         let root = {
-            let mut s = store.lock().await;
+            let mut s = store.write().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -1130,7 +1130,7 @@ mod tests {
     #[tokio::test]
     async fn create_in_folder_endpoint() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1149,7 +1149,7 @@ mod tests {
         );
 
         let root = {
-            let mut s = store.lock().await;
+            let mut s = store.write().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -1203,7 +1203,7 @@ mod tests {
     #[tokio::test]
     async fn index_guide_endpoint() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1222,7 +1222,7 @@ mod tests {
         );
 
         let root = {
-            let mut s = store.lock().await;
+            let mut s = store.write().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -1262,7 +1262,7 @@ mod tests {
     #[tokio::test]
     async fn guide_chain_via_index_endpoint() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1281,7 +1281,7 @@ mod tests {
         );
 
         let root = {
-            let mut s = store.lock().await;
+            let mut s = store.write().await;
             s.ensure_root("user1").unwrap()
         };
 
@@ -1338,7 +1338,7 @@ mod tests {
     #[tokio::test]
     async fn folder_sharing() {
         let tempdir = tempfile::tempdir().unwrap();
-        let store = Arc::new(Mutex::new(DocumentStore::new(tempdir.path()).unwrap()));
+        let store = Arc::new(RwLock::new(DocumentStore::new(tempdir.path()).unwrap()));
         let index_dir = tempdir.path().join("index");
         std::fs::create_dir_all(&index_dir).unwrap();
         let search = Arc::new(crate::search::SearchIndex::new(&index_dir).unwrap());
@@ -1357,7 +1357,7 @@ mod tests {
         );
 
         let root = {
-            let mut s = store.lock().await;
+            let mut s = store.write().await;
             s.ensure_root("user1").unwrap()
         };
 

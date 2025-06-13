@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Mutex as AsyncMutex};
+use tokio::sync::{RwLock, Mutex as AsyncMutex};
 use tokio::time::{sleep, Duration};
 use uuid::Uuid;
 
@@ -11,12 +11,12 @@ use crate::storage::crdt::DocumentStore;
 
 pub struct LiveIndex {
     index: Arc<SearchIndex>,
-    store: Arc<Mutex<DocumentStore>>,
+    store: Arc<RwLock<DocumentStore>>,
     pending: AsyncMutex<HashMap<Uuid, tokio::task::JoinHandle<()>>>,
 }
 
 impl LiveIndex {
-    pub fn new(index: Arc<SearchIndex>, store: Arc<Mutex<DocumentStore>>) -> Self {
+    pub fn new(index: Arc<SearchIndex>, store: Arc<RwLock<DocumentStore>>) -> Self {
         Self {
             index,
             store,
@@ -37,9 +37,9 @@ impl LiveIndex {
         folders
     }
 
-    async fn reindex(index: Arc<SearchIndex>, store: Arc<Mutex<DocumentStore>>, id: Uuid) {
+    async fn reindex(index: Arc<SearchIndex>, store: Arc<RwLock<DocumentStore>>, id: Uuid) {
         sleep(Duration::from_millis(100)).await;
-        let store_guard = store.lock().await;
+        let store_guard = store.read().await;
         if let Some(doc) = store_guard.get(id) {
             let folders = Self::gather_folders(&store_guard, doc.parent_folder_id());
             let _ = index.index_document(id, doc.name(), &doc.text(), &folders);
