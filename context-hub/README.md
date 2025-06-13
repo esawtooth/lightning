@@ -172,13 +172,16 @@ bash-like commands for working with the service using the `click` library.
 
 ```bash
 # create a folder
-./contexthub user1 new Project --type folder
+./contexthub user1 new hub:///Project --type folder
 
 # list folder contents using paths
-./contexthub user1 ls /
+./contexthub user1 ls hub:///
 
 # display a file
-./contexthub user1 cat /Project/notes.md
+./contexthub user1 cat hub:///Project/notes.md
+
+# copy a local file into the hub
+./contexthub user1 cp notes.txt hub:///Project/notes.md
 ```
 
 Use `-h` with any command to see available options. The base URL can be set with
