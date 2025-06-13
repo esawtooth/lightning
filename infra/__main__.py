@@ -878,7 +878,7 @@ def afd_txt(label, cd):
         f"{label}-afd-txt",
         resource_group_name=rg.name,
         zone_name=dns_zone.name,
-        relative_record_set_name=f"asuid.{label}",
+        relative_record_set_name=f"_dnsauth.{label}",
         record_type="TXT",
         ttl=3600,
         txt_records=[dns.TxtRecordArgs(value=[cd.validation_properties.validation_token])],
