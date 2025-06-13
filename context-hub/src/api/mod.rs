@@ -158,6 +158,11 @@ struct SnapshotEntry {
     timestamp: String,
 }
 
+#[derive(Serialize)]
+struct RootResponse {
+    id: Uuid,
+}
+
 pub fn router(
     state: Arc<RwLock<DocumentStore>>,
     snapshot_dir: PathBuf,
@@ -202,6 +207,7 @@ pub fn router(
         .route("/restore", post(restore_snapshot))
         .route("/snapshots", get(list_snapshots))
         .route("/snapshots/{rev}/docs/{id}", get(get_snapshot_doc))
+        .route("/root", get(get_root))
         .route("/ws", get(ws_stream))
         .route("/ws/docs/{id}", get(doc_ws))
         .with_state(app_state)
@@ -617,6 +623,15 @@ async fn search_docs(
         }
     }
     Ok(Json(results))
+}
+
+async fn get_root(
+    State(state): State<AppState>,
+    auth: AuthContext,
+) -> Result<Json<RootResponse>, StatusCode> {
+    let mut store = state.store.write().await;
+    let id = store.ensure_root(&auth.user_id).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(RootResponse { id }))
 }
 
 #[derive(Deserialize)]
