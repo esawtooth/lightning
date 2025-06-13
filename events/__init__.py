@@ -130,3 +130,29 @@ class WorkerTaskEvent(Event):
             meta["cost"] = self.cost
         d["metadata"] = meta
         return d
+
+
+@dataclass
+class VoiceCallEvent(Event):
+    """Event requesting an outbound voice call."""
+
+    phone: str = ""
+    objective: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "VoiceCallEvent":
+        base = Event.from_dict(data)
+        phone = base.metadata.get("phone")
+        if not phone:
+            raise ValueError("metadata.phone required")
+        obj = base.metadata.get("objective")
+        return cls(**asdict(base), phone=phone, objective=obj)
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["phone"] = self.phone
+        if self.objective is not None:
+            meta["objective"] = self.objective
+        d["metadata"] = meta
+        return d

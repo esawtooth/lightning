@@ -99,6 +99,7 @@ TWILIO_FROM_NUMBER="<twilio-phone-number>"
 COSMOS_CONNECTION="<connection-string>"
 COSMOS_DATABASE="vextir"
 USER_CONTAINER="users"
+CALL_CONTAINER="calls"
 LOG_CONTAINER="logs"
 REPO_CONTAINER="repos"
 ```
