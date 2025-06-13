@@ -49,7 +49,8 @@ fn resolve_git_pointer() {
         index.write().unwrap();
         let tree_id = index.write_tree().unwrap();
         let tree = repo.find_tree(tree_id).unwrap();
-        let sig = repo.signature().unwrap();
+        // Use a synthetic signature rather than relying on the user's git config
+        let sig = git2::Signature::now("tester", "tester@example.com").unwrap();
         repo.commit(Some("HEAD"), &sig, &sig, "init", &tree, &[])
             .unwrap();
     }
