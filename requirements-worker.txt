@@ -6,4 +6,5 @@ requests
 firecrawl-py>=1.0.0
 fastapi
 jinja2>=3.1.0
+PyJWT>=2.8.0
 pytest-benchmark
