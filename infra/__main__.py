@@ -493,6 +493,7 @@ def aci_group(
         name,
         resource_group_name=rg.name,
         location=rg.location,
+        container_group_name=name,
         os_type="Linux",
         subnet_ids=subnet_ids,
         ip_address=ip_cfg,
@@ -524,7 +525,10 @@ def aci_group(
             )
         ),
         image_registry_credentials=registry_creds,
-        opts=pulumi.ResourceOptions(replace_on_changes=["containers"]),
+        opts=pulumi.ResourceOptions(
+            replace_on_changes=["containers"],
+            delete_before_replace=True,
+        ),
     )
 
 postgres_cg = aci_group(
