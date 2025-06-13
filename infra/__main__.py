@@ -589,6 +589,7 @@ ui_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://api.", domain)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://api.", domain, "/events")),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
