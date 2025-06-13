@@ -14,7 +14,8 @@ import {
 } from "./sessionManager";
 import functions from "./functionHandlers";
 import { CosmosClient, Container } from "@azure/cosmos";
-import { getCallSid } from "./callControl";
+import { ServiceBusClient, ServiceBusMessage } from "@azure/service-bus";
+import { getCallSid, startCall } from "./callControl";
 
 dotenv.config();
 
@@ -27,10 +28,16 @@ const COSMOS_DATABASE = process.env.COSMOS_DATABASE || "vextir";
 const USER_CONTAINER = process.env.USER_CONTAINER || "users";
 const LOG_CONTAINER = process.env.LOG_CONTAINER || "logs";
 const REPO_CONTAINER = process.env.REPO_CONTAINER || "repos";
+const CALL_CONTAINER = process.env.CALL_CONTAINER || "calls";
+const SERVICEBUS_CONNECTION = process.env.SERVICEBUS_CONNECTION || "";
+const SERVICEBUS_QUEUE = process.env.SERVICEBUS_QUEUE || "";
+const OUTBOUND_TO = process.env.OUTBOUND_TO;
 
 let userContainer: Container | undefined;
 let logContainer: Container | undefined;
 let repoContainer: Container | undefined;
+let callContainer: Container | undefined;
+let sbClient: ServiceBusClient | undefined;
 if (COSMOS_CONNECTION) {
   try {
     const cosmosClient = new CosmosClient(COSMOS_CONNECTION);
@@ -43,8 +50,19 @@ if (COSMOS_CONNECTION) {
     repoContainer = cosmosClient
       .database(COSMOS_DATABASE)
       .container(REPO_CONTAINER);
+    callContainer = cosmosClient
+      .database(COSMOS_DATABASE)
+      .container(CALL_CONTAINER);
   } catch (err) {
     console.error("Failed to init Cosmos client", err);
+  }
+}
+
+if (SERVICEBUS_CONNECTION && SERVICEBUS_QUEUE) {
+  try {
+    sbClient = new ServiceBusClient(SERVICEBUS_CONNECTION);
+  } catch (err) {
+    console.error("Failed to init Service Bus client", err);
   }
 }
 
@@ -66,43 +84,40 @@ function recordLog(event: any) {
 }
 
 async function saveTranscript(logs: any[], user?: any) {
-  if (!repoContainer || !user) return;
-  try {
-    const { resource } = await repoContainer.item("repo", user.id).read();
-    const repoUrl = resource.repo as string;
-    const giteaUrl = process.env.GITEA_URL;
-    const giteaToken = process.env.GITEA_TOKEN;
-    if (!repoUrl || !giteaUrl || !giteaToken) return;
-    const owner = user.id;
-    const repoName = repoUrl.split("/").pop()?.replace(/\.git$/, "");
-    if (!repoName) return;
-    const path = `transcripts/${new Date().toISOString()}.json`;
-    const summary = logs
-      .filter((e: any) => e.item && e.item.type === "message")
-      .slice(0, 5)
-      .map((e: any) => e.item.content?.map((c: any) => c.text).join(" "))
-      .join("\n");
-    const body = {
-      content: Buffer.from(
-        JSON.stringify({ logs, summary }, null, 2)
-      ).toString("base64"),
-      message: `add transcript ${path}`,
+  const callId = getCallSid() || `call-${Date.now()}`;
+  if (callContainer) {
+    const entity = {
+      id: callId,
+      pk: user?.id || "anon",
+      timestamp: new Date().toISOString(),
+      logs,
     };
-    await fetch(
-      `${giteaUrl}/api/v1/repos/${owner}/${repoName}/contents/${encodeURIComponent(
-        path
-      )}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `token ${giteaToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(body),
-      }
-    );
-  } catch (err) {
-    console.error("Failed to save transcript", err);
+    try {
+      await callContainer.items.create(entity);
+    } catch (err) {
+      console.error("Failed to save call transcript", err);
+    }
+  }
+
+  if (sbClient) {
+    const outEvent = {
+      timestamp: new Date().toISOString(),
+      source: "voice-agent",
+      type: "voice.call.done",
+      userID: user?.id || "anon",
+      metadata: { callId },
+    };
+    const message: ServiceBusMessage = {
+      body: JSON.stringify(outEvent),
+      applicationProperties: { topic: outEvent.type },
+    } as any;
+    try {
+      const sender = sbClient.createSender(SERVICEBUS_QUEUE);
+      await sender.sendMessages(message);
+      await sender.close();
+    } catch (err) {
+      console.error("Failed to publish call event", err);
+    }
   }
 }
 
@@ -188,4 +203,9 @@ wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+  if (OUTBOUND_TO) {
+    startCall(OUTBOUND_TO).catch((err) =>
+      console.error("Failed to start outbound call", err)
+    );
+  }
 });
