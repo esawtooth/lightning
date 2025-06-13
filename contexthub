@@ -1,0 +1,209 @@
+#!/usr/bin/env python3
+"""Rich command line client for the Context Hub service using ``click``."""
+
+from __future__ import annotations
+
+import json
+import os
+import sys
+from typing import Optional
+
+import click
+import requests
+
+
+def _get_default_url() -> str:
+    return os.environ.get("HUB_URL", "http://localhost:3000")
+
+
+
+def request(method: str, path: str, *, ctx: dict[str, str], **kwargs):
+    """Send an HTTP request and return the JSON response if any."""
+    url = f"{ctx['url']}{path}"
+    headers = kwargs.pop("headers", {})
+    headers.setdefault("X-User-Id", ctx["user"])
+    agent = ctx.get("agent")
+    if agent:
+        headers.setdefault("X-Agent-Id", agent)
+    resp = requests.request(method, url, headers=headers, **kwargs)
+    if not resp.ok:
+        print(f"Error: {resp.status_code} {resp.text}", file=sys.stderr)
+        resp.raise_for_status()
+    if resp.text:
+        try:
+            return resp.json()
+        except ValueError:
+            return resp.text
+    return None
+
+
+# Command implementations ----------------------------------------------------
+
+def _read_content(src: Optional[str]) -> str:
+    if src is None or src == "-":
+        return sys.stdin.read()
+    with open(src, "r", encoding="utf-8") as f:
+        return f.read()
+
+
+@click.command("ls")
+@click.argument("id")
+@click.pass_obj
+def cmd_ls(ctx: dict[str, str], id: str) -> None:
+    """List the children of a folder."""
+    res = request("GET", f"/folders/{id}", ctx=ctx)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("cat")
+@click.argument("id")
+@click.pass_obj
+def cmd_cat(ctx: dict[str, str], id: str) -> None:
+    """Print a document's content."""
+    res = request("GET", f"/docs/{id}", ctx=ctx)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("get")
+@click.argument("id")
+@click.option("-o", "--output", type=click.Path(), help="Write to file instead of stdout")
+@click.pass_obj
+def cmd_get(ctx: dict[str, str], id: str, output: Optional[str]) -> None:
+    """Fetch a document and optionally write it to a file."""
+    res = request("GET", f"/docs/{id}", ctx=ctx)
+    if output:
+        with open(output, "w", encoding="utf-8") as f:
+            json.dump(res, f, indent=2)
+    else:
+        click.echo(json.dumps(res, indent=2))
+
+@click.command("put")
+@click.argument("id")
+@click.argument("file", required=False)
+@click.pass_obj
+def cmd_put(ctx: dict[str, str], id: str, file: Optional[str]) -> None:
+    """Update an existing document's content from a file or STDIN."""
+    content = _read_content(file)
+    data = {"content": content}
+    res = request("PUT", f"/docs/{id}", ctx=ctx, json=data)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("new")
+@click.argument("name")
+@click.option("--parent", help="Parent folder UUID")
+@click.option("--type", "doc_type", type=click.Choice(["text", "folder"]), default="text")
+@click.option("--content", default="", help="Inline content for text docs")
+@click.option("--file", "file_path", type=click.Path(), help="Read content from file")
+@click.pass_obj
+def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str, content: str, file_path: Optional[str]) -> None:
+    """Create a new document or folder."""
+    content = _read_content(file_path) if file_path else content
+    data = {
+        "name": name,
+        "content": content or "",
+        "parent_folder_id": parent,
+        "doc_type": doc_type.capitalize(),
+    }
+    res = request("POST", "/docs", ctx=ctx, json=data)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("rm")
+@click.argument("id")
+@click.pass_obj
+def cmd_rm(ctx: dict[str, str], id: str) -> None:
+    """Delete a document or folder."""
+    request("DELETE", f"/docs/{id}", ctx=ctx)
+    click.echo("Deleted")
+
+
+@click.command("rename")
+@click.argument("id")
+@click.argument("name")
+@click.pass_obj
+def cmd_rename(ctx: dict[str, str], id: str, name: str) -> None:
+    """Rename a document or folder."""
+    data = {"name": name}
+    res = request("PUT", f"/docs/{id}/rename", ctx=ctx, json=data)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("share")
+@click.argument("id")
+@click.argument("target")
+@click.option("--rights", type=click.Choice(["read", "write"]), default="read")
+@click.pass_obj
+def cmd_share(ctx: dict[str, str], id: str, target: str, rights: str) -> None:
+    """Share a folder with another user."""
+    data = {"user": target, "rights": rights}
+    res = request("POST", f"/folders/{id}/share", ctx=ctx, json=data)
+    click.echo(json.dumps(res, indent=2))
+
+
+@click.command("unshare")
+@click.argument("id")
+@click.argument("target")
+@click.pass_obj
+def cmd_unshare(ctx: dict[str, str], id: str, target: str) -> None:
+    data = {"user": target}
+    request("DELETE", f"/folders/{id}/share", ctx=ctx, json=data)
+    click.echo("Unshared")
+
+
+@click.command("search")
+@click.argument("query")
+@click.pass_obj
+def cmd_search(ctx: dict[str, str], query: str) -> None:
+    params = {"q": query}
+    res = request("GET", "/search", ctx=ctx, params=params)
+    click.echo(json.dumps(res, indent=2))
+
+
+# CLI ------------------------------------------------------------------------
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option("--url", default=_get_default_url, show_default="env:HUB_URL or http://localhost:3000", help="Base service URL")
+@click.option("--agent-id", envvar="AGENT_ID", help="Acting agent ID")
+@click.argument("user")
+@click.pass_context
+def cli(ctx: click.Context, url: str, agent_id: Optional[str], user: str) -> None:
+    """Interact with the Context Hub service."""
+    ctx.obj = {"url": url, "user": user, "agent": agent_id}
+
+
+# Register commands on the group
+cli.add_command(cmd_ls)
+cli.add_command(cmd_cat)
+cli.add_command(cmd_get)
+cli.add_command(cmd_put)
+cli.add_command(cmd_new)
+cli.add_command(cmd_rm)
+cli.add_command(cmd_rename)
+cli.add_command(cmd_share)
+cli.add_command(cmd_unshare)
+cli.add_command(cmd_search)
+
+
+@cli.command()
+@click.option("--shell", type=click.Choice(["bash", "zsh", "fish"]), default="bash", show_default=True, help="Shell type")
+@click.pass_context
+def completion(ctx: click.Context, shell: str) -> None:
+    """Output shell completion script."""
+    from click.shell_completion import get_completion_class
+
+    comp_cls = get_completion_class(shell)
+    comp = comp_cls(ctx.parent.command, {}, ctx.parent.command_path, "_CONTEXTHUB_COMPLETE")
+    click.echo(comp.source())
+
+
+def main() -> int:
+    try:
+        cli.main(prog_name="contexthub")
+    except requests.exceptions.HTTPError:
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

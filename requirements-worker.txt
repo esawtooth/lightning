@@ -7,3 +7,4 @@ firecrawl-py>=1.0.0
 fastapi
 jinja2>=3.1.0
 pytest-benchmark
+click>=8.1.0
