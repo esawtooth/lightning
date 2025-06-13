@@ -28,4 +28,4 @@ criterion = "0.5"
 [[bench]]
 name = "search_bench"
 harness = false
-
+tokio-tungstenite = "0.26"
