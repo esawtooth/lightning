@@ -128,7 +128,7 @@ jobs:
           context: .
           file: ./Dockerfile.worker
           push: true
-          tags: vextiracr.azurecr.io/worker-task:${{ github.sha }},vextiracr.azurecr.io/worker-task:latest
+          tags: vextiracrdev.azurecr.io/worker-task:${{ github.sha }},vextiracrdev.azurecr.io/worker-task:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push chainlit client image
@@ -137,7 +137,7 @@ jobs:
           context: .
           file: ./chat_client/Dockerfile
           push: true
-          tags: vextiracr.azurecr.io/chainlit-client:${{ github.sha }},vextiracr.azurecr.io/chainlit-client:latest
+          tags: vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }},vextiracrdev.azurecr.io/chainlit-client:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push voice websocket image
@@ -145,7 +145,7 @@ jobs:
         with:
           context: ./agents/voice-agent/websocket-server
           push: true
-          tags: vextiracr.azurecr.io/voice-ws:${{ github.sha }},vextiracr.azurecr.io/voice-ws:latest
+          tags: vextiracrdev.azurecr.io/voice-ws:${{ github.sha }},vextiracrdev.azurecr.io/voice-ws:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Build and push voice webapp image
@@ -153,7 +153,7 @@ jobs:
         with:
           context: ./agents/voice-agent/webapp
           push: true
-          tags: vextiracr.azurecr.io/voice-webapp:${{ github.sha }},vextiracr.azurecr.io/voice-webapp:latest
+          tags: vextiracrdev.azurecr.io/voice-webapp:${{ github.sha }},vextiracrdev.azurecr.io/voice-webapp:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -208,17 +208,17 @@ jobs:
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure worker image
-        run: pulumi config set workerImage "vextiracr.azurecr.io/worker-task:${{ github.sha }}"
+        run: pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure UI image
-        run: pulumi config set uiImage "vextiracr.azurecr.io/chainlit-client:${{ github.sha }}"
+        run: pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       - name: Configure voice websocket image
-        run: pulumi config set voiceWsImage "vextiracr.azurecr.io/voice-ws:${{ github.sha }}"
+        run: pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${{ github.sha }}"
         working-directory: infra
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
