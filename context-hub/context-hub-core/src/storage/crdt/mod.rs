@@ -221,6 +221,20 @@ impl Document {
         Ok(())
     }
 
+    /// Import CRDT updates encoded via `LoroDoc::export`.
+    pub fn import_updates(&mut self, bytes: &[u8]) -> Result<()> {
+        self.doc.import(bytes).map_err(|e| anyhow!(e))?;
+        self.doc.commit();
+        Ok(())
+    }
+
+    /// Export the current document state as a CRDT snapshot.
+    pub fn snapshot_bytes(&self) -> Result<Vec<u8>> {
+        self.doc
+            .export(loro::ExportMode::Snapshot)
+            .map_err(|e| anyhow!(e))
+    }
+
     pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
         if self.doc_type == DocumentType::Folder {
             return Ok(());
@@ -992,6 +1006,17 @@ impl DocumentStore {
         let path = self.path(id);
         if let Some(doc) = self.docs.get_mut(&id) {
             doc.set_text(text)?;
+            doc.save(&path)?;
+        }
+        self.mark_dirty();
+        Ok(())
+    }
+
+    /// Apply serialized CRDT updates to the given document.
+    pub fn apply_updates(&mut self, id: Uuid, bytes: &[u8]) -> Result<()> {
+        let path = self.path(id);
+        if let Some(doc) = self.docs.get_mut(&id) {
+            doc.import_updates(bytes)?;
             doc.save(&path)?;
         }
         self.mark_dirty();

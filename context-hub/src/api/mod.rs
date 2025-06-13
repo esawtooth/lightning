@@ -988,22 +988,22 @@ async fn handle_doc_ws(mut socket: WebSocket, id: Uuid, state: AppState, auth: A
     };
     let mut rx = tx.subscribe();
 
-    if let Some(text) = {
+    if let Some(snapshot) = {
         let store = state.store.read().await;
-        store.get(id).map(|d| d.text())
+        store.get(id).and_then(|d| d.snapshot_bytes().ok())
     } {
-        let _ = socket.send(Message::Text(text.clone().into())).await;
+        let _ = socket.send(Message::Binary(Bytes::from(snapshot))).await;
     }
 
     loop {
         tokio::select! {
             msg = socket.recv() => {
                 match msg {
-                    Some(Ok(Message::Text(text))) => {
-                        let text_str = text.to_string();
+                    Some(Ok(Message::Binary(patch))) => {
                         let mut store = state.store.write().await;
-                        let _ = store.update(id, &text_str);
-                        let _ = tx.send(text_str.into_bytes());
+                        let _ = store.apply_updates(id, &patch);
+                        let _ = tx.send(patch.to_vec());
+                        state.indexer.schedule_update(id).await;
                         state.events.send(Event::Updated { id });
                     }
                     Some(Ok(Message::Close(_))) | None => break,
