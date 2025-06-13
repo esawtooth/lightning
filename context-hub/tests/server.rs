@@ -23,6 +23,7 @@ async fn server_health_endpoint() {
     let router = api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer,
         events,
         verifier,
@@ -61,6 +62,7 @@ async fn root_created_on_use() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer,
         events,
         verifier,
@@ -102,6 +104,7 @@ async fn search_endpoint() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer.clone(),
         events,
         verifier,
@@ -155,6 +158,7 @@ async fn rename_endpoint() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer.clone(),
         events,
         verifier,
@@ -225,6 +229,7 @@ async fn move_endpoint() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer.clone(),
         events,
         verifier,
@@ -374,6 +379,7 @@ async fn blob_attach_and_fetch() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer.clone(),
         events,
         verifier,
@@ -438,6 +444,7 @@ async fn agent_scope_api() {
     let app = Router::new().merge(api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer.clone(),
         events,
         verifier,

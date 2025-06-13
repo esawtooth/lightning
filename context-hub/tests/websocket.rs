@@ -22,6 +22,7 @@ async fn doc_websocket_broadcasts_updates() {
     let router = api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer,
         events,
         verifier,

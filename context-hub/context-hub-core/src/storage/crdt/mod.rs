@@ -395,6 +395,49 @@ impl Document {
         })
     }
 
+    pub fn from_bytes(id: Uuid, bytes: &[u8]) -> Result<Self> {
+        let doc = LoroDoc::new();
+        doc.import(bytes).map_err(|e| anyhow!(e))?;
+        doc.commit();
+        let doc_type = if doc.get_by_str_path(CHILDREN_KEY).is_some() {
+            DocumentType::Folder
+        } else if let Some(t) = doc
+            .get_by_str_path("meta/doc_type")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+        {
+            DocumentType::from_str(&t)
+        } else {
+            DocumentType::Text
+        };
+        let owner = doc
+            .get_by_str_path("meta/owner")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| DEFAULT_USER.to_string());
+        let name = doc
+            .get_by_str_path("meta/name")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| id.to_string());
+        let parent_folder_id = doc
+            .get_by_str_path("meta/parent_folder_id")
+            .and_then(|v| v.into_value().ok())
+            .and_then(|v| v.into_string().ok())
+            .and_then(|s| Uuid::parse_str(&s).ok());
+        Ok(Self {
+            id,
+            doc,
+            owner,
+            name,
+            parent_folder_id,
+            doc_type,
+            acl: Vec::new(),
+        })
+    }
+
     pub fn add_child(&mut self, child_id: Uuid, name: &str, doc_type: DocumentType) -> Result<()> {
         if self.doc_type != DocumentType::Folder {
             return Ok(());

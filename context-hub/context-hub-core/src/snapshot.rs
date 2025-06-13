@@ -7,9 +7,17 @@ use crate::storage::crdt::DocumentStore;
 use anyhow::{anyhow, Result};
 use chrono::{TimeZone, Utc};
 use git2::{IndexAddOption, ObjectType, Oid, Repository, Signature};
+use crate::storage::crdt::Document;
+use uuid::Uuid;
 
 pub struct SnapshotManager {
     repo: Repository,
+}
+
+#[derive(Debug, Clone)]
+pub struct SnapshotInfo {
+    pub id: Oid,
+    pub time: chrono::DateTime<Utc>,
 }
 
 impl SnapshotManager {
@@ -48,7 +56,8 @@ impl SnapshotManager {
         let tree = self.repo.find_tree(tree_id)?;
 
         let sig = Signature::now("context-hub", "context@hub")?;
-        let msg = format!("Snapshot {}", Utc::now().to_rfc3339());
+        let ts = Utc::now();
+        let msg = format!("Snapshot {}", ts.to_rfc3339());
         let commit_id = match self.repo.head() {
             Ok(head) => {
                 let parent = head.peel_to_commit()?;
@@ -59,19 +68,42 @@ impl SnapshotManager {
                 .repo
                 .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[])?,
         };
+        let tag_name = format!("snapshot-{}", ts.timestamp());
+        let obj = self.repo.find_object(commit_id, None)?;
+        let _ = self.repo.tag_lightweight(&tag_name, &obj, false);
         Ok(commit_id)
+    }
+
+    pub fn prune_old_tags(&self, keep: usize) -> Result<()> {
+        let names = self.repo.tag_names(Some("snapshot-*"))?;
+        let mut entries = Vec::new();
+        for name in names.iter().flatten() {
+            if let Ok(obj) = self.repo.revparse_single(name) {
+                if let Ok(commit) = obj.peel_to_commit() {
+                    let ts = Utc
+                        .timestamp_opt(commit.time().seconds(), 0)
+                        .single()
+                        .unwrap();
+                    entries.push((name.to_string(), ts));
+                }
+            }
+        }
+        entries.sort_by_key(|e| e.1);
+        while entries.len() > keep {
+            if let Some((name, _)) = entries.first() {
+                let _ = self.repo.tag_delete(name);
+                entries.remove(0);
+            }
+        }
+        Ok(())
     }
 
     pub fn repo(&self) -> &Repository {
         &self.repo
     }
 
-    /// Restore the document store state from the specified revision. The
-    /// `rev` can be any git revspec (commit hash or tag) or an RFC3339
-    /// timestamp, in which case the latest commit at or before that time is
-    /// used.
-    pub fn restore(&self, store: &mut DocumentStore, rev: &str) -> Result<()> {
-        let oid = if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(rev) {
+    fn resolve_rev(&self, rev: &str) -> Result<Oid> {
+        if let Ok(ts) = chrono::DateTime::parse_from_rfc3339(rev) {
             let mut walk = self.repo.revwalk()?;
             walk.push_head()?;
             let ts = ts.with_timezone(&Utc);
@@ -88,10 +120,52 @@ impl SnapshotManager {
                     break;
                 }
             }
-            found.ok_or_else(|| anyhow!("no commit before timestamp"))?
+            found.ok_or_else(|| anyhow!("no commit before timestamp"))
         } else {
-            self.repo.revparse_single(rev)?.peel_to_commit()?.id()
-        };
+            Ok(self.repo.revparse_single(rev)?.peel_to_commit()?.id())
+        }
+    }
+
+    pub fn history(&self, limit: usize) -> Result<Vec<SnapshotInfo>> {
+        let mut walk = self.repo.revwalk()?;
+        walk.push_head()?;
+        let mut out = Vec::new();
+        for (i, id) in walk.enumerate() {
+            if i >= limit {
+                break;
+            }
+            let id = id?;
+            let commit = self.repo.find_commit(id)?;
+            let ts = Utc
+                .timestamp_opt(commit.time().seconds(), 0)
+                .single()
+                .unwrap();
+            out.push(SnapshotInfo { id, time: ts });
+        }
+        Ok(out)
+    }
+
+    pub fn load_document_at(&self, doc: Uuid, rev: &str) -> Result<Option<Document>> {
+        let oid = self.resolve_rev(rev)?;
+        let commit = self.repo.find_commit(oid)?;
+        let tree = commit.tree()?;
+        let name = format!("{}.bin", doc);
+        if let Some(entry) = tree.get_name(&name) {
+            if entry.kind() == Some(ObjectType::Blob) {
+                let blob = self.repo.find_blob(entry.id())?;
+                let doc = Document::from_bytes(doc, blob.content())?;
+                return Ok(Some(doc));
+            }
+        }
+        Ok(None)
+    }
+
+    /// Restore the document store state from the specified revision. The
+    /// `rev` can be any git revspec (commit hash or tag) or an RFC3339
+    /// timestamp, in which case the latest commit at or before that time is
+    /// used.
+    pub fn restore(&self, store: &mut DocumentStore, rev: &str) -> Result<()> {
+        let oid = self.resolve_rev(rev)?;
 
         let commit = self.repo.find_commit(oid)?;
         let tree = commit.tree()?;
@@ -124,13 +198,18 @@ pub async fn snapshot_task(
     store: Arc<RwLock<DocumentStore>>,
     manager: Arc<SnapshotManager>,
     period: Duration,
+    retention: Option<usize>,
 ) {
     let mut ticker = interval(period);
     loop {
         ticker.tick().await;
         let mut store = store.write().await;
         if store.is_dirty() {
-            let _ = manager.snapshot(&store);
+            if manager.snapshot(&store).is_ok() {
+                if let Some(max) = retention {
+                    let _ = manager.prune_old_tags(max);
+                }
+            }
             store.clear_dirty();
             let _ = store.compact_history();
         }

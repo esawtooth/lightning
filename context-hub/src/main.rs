@@ -47,19 +47,28 @@ async fn main() -> anyhow::Result<()> {
         let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
         Arc::new(auth::Hs256Verifier::new(secret))
     };
+    let snapshot_retention = std::env::var("SNAPSHOT_RETENTION")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok());
     let router = api::router(
         store.clone(),
         PathBuf::from(&snapshot_dir),
+        snapshot_retention,
         indexer.clone(),
         events.clone(),
         verifier,
     );
     // spawn periodic snapshots every hour on a LocalSet so non-Send types work
     let local = LocalSet::new();
+    let interval = std::env::var("SNAPSHOT_INTERVAL_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(3600);
     local.spawn_local(snapshot::snapshot_task(
         store.clone(),
         snapshot_mgr.clone(),
-        Duration::from_secs(3600),
+        Duration::from_secs(interval),
+        snapshot_retention,
     ));
     let app = Router::new().merge(router).route("/health", get(|| async { "OK" }));
 
