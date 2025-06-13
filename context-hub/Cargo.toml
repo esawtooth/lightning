@@ -24,8 +24,8 @@ tower = "0.5"
 futures-util = "0.3"
 bytes = "1"
 criterion = "0.5"
+tokio-tungstenite = "0.26"
 
 [[bench]]
 name = "search_bench"
 harness = false
-tokio-tungstenite = "0.26"
