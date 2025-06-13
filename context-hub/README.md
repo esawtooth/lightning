@@ -162,3 +162,27 @@ GET /docs/{id}/sharing
    ```bash
    curl -H "X-User-Id: user1" http://localhost:3000/snapshots
    ```
+## Command Line Client
+
+A helper script `contexthub` is available in the repository root. It provides
+bash-like commands for working with the service using the `click` library.
+
+```bash
+# create a folder
+./contexthub user1 new Project --type folder
+
+# list folder contents
+./contexthub user1 ls <folder-id>
+```
+
+Use `-h` with any command to see available options. The base URL can be set with
+`--url` or the `HUB_URL` environment variable (default
+`http://localhost:3000`). Optionally provide an agent ID with `--agent-id` or the
+`AGENT_ID` variable.
+
+Shell completion scripts are available via:
+
+```bash
+contexthub completion --shell bash > /usr/local/etc/bash_completion.d/contexthub
+```
+
