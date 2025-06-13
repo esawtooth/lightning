@@ -183,6 +183,7 @@ privatedns.VirtualNetworkLink(
     virtual_network_link_name="link-cosmos",
     virtual_network=privatedns.SubResourceArgs(id=vnet.id),
     registration_enabled=False,
+    location="global",  # privatedns links require location 'global'
 )
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -578,6 +579,7 @@ assign_guid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{stack_suffix}-func-blob-read
 func_blob_reader = authorization.RoleAssignment(
     "func-blob-reader",
     principal_id=func_app.identity.principal_id,
+    principal_type="ServicePrincipal",
     role_definition_id=pulumi.Output.concat(
         "/subscriptions/", subscription_id,
         "/providers/Microsoft.Authorization/roleDefinitions/2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"
@@ -726,7 +728,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
             additional_latency_in_milliseconds = 0,
         ),
     )
-    cdn.afd_origin.AFDOrigin(
+    origin = cdn.afd_origin.AFDOrigin(
         f"{name}-origin",
         resource_group_name=rg.name,
         profile_name=fd_profile.name,
@@ -737,11 +739,11 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         http_port=80 if port == 443 else port,
         enabled_state=cdn.EnabledState.ENABLED,
     )
-    return og
+    return og, origin
 
-ui_og   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
-api_og  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
-voice_og = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
+ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
+api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
+voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
 
 
 def afd_domain(label, sub):
@@ -760,7 +762,7 @@ ui_cd   = afd_domain("ui",   "www")
 api_cd  = afd_domain("api",  "api")
 voice_cd= afd_domain("voice","voice-ws")
 
-def afd_route(name, pattern, og, cd, fp):
+def afd_route(name, pattern, og, origin, cd, fp):
     cdn.route.Route(
         f"{name}-route",
         resource_group_name=rg.name,
@@ -774,11 +776,11 @@ def afd_route(name, pattern, og, cd, fp):
         link_to_default_domain=cdn.LinkToDefaultDomain.DISABLED,
         supported_protocols=[cdn.AFDEndpointProtocols.HTTPS],
         custom_domains=[cdn.ActivatedResourceReferenceArgs(id=cd.id)],
-        opts=pulumi.ResourceOptions(depends_on=[og]),
+        opts=pulumi.ResourceOptions(depends_on=[og, origin]),
     )
-afd_route("ui",    "/*",           ui_og,   ui_cd,   cdn.ForwardingProtocol.HTTPS_ONLY)
-afd_route("api",   "/api/*",       api_og,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
-afd_route("voice", "/voice-ws/*",  voice_og,voice_cd,cdn.ForwardingProtocol.HTTP_ONLY)
+afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTPS_ONLY)
+afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
+afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
 
 dns_zone = dns.Zone(
     "zone",
