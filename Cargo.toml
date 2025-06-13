@@ -1,5 +1,5 @@
 [workspace]
 members = [
-    "context-hub",
+    "context-hub", "context-hub-fuse",
     "context-hub/context-hub-core"
 ]
