@@ -494,7 +494,7 @@ postgres_cg = aci_group(
     5432,
     [
         containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
-        containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", value=postgres_password),
+        containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", secure_value=postgres_password),
         containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
     ],
     volumes=[
