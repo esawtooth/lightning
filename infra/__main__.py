@@ -98,7 +98,7 @@ vault = keyvault.Vault(
 authorization.RoleAssignment(
     "kv-admin",
     principal_id = client_cfg.object_id,                  # who is running Pulumi
-    principal_type = "ServicePrincipal",          
+    principal_type = "ServicePrincipal",
     role_definition_id = (
         "/subscriptions/" + subscription_id +
         "/providers/Microsoft.Authorization/roleDefinitions/" +
@@ -108,6 +108,20 @@ authorization.RoleAssignment(
     role_assignment_name = str(uuid.uuid5(
         uuid.NAMESPACE_URL, f"{rg.name}-kv-admin-{client_cfg.object_id}"
     )),
+)
+
+# Allow the Pulumi service principal to manage Key Vault secrets
+kv_secret_delete_guid = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{stack_suffix}-kv-secret-delete"))
+authorization.RoleAssignment(
+    "pulumi-sp-secret-delete",
+    principal_id=client_cfg.object_id,
+    principal_type="ServicePrincipal",
+    role_definition_id=pulumi.Output.concat(
+        "/subscriptions/", subscription_id,
+        "/providers/Microsoft.Authorization/roleDefinitions/b86a8fe4-44ce-4948-aee5-eccb2c155cd7",
+    ),
+    scope=vault.id,
+    role_assignment_name=kv_secret_delete_guid,
 )
 
 
