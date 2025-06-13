@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from typing import Optional
+from typing import Optional, Iterable
 
 import click
 import requests
@@ -72,10 +72,51 @@ def resolve_path(target: str, ctx: dict[str, str]) -> str:
 # Command implementations ----------------------------------------------------
 
 def _read_content(src: Optional[str]) -> str:
+    """Read file content or STDIN when ``src`` is ``None`` or ``-``."""
     if src is None or src == "-":
         return sys.stdin.read()
-    with open(src, "r", encoding="utf-8") as f:
-        return f.read()
+    try:
+        with open(src, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        raise click.ClickException(f"file not found: {src}")
+    except IsADirectoryError:
+        raise click.ClickException(f"not a file: {src}")
+
+
+def _print_table(rows: list[dict], *, headers: Iterable[str] | None = None) -> None:
+    """Render a simple table from a list of dictionaries."""
+    if not rows:
+        return
+    headers = list(headers or {k for row in rows for k in row})
+    widths = {h: len(h) for h in headers}
+    for row in rows:
+        for h in headers:
+            widths[h] = max(widths[h], len(str(row.get(h, ""))))
+    header_line = "  ".join(h.ljust(widths[h]) for h in headers)
+    click.echo(header_line)
+    click.echo("-" * len(header_line))
+    for row in rows:
+        line = "  ".join(str(row.get(h, "")).ljust(widths[h]) for h in headers)
+        click.echo(line)
+
+
+def _pretty_print(data: object) -> None:
+    """Pretty-print JSON data."""
+    if isinstance(data, list) and all(isinstance(x, dict) for x in data):
+        _print_table(data)
+    elif isinstance(data, dict):
+        for k, v in data.items():
+            click.echo(f"{k}: {v}")
+    else:
+        click.echo(str(data))
+
+
+def _output(ctx: dict[str, str], data: object) -> None:
+    if ctx.get("json_output"):
+        click.echo(json.dumps(data, indent=2))
+    else:
+        _pretty_print(data)
 
 
 @click.command("ls")
@@ -83,9 +124,9 @@ def _read_content(src: Optional[str]) -> str:
 @click.pass_obj
 def cmd_ls(ctx: dict[str, str], path: str) -> None:
     """List the children of a folder."""
-    folder_id = resolve_path(path, ctx)
+    folder_id = resolve_path(_strip_hub(path), ctx)
     res = request("GET", f"/folders/{folder_id}", ctx=ctx)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 @click.command("cat")
@@ -93,9 +134,9 @@ def cmd_ls(ctx: dict[str, str], path: str) -> None:
 @click.pass_obj
 def cmd_cat(ctx: dict[str, str], path: str) -> None:
     """Print a document's content."""
-    doc_id = resolve_path(path, ctx)
+    doc_id = resolve_path(_strip_hub(path), ctx)
     res = request("GET", f"/docs/{doc_id}", ctx=ctx)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 @click.command("get")
@@ -104,38 +145,220 @@ def cmd_cat(ctx: dict[str, str], path: str) -> None:
 @click.pass_obj
 def cmd_get(ctx: dict[str, str], path: str, output: Optional[str]) -> None:
     """Fetch a document and optionally write it to a file."""
-    doc_id = resolve_path(path, ctx)
+    doc_id = resolve_path(_strip_hub(path), ctx)
     res = request("GET", f"/docs/{doc_id}", ctx=ctx)
     if output:
         with open(output, "w", encoding="utf-8") as f:
             json.dump(res, f, indent=2)
     else:
-        click.echo(json.dumps(res, indent=2))
+        _output(ctx, res)
 
-@click.command("put")
-@click.argument("path")
-@click.argument("file", required=False)
+def _is_hub_path(path: str) -> bool:
+    return path.startswith("hub://")
+
+
+def _strip_hub(path: str) -> str:
+    return path[6:] if _is_hub_path(path) else path
+
+
+def _parent_and_name(path: str) -> tuple[str, str]:
+    clean = path.rstrip("/") or "/"
+    parent, name = os.path.split(clean)
+    if not parent:
+        parent = "/"
+    return parent, name
+
+
+def _ensure_remote_folder(ctx: dict[str, str], path: str) -> str:
+    """Return folder ID creating folders recursively if needed."""
+    clean = _strip_hub(path)
+    try:
+        folder_id = resolve_path(clean, ctx)
+        info = request("GET", f"/docs/{folder_id}", ctx=ctx)
+        if info["doc_type"].lower() != "folder":
+            raise click.ClickException(f"not a folder: {path}")
+        return folder_id
+    except click.ClickException:
+        # create recursively
+        parent, name = _parent_and_name(clean)
+        parent_id = _ensure_remote_folder(ctx, parent) if parent != clean else resolve_path(_strip_hub(parent), ctx)
+        data = {
+            "name": name,
+            "content": "",
+            "parent_folder_id": parent_id,
+            "doc_type": "Folder",
+        }
+        res = request("POST", "/docs", ctx=ctx, json=data)
+        return res["id"]
+
+
+def _copy_local_file_to_hub(ctx: dict[str, str], src: str, dest: str) -> None:
+    content = _read_content(src)
+    try:
+        dest_id = resolve_path(_strip_hub(dest), ctx)
+        info = request("GET", f"/docs/{dest_id}", ctx=ctx)
+        if info["doc_type"].lower() == "folder":
+            parent_id = dest_id
+            name = os.path.basename(src)
+            data = {
+                "name": name,
+                "content": content,
+                "parent_folder_id": parent_id,
+                "doc_type": "Text",
+            }
+            res = request("POST", "/docs", ctx=ctx, json=data)
+        else:
+            data = {"content": content}
+            res = request("PUT", f"/docs/{dest_id}", ctx=ctx, json=data)
+    except click.ClickException:
+        parent, name = _parent_and_name(_strip_hub(dest))
+        parent_id = _ensure_remote_folder(ctx, parent)
+        data = {
+            "name": name,
+            "content": content,
+            "parent_folder_id": parent_id,
+            "doc_type": "Text",
+        }
+        res = request("POST", "/docs", ctx=ctx, json=data)
+    _output(ctx, res)
+
+
+def _copy_hub_file_to_local(ctx: dict[str, str], src: str, dest: str) -> None:
+    doc_id = resolve_path(_strip_hub(src), ctx)
+    info = request("GET", f"/docs/{doc_id}", ctx=ctx)
+    if info["doc_type"].lower() == "folder":
+        raise click.ClickException("source is a folder; use -r")
+    with open(dest, "w", encoding="utf-8") as f:
+        f.write(info.get("content", ""))
+
+
+def _copy_hub_file_to_hub(ctx: dict[str, str], src: str, dest: str) -> None:
+    doc_id = resolve_path(_strip_hub(src), ctx)
+    info = request("GET", f"/docs/{doc_id}", ctx=ctx)
+    if info["doc_type"].lower() == "folder":
+        raise click.ClickException("source is a folder; use -r")
+    content = info.get("content", "")
+    tmp = _strip_hub(dest)
+    try:
+        dest_id = resolve_path(_strip_hub(tmp), ctx)
+        d_info = request("GET", f"/docs/{dest_id}", ctx=ctx)
+        if d_info["doc_type"].lower() == "folder":
+            parent_id = dest_id
+            name = info["name"]
+            data = {
+                "name": name,
+                "content": content,
+                "parent_folder_id": parent_id,
+                "doc_type": "Text",
+            }
+            res = request("POST", "/docs", ctx=ctx, json=data)
+        else:
+            res = request("PUT", f"/docs/{dest_id}", ctx=ctx, json={"content": content})
+    except click.ClickException:
+        parent, name = _parent_and_name(_strip_hub(tmp))
+        parent_id = _ensure_remote_folder(ctx, parent)
+        data = {
+            "name": name,
+            "content": content,
+            "parent_folder_id": parent_id,
+            "doc_type": "Text",
+        }
+        res = request("POST", "/docs", ctx=ctx, json=data)
+    _output(ctx, res)
+
+
+def _copy_local_to_local(src: str, dest: str) -> None:
+    import shutil
+
+    shutil.copy2(src, dest)
+
+
+@click.command("cp")
+@click.option("-r", "--recursive", is_flag=True, help="Copy directories recursively")
+@click.argument("src")
+@click.argument("dest")
 @click.pass_obj
-def cmd_put(ctx: dict[str, str], path: str, file: Optional[str]) -> None:
-    """Update an existing document's content from a file or STDIN."""
-    content = _read_content(file)
-    data = {"content": content}
-    doc_id = resolve_path(path, ctx)
-    res = request("PUT", f"/docs/{doc_id}", ctx=ctx, json=data)
-    click.echo(json.dumps(res, indent=2))
+def cmd_cp(ctx: dict[str, str], recursive: bool, src: str, dest: str) -> None:
+    """Copy files and folders between local paths and the hub."""
+
+    src_is_hub = _is_hub_path(src)
+    dest_is_hub = _is_hub_path(dest)
+    src_p = _strip_hub(src)
+    dest_p = _strip_hub(dest)
+
+    if recursive:
+        _cp_recursive(ctx, src_is_hub, src_p, dest_is_hub, dest_p)
+    else:
+        _cp_single(ctx, src_is_hub, src_p, dest_is_hub, dest_p)
+
+
+def _cp_single(ctx: dict[str, str], src_is_hub: bool, src: str, dest_is_hub: bool, dest: str) -> None:
+    if src_is_hub and dest_is_hub:
+        _copy_hub_file_to_hub(ctx, src, dest)
+    elif src_is_hub and not dest_is_hub:
+        _copy_hub_file_to_local(ctx, src, dest)
+    elif not src_is_hub and dest_is_hub:
+        _copy_local_file_to_hub(ctx, src, dest)
+    else:
+        _copy_local_to_local(src, dest)
+
+
+def _cp_recursive(ctx: dict[str, str], src_is_hub: bool, src: str, dest_is_hub: bool, dest: str) -> None:
+    if src_is_hub:
+        src_id = resolve_path(src, ctx)
+        info = request("GET", f"/docs/{src_id}", ctx=ctx)
+        if info["doc_type"].lower() != "folder":
+            _cp_single(ctx, src_is_hub, src, dest_is_hub, dest)
+            return
+        items = request("GET", f"/folders/{src_id}", ctx=ctx)
+        if dest_is_hub:
+            _ensure_remote_folder(ctx, dest)
+            for item in items:
+                child_src = os.path.join(src.rstrip("/"), item["name"])
+                child_dest = os.path.join(dest.rstrip("/"), item["name"])
+                _cp_recursive(ctx, True, child_src, True, child_dest)
+        else:
+            os.makedirs(dest, exist_ok=True)
+            for item in items:
+                child_src = os.path.join(src.rstrip("/"), item["name"])
+                child_dest = os.path.join(dest, item["name"])
+                _cp_recursive(ctx, True, child_src, False, child_dest)
+    else:
+        if not os.path.isdir(src):
+            _cp_single(ctx, src_is_hub, src, dest_is_hub, dest)
+            return
+        for root_dir, dirs, files in os.walk(src):
+            rel_root = os.path.relpath(root_dir, src)
+            target_root = os.path.join(dest, rel_root) if rel_root != "." else dest
+            if dest_is_hub:
+                _ensure_remote_folder(ctx, target_root)
+                for fname in files:
+                    lsrc = os.path.join(root_dir, fname)
+                    ddest = os.path.join(target_root, fname)
+                    _copy_local_file_to_hub(ctx, lsrc, ddest)
+            else:
+                os.makedirs(target_root, exist_ok=True)
+                import shutil
+                for fname in files:
+                    shutil.copy2(os.path.join(root_dir, fname), os.path.join(target_root, fname))
+
 
 
 @click.command("new")
-@click.argument("name")
-@click.option("--parent", default="/", help="Parent folder path")
+@click.argument("path")
 @click.option("--type", "doc_type", type=click.Choice(["text", "folder"]), default="text")
 @click.option("--content", default="", help="Inline content for text docs")
 @click.option("--file", "file_path", type=click.Path(), help="Read content from file")
 @click.pass_obj
-def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str, content: str, file_path: Optional[str]) -> None:
-    """Create a new document or folder."""
+def cmd_new(ctx: dict[str, str], path: str, doc_type: str, content: str, file_path: Optional[str]) -> None:
+    """Create a new document or folder at PATH."""
     content = _read_content(file_path) if file_path else content
-    parent_id = resolve_path(parent or "/", ctx)
+    # Split path into parent and item name
+    clean = _strip_hub(path).rstrip("/") or "/"
+    parent_path, name = os.path.split(clean)
+    if not parent_path:
+        parent_path = "/"
+    parent_id = resolve_path(_strip_hub(parent_path), ctx)
     data = {
         "name": name,
         "content": content or "",
@@ -143,7 +366,7 @@ def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str
         "doc_type": doc_type.capitalize(),
     }
     res = request("POST", "/docs", ctx=ctx, json=data)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 @click.command("rm")
@@ -151,9 +374,9 @@ def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str
 @click.pass_obj
 def cmd_rm(ctx: dict[str, str], path: str) -> None:
     """Delete a document or folder."""
-    doc_id = resolve_path(path, ctx)
+    doc_id = resolve_path(_strip_hub(path), ctx)
     request("DELETE", f"/docs/{doc_id}", ctx=ctx)
-    click.echo("Deleted")
+    _output(ctx, "Deleted")
 
 
 @click.command("rename")
@@ -162,10 +385,10 @@ def cmd_rm(ctx: dict[str, str], path: str) -> None:
 @click.pass_obj
 def cmd_rename(ctx: dict[str, str], path: str, name: str) -> None:
     """Rename a document or folder."""
-    doc_id = resolve_path(path, ctx)
+    doc_id = resolve_path(_strip_hub(path), ctx)
     data = {"name": name}
     res = request("PUT", f"/docs/{doc_id}/rename", ctx=ctx, json=data)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 @click.command("share")
@@ -175,10 +398,10 @@ def cmd_rename(ctx: dict[str, str], path: str, name: str) -> None:
 @click.pass_obj
 def cmd_share(ctx: dict[str, str], path: str, target: str, rights: str) -> None:
     """Share a folder with another user."""
-    folder_id = resolve_path(path, ctx)
+    folder_id = resolve_path(_strip_hub(path), ctx)
     data = {"user": target, "rights": rights}
     res = request("POST", f"/folders/{folder_id}/share", ctx=ctx, json=data)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 @click.command("unshare")
@@ -186,10 +409,10 @@ def cmd_share(ctx: dict[str, str], path: str, target: str, rights: str) -> None:
 @click.argument("target")
 @click.pass_obj
 def cmd_unshare(ctx: dict[str, str], path: str, target: str) -> None:
-    folder_id = resolve_path(path, ctx)
+    folder_id = resolve_path(_strip_hub(path), ctx)
     data = {"user": target}
     request("DELETE", f"/folders/{folder_id}/share", ctx=ctx, json=data)
-    click.echo("Unshared")
+    _output(ctx, "Unshared")
 
 
 @click.command("search")
@@ -198,7 +421,7 @@ def cmd_unshare(ctx: dict[str, str], path: str, target: str) -> None:
 def cmd_search(ctx: dict[str, str], query: str) -> None:
     params = {"q": query}
     res = request("GET", "/search", ctx=ctx, params=params)
-    click.echo(json.dumps(res, indent=2))
+    _output(ctx, res)
 
 
 # CLI ------------------------------------------------------------------------
@@ -206,18 +429,19 @@ def cmd_search(ctx: dict[str, str], query: str) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option("--url", default=_get_default_url, show_default="env:HUB_URL or http://localhost:3000", help="Base service URL")
 @click.option("--agent-id", envvar="AGENT_ID", help="Acting agent ID")
+@click.option("--json", "json_output", is_flag=True, help="Output raw JSON")
 @click.argument("user")
 @click.pass_context
-def cli(ctx: click.Context, url: str, agent_id: Optional[str], user: str) -> None:
+def cli(ctx: click.Context, url: str, agent_id: Optional[str], json_output: bool, user: str) -> None:
     """Interact with the Context Hub service."""
-    ctx.obj = {"url": url, "user": user, "agent": agent_id}
+    ctx.obj = {"url": url, "user": user, "agent": agent_id, "json_output": json_output}
 
 
 # Register commands on the group
 cli.add_command(cmd_ls)
 cli.add_command(cmd_cat)
 cli.add_command(cmd_get)
-cli.add_command(cmd_put)
+cli.add_command(cmd_cp)
 cli.add_command(cmd_new)
 cli.add_command(cmd_rm)
 cli.add_command(cmd_rename)
