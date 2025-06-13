@@ -1,13 +1,16 @@
 //! HTTP API layer exposing document CRUD endpoints.
 
+use crate::auth::TokenVerifier;
 use axum::{
-    extract::{FromRequestParts, Path, Query, State},
+    extract::{
+        ws::{Message, WebSocket, WebSocketUpgrade},
+        FromRequestParts, Path, Query, State,
+    },
     http::{request::Parts, StatusCode},
     routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use crate::auth::TokenVerifier;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -16,7 +19,11 @@ use crate::events::{Event, EventBus};
 use crate::indexer::LiveIndex;
 use crate::snapshot::SnapshotManager;
 use crate::storage::crdt::{AccessLevel, DocumentStore, DocumentType, Pointer};
+use std::collections::HashMap;
 use std::path::PathBuf;
+use tokio::sync::broadcast;
+use futures::SinkExt;
+use bytes::Bytes;
 
 /// Authentication context extracted from request headers.
 #[derive(Clone, Debug)]
@@ -68,6 +75,7 @@ pub struct AppState {
     pub indexer: Arc<LiveIndex>,
     pub events: crate::events::EventBus,
     pub verifier: Arc<dyn TokenVerifier>,
+    pub channels: Arc<Mutex<std::collections::HashMap<Uuid, broadcast::Sender<Vec<u8>>>>>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -156,6 +164,7 @@ pub fn router(
         indexer,
         events,
         verifier,
+        channels: Arc::new(Mutex::new(HashMap::new())),
     };
     Router::new()
         .route("/docs", post(create_doc))
@@ -183,6 +192,7 @@ pub fn router(
         .route("/snapshot", post(snapshot_now))
         .route("/restore", post(restore_snapshot))
         .route("/ws", get(ws_stream))
+        .route("/ws/docs/{id}", get(doc_ws))
         .with_state(app_state)
 }
 
@@ -292,6 +302,9 @@ async fn update_doc(
                 drop(store);
                 state.indexer.schedule_update(id).await;
                 state.events.send(Event::Updated { id });
+                if let Some(tx) = state.channels.lock().await.get(&id).cloned() {
+                    let _ = tx.send(req.content.clone().into_bytes());
+                }
                 StatusCode::NO_CONTENT
             } else {
                 StatusCode::FORBIDDEN
@@ -562,7 +575,6 @@ async fn get_index_guide(
         None => Err(StatusCode::NOT_FOUND),
     }
 }
-
 
 async fn search_docs(
     State(state): State<AppState>,
@@ -867,6 +879,78 @@ async fn ws_stream(
         }
     });
     Sse::new(stream)
+}
+
+async fn doc_ws(
+    ws: WebSocketUpgrade,
+    Path(id): Path<Uuid>,
+    State(state): State<AppState>,
+    auth: AuthContext,
+) -> impl axum::response::IntoResponse {
+    ws.on_upgrade(move |socket| async move {
+        handle_doc_ws(socket, id, state, auth).await;
+    })
+}
+
+async fn handle_doc_ws(mut socket: WebSocket, id: Uuid, state: AppState, auth: AuthContext) {
+    let allow = {
+        let store = state.store.lock().await;
+        store.has_permission(
+            id,
+            &auth.user_id,
+            auth.agent_id.as_deref(),
+            AccessLevel::Read,
+        )
+    };
+    if !allow {
+        let _ = socket.close().await;
+        return;
+    }
+
+    let tx = {
+        let mut map = state.channels.lock().await;
+        map.entry(id)
+            .or_insert_with(|| {
+                let (tx, _) = broadcast::channel(100);
+                tx
+            })
+            .clone()
+    };
+    let mut rx = tx.subscribe();
+
+    if let Some(text) = {
+        let store = state.store.lock().await;
+        store.get(id).map(|d| d.text())
+    } {
+        let _ = socket.send(Message::Text(text.clone().into())).await;
+    }
+
+    loop {
+        tokio::select! {
+            msg = socket.recv() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        let text_str = text.to_string();
+                        let mut store = state.store.lock().await;
+                        let _ = store.update(id, &text_str);
+                        let _ = tx.send(text_str.into_bytes());
+                        state.events.send(Event::Updated { id });
+                    }
+                    Some(Ok(Message::Close(_))) | None => break,
+                    _ => {}
+                }
+            }
+            res = rx.recv() => {
+                if let Ok(patch) = res {
+                    if socket.send(Message::Binary(Bytes::from(patch))).await.is_err() {
+                        break;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
