@@ -25,6 +25,8 @@ impl SearchIndex {
         let content = schema_builder.add_text_field("content", TEXT);
         let folder = schema_builder.add_text_field("folder", TEXT);
         let schema = schema_builder.build();
+        let path = path.as_ref();
+        std::fs::create_dir_all(path)?;
         let dir = MmapDirectory::open(path)?;
         let index = Index::open_or_create(dir, schema.clone())?;
         Ok(Self {

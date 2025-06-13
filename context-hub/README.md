@@ -23,6 +23,9 @@ The server can be configured through environment variables:
 | `JWT_SECRET` | HS256 secret when not using Azure AD | `secret` |
 | `AZURE_JWKS_URL` | JWKS endpoint for Azure tokens | *(unset)* |
 
+The data, snapshot, index, and blob directories are created automatically if
+they do not already exist.
+
 All API calls require an `X-User-Id` HTTP header identifying the current user.
 An optional `X-Agent-Id` header can be supplied when the request originates from
 an agent acting on behalf of the user.
