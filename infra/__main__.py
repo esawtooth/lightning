@@ -41,10 +41,12 @@ import pulumi_azuread as azuread
 # 1. CONFIG
 # ─────────────────────────────────────────────────────────────────────────────
 cfg = pulumi.Config()
+stack_suffix = pulumi.get_stack()
+
 location          = cfg.get("location") or "centralindia"
 domain            = cfg.get("domain")   or "vextir.com"
-worker_image      = cfg.get("workerImage")  or "vextiracr.azurecr.io/worker-task:latest"
-voice_ws_image    = cfg.get("voiceWsImage") or "vextiracr.azurecr.io/voice-ws:latest"
+worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/worker-task:latest"
+voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
 ui_image          = cfg.require("uiImage")
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
@@ -64,7 +66,6 @@ dns_suffix = cfg.get("dnsSuffix") or RandomString(
     special=False,
 ).result
 ui_dns_label = pulumi.Output.concat("chat-ui-", dns_suffix)
-stack_suffix = pulumi.get_stack()
 
 client_cfg      = authorization.get_client_config()
 subscription_id = client_cfg.subscription_id
