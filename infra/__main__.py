@@ -138,7 +138,10 @@ pg_secret = keyvault.Secret(
     ),
 )
 
-postgres_password = pulumi.Output.secret(pg_secret.properties.value)
+#
+# For ACI env‑vars we need a plain value (using RandomPassword output directly);
+# Key Vault still keeps the secret for humans, but the container env uses this:
+postgres_password = postgres_password_res.result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. NETWORKING
@@ -494,7 +497,7 @@ postgres_cg = aci_group(
     5432,
     [
         containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
-        containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", secure_value=postgres_password),
+        containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", value=postgres_password),
         containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
     ],
     volumes=[
@@ -521,7 +524,7 @@ gitea_cg = aci_group(
         ),
         containerinstance.EnvironmentVariableArgs(name="GITEA__database__NAME", value=postgres_db),
         containerinstance.EnvironmentVariableArgs(name="GITEA__database__USER", value=postgres_user),
-        containerinstance.EnvironmentVariableArgs(name="GITEA__database__PASSWD", secure_value=postgres_password),
+        containerinstance.EnvironmentVariableArgs(name="GITEA__database__PASSWD", value=postgres_password),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
