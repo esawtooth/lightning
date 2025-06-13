@@ -5,13 +5,13 @@ use std::future::IntoFuture;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tower::util::ServiceExt;
 
 #[tokio::test]
 async fn server_health_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -49,7 +49,7 @@ async fn server_health_endpoint() {
 #[tokio::test]
 async fn root_created_on_use() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -83,14 +83,14 @@ async fn root_created_on_use() {
         .unwrap();
     let _ = app.clone().oneshot(req).await.unwrap();
 
-    let mut store_guard = store.lock().await;
+    let mut store_guard = store.write().await;
     assert!(store_guard.ensure_root("newuser").is_ok());
 }
 
 #[tokio::test]
 async fn search_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -143,7 +143,7 @@ async fn search_endpoint() {
 #[tokio::test]
 async fn rename_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -213,7 +213,7 @@ async fn rename_endpoint() {
 #[tokio::test]
 async fn move_endpoint() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -231,7 +231,7 @@ async fn move_endpoint() {
     ));
 
     let root = {
-        let mut s = store.lock().await;
+        let mut s = store.write().await;
         s.ensure_root("user1").unwrap()
     };
 
@@ -355,11 +355,11 @@ async fn move_endpoint() {
 #[tokio::test]
 async fn blob_attach_and_fetch() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     {
-        let mut s = store.lock().await;
+        let mut s = store.write().await;
         let resolver = Arc::new(
             BlobPointerResolver::new(tempdir.path().join("blobs")).unwrap(),
         );
@@ -426,7 +426,7 @@ async fn blob_attach_and_fetch() {
 #[tokio::test]
 async fn agent_scope_api() {
     let tempdir = tempfile::tempdir().unwrap();
-    let store = Arc::new(Mutex::new(
+    let store = Arc::new(RwLock::new(
         storage::crdt::DocumentStore::new(tempdir.path()).unwrap(),
     ));
     let index_dir = tempdir.path().join("index");
@@ -444,7 +444,7 @@ async fn agent_scope_api() {
     ));
 
     let root = {
-        let mut s = store.lock().await;
+        let mut s = store.write().await;
         s.ensure_root("user1").unwrap()
     };
 

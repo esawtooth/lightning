@@ -12,7 +12,7 @@ use std::future::IntoFuture;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::task::LocalSet;
 use tokio::time::Duration;
 
@@ -28,15 +28,15 @@ async fn main() -> anyhow::Result<()> {
     // initialize snapshot repository for durability
     let snapshot_mgr = Arc::new(snapshot::SnapshotManager::new(&snapshot_dir)?);
 
-    let store = Arc::new(Mutex::new(storage::crdt::DocumentStore::new(&data_dir)?));
+    let store = Arc::new(RwLock::new(storage::crdt::DocumentStore::new(&data_dir)?));
     let search = Arc::new(search::SearchIndex::new(&index_dir)?);
     {
-        let mut guard = store.lock().await;
+        let mut guard = store.write().await;
         let blob_resolver = Arc::new(BlobPointerResolver::new(&blob_dir)?);
         guard.register_resolver("blob", blob_resolver);
     }
     {
-        let store_guard = store.lock().await;
+        let store_guard = store.read().await;
         search.index_all(&store_guard)?;
     }
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
