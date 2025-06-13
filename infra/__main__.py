@@ -47,7 +47,8 @@ location          = cfg.get("location") or "centralindia"
 domain            = cfg.get("domain")   or "vextir.com"
 worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/worker-task:latest"
 voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
-hub_image         = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/context-hub:latest"
+# Image for the context hub container.
+hub_image_cfg     = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/context-hub:latest"
 ui_image          = cfg.require("uiImage")
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
@@ -351,6 +352,39 @@ acr = containerregistry.Registry(
 acr_creds = containerregistry.list_registry_credentials_output(
     resource_group_name=rg.name, registry_name=acr.name
 )
+
+# When deploying the first time, the context-hub image may not yet exist in ACR.
+# Fall back to a public placeholder so the container group can start.
+_placeholder_hub_image = "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
+
+def _ensure_hub_image(args: tuple[str, str, str]) -> str:
+    login_server, username, password = args
+    image = hub_image_cfg
+    if not image.startswith(login_server):
+        return image
+    repo_tag = image[len(login_server) + 1:]
+    repo, _, tag = repo_tag.partition(":")
+    tag = tag or "latest"
+    url = f"https://{login_server}/v2/{repo}/manifests/{tag}"
+    import requests
+    try:
+        r = requests.get(
+            url,
+            auth=(username, password),
+            headers={"Accept": "application/vnd.docker.distribution.manifest.v2+json"},
+            timeout=5,
+        )
+        if r.status_code == 200:
+            return image
+    except Exception:
+        pass
+    return _placeholder_hub_image
+
+hub_image = pulumi.Output.all(
+    acr.login_server,
+    acr_creds.username,
+    acr_creds.passwords[0].value,
+).apply(_ensure_hub_image)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. SERVICE BUS
