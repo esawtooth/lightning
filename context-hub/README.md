@@ -57,6 +57,7 @@ include an `agent` claim naming the acting agent.
 
 - `GET /search?q=term` – keyword search across documents.
 - `GET /ws` – subscribe to a server-sent-events stream of changes.
+- `GET /ws/docs/{id}` – open a WebSocket for real-time edits to a single document.
 
 ### Pointer Upload/Download
 
