@@ -79,7 +79,7 @@ build_images() {
     echo "Building Docker images..."
     docker buildx create --use --name deploy_builder || docker buildx use deploy_builder
 
-    az acr login --name vextiracr
+    az acr login --name vextiracrdev
 
     docker buildx build \
         --file ./Dockerfile.worker \

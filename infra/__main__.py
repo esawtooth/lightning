@@ -47,8 +47,8 @@ location          = cfg.get("location") or "centralindia"
 domain            = cfg.get("domain")   or "vextir.com"
 worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/worker-task:latest"
 voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
+hub_image         = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/context-hub:latest"
 ui_image          = cfg.require("uiImage")
-hub_image         = cfg.get("hubImage") or "vextiracr.azurecr.io/context-hub:latest"
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
 aad_client_id     = cfg.require_secret("aadClientId")
