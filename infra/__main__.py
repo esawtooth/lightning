@@ -111,29 +111,20 @@ authorization.RoleAssignment(
 )
 
 
-def _ensure_pg_secret():
-    if runtime.is_dry_run():
-        pwd = RandomPassword("pg-preview", length=16, special=True).result
-        return pwd
-    try:
-        existing = keyvault.get_secret_output(
-            resource_group_name=rg.name,
-            vault_name=vault.name,
-            secret_name="postgresPassword",
-        )
-        return existing.value
-    except Exception:
-        pwd = RandomPassword("pg", length=16, special=True).result
-        keyvault.Secret(
-            "pg-secret",
-            resource_group_name=rg.name,
-            vault_name=vault.name,
-            secret_name="postgresPassword",
-            properties=keyvault.SecretPropertiesArgs(value=pwd),
-        )
-        return pwd
+postgres_password_res = RandomPassword("pg", length=16, special=True)
+pg_secret = keyvault.Secret(
+    "postgres-password-secret",
+    resource_group_name=rg.name,
+    vault_name=vault.name,
+    secret_name="postgresPassword",
+    properties=keyvault.SecretPropertiesArgs(value=postgres_password_res.result),
+    opts=pulumi.ResourceOptions(
+        retain_on_delete=True,
+        delete_before_replace=False,
+    ),
+)
 
-postgres_password = pulumi.Output.secret(_ensure_pg_secret())
+postgres_password = pulumi.Output.secret(pg_secret.properties.value)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. NETWORKING
@@ -165,6 +156,22 @@ aci_subnet = network.Subnet(
     opts=pulumi.ResourceOptions(
         delete_before_replace=False,  # ← prevents forced replacement
         ignore_changes=["addressPrefix", "delegations"],  # ← no diff noise
+    ),
+)
+
+pe_subnet = network.Subnet(
+    "pe-subnet",
+    resource_group_name=rg.name,
+    virtual_network_name=vnet.name,
+    subnet_name="privatelink",
+    address_prefix="10.0.2.0/24",
+    service_endpoints=[
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.Storage"),
+        network.ServiceEndpointPropertiesFormatArgs(service="Microsoft.AzureCosmosDB"),
+    ],
+    opts=pulumi.ResourceOptions(
+        delete_before_replace=False,
+        ignore_changes=["addressPrefix"],
     ),
 )
 
@@ -252,7 +259,7 @@ cosmos_pe = network.PrivateEndpoint(
     "cosmos-pe",
     resource_group_name=rg.name,
     private_endpoint_name=f"cosmos-pe-{stack_suffix}",
-    subnet=network.SubnetArgs(id=aci_subnet.id),
+    subnet=network.SubnetArgs(id=pe_subnet.id),
     location=rg.location,
     private_link_service_connections=[
         network.PrivateLinkServiceConnectionArgs(
