@@ -48,6 +48,7 @@ domain            = cfg.get("domain")   or "vextir.com"
 worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/worker-task:latest"
 voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
 ui_image          = cfg.require("uiImage")
+hub_image         = cfg.get("hubImage") or "vextiracr.azurecr.io/context-hub:latest"
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
 aad_client_id     = cfg.require_secret("aadClientId")
@@ -575,8 +576,16 @@ voice_cg = aci_group(
     public=True,
 )
 
+hub_cg = aci_group(
+    "contexthub",
+    hub_image,
+    3000,
+    [],
+)
+
 pulumi.export("uiFqdn", ui_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
+pulumi.export("contextHubIp", hub_cg.ip_address.apply(lambda ip: ip.ip))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 12. FUNCTION APP

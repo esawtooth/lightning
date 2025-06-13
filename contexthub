@@ -37,6 +37,38 @@ def request(method: str, path: str, *, ctx: dict[str, str], **kwargs):
     return None
 
 
+def get_root_id(ctx: dict[str, str]) -> str:
+    res = request("GET", "/root", ctx=ctx)
+    return res["id"]
+
+
+def resolve_path(target: str, ctx: dict[str, str]) -> str:
+    """Resolve a POSIX path to a document UUID."""
+    import uuid
+
+    # If already a UUID, return as-is
+    try:
+        uuid.UUID(target)
+        return target
+    except Exception:
+        pass
+
+    if target in {"", "/"}:
+        return get_root_id(ctx)
+
+    parts = [p for p in target.strip("/").split("/") if p]
+    current = get_root_id(ctx)
+    for i, part in enumerate(parts):
+        items = request("GET", f"/folders/{current}", ctx=ctx)
+        match = next((it for it in items if it["name"] == part), None)
+        if match is None:
+            raise click.ClickException(f"path not found: {target}")
+        current = match["id"]
+        if i < len(parts) - 1 and match["doc_type"].lower() != "folder":
+            raise click.ClickException(f"not a folder: {'/'.join(parts[:i+1])}")
+    return current
+
+
 # Command implementations ----------------------------------------------------
 
 def _read_content(src: Optional[str]) -> str:
@@ -47,30 +79,33 @@ def _read_content(src: Optional[str]) -> str:
 
 
 @click.command("ls")
-@click.argument("id")
+@click.argument("path")
 @click.pass_obj
-def cmd_ls(ctx: dict[str, str], id: str) -> None:
+def cmd_ls(ctx: dict[str, str], path: str) -> None:
     """List the children of a folder."""
-    res = request("GET", f"/folders/{id}", ctx=ctx)
+    folder_id = resolve_path(path, ctx)
+    res = request("GET", f"/folders/{folder_id}", ctx=ctx)
     click.echo(json.dumps(res, indent=2))
 
 
 @click.command("cat")
-@click.argument("id")
+@click.argument("path")
 @click.pass_obj
-def cmd_cat(ctx: dict[str, str], id: str) -> None:
+def cmd_cat(ctx: dict[str, str], path: str) -> None:
     """Print a document's content."""
-    res = request("GET", f"/docs/{id}", ctx=ctx)
+    doc_id = resolve_path(path, ctx)
+    res = request("GET", f"/docs/{doc_id}", ctx=ctx)
     click.echo(json.dumps(res, indent=2))
 
 
 @click.command("get")
-@click.argument("id")
+@click.argument("path")
 @click.option("-o", "--output", type=click.Path(), help="Write to file instead of stdout")
 @click.pass_obj
-def cmd_get(ctx: dict[str, str], id: str, output: Optional[str]) -> None:
+def cmd_get(ctx: dict[str, str], path: str, output: Optional[str]) -> None:
     """Fetch a document and optionally write it to a file."""
-    res = request("GET", f"/docs/{id}", ctx=ctx)
+    doc_id = resolve_path(path, ctx)
+    res = request("GET", f"/docs/{doc_id}", ctx=ctx)
     if output:
         with open(output, "w", encoding="utf-8") as f:
             json.dump(res, f, indent=2)
@@ -78,20 +113,21 @@ def cmd_get(ctx: dict[str, str], id: str, output: Optional[str]) -> None:
         click.echo(json.dumps(res, indent=2))
 
 @click.command("put")
-@click.argument("id")
+@click.argument("path")
 @click.argument("file", required=False)
 @click.pass_obj
-def cmd_put(ctx: dict[str, str], id: str, file: Optional[str]) -> None:
+def cmd_put(ctx: dict[str, str], path: str, file: Optional[str]) -> None:
     """Update an existing document's content from a file or STDIN."""
     content = _read_content(file)
     data = {"content": content}
-    res = request("PUT", f"/docs/{id}", ctx=ctx, json=data)
+    doc_id = resolve_path(path, ctx)
+    res = request("PUT", f"/docs/{doc_id}", ctx=ctx, json=data)
     click.echo(json.dumps(res, indent=2))
 
 
 @click.command("new")
 @click.argument("name")
-@click.option("--parent", help="Parent folder UUID")
+@click.option("--parent", default="/", help="Parent folder path")
 @click.option("--type", "doc_type", type=click.Choice(["text", "folder"]), default="text")
 @click.option("--content", default="", help="Inline content for text docs")
 @click.option("--file", "file_path", type=click.Path(), help="Read content from file")
@@ -99,10 +135,11 @@ def cmd_put(ctx: dict[str, str], id: str, file: Optional[str]) -> None:
 def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str, content: str, file_path: Optional[str]) -> None:
     """Create a new document or folder."""
     content = _read_content(file_path) if file_path else content
+    parent_id = resolve_path(parent or "/", ctx)
     data = {
         "name": name,
         "content": content or "",
-        "parent_folder_id": parent,
+        "parent_folder_id": parent_id,
         "doc_type": doc_type.capitalize(),
     }
     res = request("POST", "/docs", ctx=ctx, json=data)
@@ -110,44 +147,48 @@ def cmd_new(ctx: dict[str, str], name: str, parent: Optional[str], doc_type: str
 
 
 @click.command("rm")
-@click.argument("id")
+@click.argument("path")
 @click.pass_obj
-def cmd_rm(ctx: dict[str, str], id: str) -> None:
+def cmd_rm(ctx: dict[str, str], path: str) -> None:
     """Delete a document or folder."""
-    request("DELETE", f"/docs/{id}", ctx=ctx)
+    doc_id = resolve_path(path, ctx)
+    request("DELETE", f"/docs/{doc_id}", ctx=ctx)
     click.echo("Deleted")
 
 
 @click.command("rename")
-@click.argument("id")
+@click.argument("path")
 @click.argument("name")
 @click.pass_obj
-def cmd_rename(ctx: dict[str, str], id: str, name: str) -> None:
+def cmd_rename(ctx: dict[str, str], path: str, name: str) -> None:
     """Rename a document or folder."""
+    doc_id = resolve_path(path, ctx)
     data = {"name": name}
-    res = request("PUT", f"/docs/{id}/rename", ctx=ctx, json=data)
+    res = request("PUT", f"/docs/{doc_id}/rename", ctx=ctx, json=data)
     click.echo(json.dumps(res, indent=2))
 
 
 @click.command("share")
-@click.argument("id")
+@click.argument("path")
 @click.argument("target")
 @click.option("--rights", type=click.Choice(["read", "write"]), default="read")
 @click.pass_obj
-def cmd_share(ctx: dict[str, str], id: str, target: str, rights: str) -> None:
+def cmd_share(ctx: dict[str, str], path: str, target: str, rights: str) -> None:
     """Share a folder with another user."""
+    folder_id = resolve_path(path, ctx)
     data = {"user": target, "rights": rights}
-    res = request("POST", f"/folders/{id}/share", ctx=ctx, json=data)
+    res = request("POST", f"/folders/{folder_id}/share", ctx=ctx, json=data)
     click.echo(json.dumps(res, indent=2))
 
 
 @click.command("unshare")
-@click.argument("id")
+@click.argument("path")
 @click.argument("target")
 @click.pass_obj
-def cmd_unshare(ctx: dict[str, str], id: str, target: str) -> None:
+def cmd_unshare(ctx: dict[str, str], path: str, target: str) -> None:
+    folder_id = resolve_path(path, ctx)
     data = {"user": target}
-    request("DELETE", f"/folders/{id}/share", ctx=ctx, json=data)
+    request("DELETE", f"/folders/{folder_id}/share", ctx=ctx, json=data)
     click.echo("Unshared")
 
 
