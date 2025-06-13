@@ -1,5 +1,5 @@
 import { FunctionHandler } from "./types";
-import { sendDigits } from "./callControl";
+import { sendDigits, startCall } from "./callControl";
 
 const functions: FunctionHandler[] = [];
 
@@ -38,6 +38,25 @@ functions.push({
   },
   handler: async (args: { digits: string }) => {
     const result = await sendDigits(args.digits);
+    return JSON.stringify(result);
+  },
+});
+
+functions.push({
+  schema: {
+    name: "start_call",
+    type: "function",
+    description: "Initiate an outbound call to the specified phone number.",
+    parameters: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Phone number to call in E.164 format" },
+      },
+      required: ["to"],
+    },
+  },
+  handler: async (args: { to: string }) => {
+    const result = await startCall(args.to);
     return JSON.stringify(result);
   },
 });
