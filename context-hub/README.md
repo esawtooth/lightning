@@ -174,8 +174,11 @@ bash-like commands for working with the service using the `click` library.
 # create a folder
 ./contexthub user1 new Project --type folder
 
-# list folder contents
-./contexthub user1 ls <folder-id>
+# list folder contents using paths
+./contexthub user1 ls /
+
+# display a file
+./contexthub user1 cat /Project/notes.md
 ```
 
 Use `-h` with any command to see available options. The base URL can be set with
