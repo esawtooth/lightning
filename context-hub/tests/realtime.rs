@@ -42,6 +42,7 @@ async fn realtime_updates_stream() {
     let router = api::router(
         store.clone(),
         tempdir.path().into(),
+        None,
         indexer,
         events.clone(),
         verifier,

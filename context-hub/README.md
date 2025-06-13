@@ -16,6 +16,8 @@ The server can be configured through environment variables:
 | `PORT` | port to bind | `3000` |
 | `DATA_DIR` | directory for live documents | `data` |
 | `SNAPSHOT_DIR` | directory for snapshots | `snapshots` |
+| `SNAPSHOT_INTERVAL_SECS` | snapshot period in seconds | `3600` |
+| `SNAPSHOT_RETENTION` | number of snapshot tags to keep | *(unset)* |
 | `INDEX_DIR` | directory for search index | `index` |
 | `BLOB_DIR` | directory for blob storage | `blobs` |
 | `JWT_SECRET` | HS256 secret when not using Azure AD | `secret` |
@@ -68,6 +70,8 @@ include an `agent` claim naming the acting agent.
 - `DELETE /agents/{agentId}/scopes` – remove scope restrictions.
 - `POST /snapshot` – force an immediate snapshot of all documents.
 - `POST /restore` – restore from the latest snapshot.
+- `GET /snapshots` – list recent snapshot commit IDs and timestamps.
+- `GET /snapshots/{rev}/docs/{id}` – fetch a document at a given snapshot.
 - `GET /health` – basic health check.
 
 Documents are stored as Automerge CRDTs and persisted as binary files under the `DATA_DIR` directory. Each document carries an **owner**. When a document is created, the `X-User-Id` header value is recorded as its owner. Existing files loaded from disk default to the user `user1`. The API responses include this `owner` field.
@@ -150,4 +154,10 @@ GET /docs/{id}/sharing
    ```bash
    curl -X POST -H "X-User-Id: user1" http://localhost:3000/snapshot
    curl -X POST -H "X-User-Id: user1" http://localhost:3000/restore
+   ```
+
+   List snapshots:
+
+   ```bash
+   curl -H "X-User-Id: user1" http://localhost:3000/snapshots
    ```

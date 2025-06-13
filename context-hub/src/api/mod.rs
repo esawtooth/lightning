@@ -72,6 +72,7 @@ impl FromRequestParts<AppState> for AuthContext {
 pub struct AppState {
     pub store: Arc<RwLock<DocumentStore>>,
     pub snapshot_dir: PathBuf,
+    pub snapshot_retention: Option<usize>,
     pub indexer: Arc<LiveIndex>,
     pub events: crate::events::EventBus,
     pub verifier: Arc<dyn TokenVerifier>,
@@ -151,9 +152,16 @@ struct SearchResult {
     snippet: String,
 }
 
+#[derive(Serialize)]
+struct SnapshotEntry {
+    id: String,
+    timestamp: String,
+}
+
 pub fn router(
     state: Arc<RwLock<DocumentStore>>,
     snapshot_dir: PathBuf,
+    snapshot_retention: Option<usize>,
     indexer: Arc<LiveIndex>,
     events: EventBus,
     verifier: Arc<dyn TokenVerifier>,
@@ -161,6 +169,7 @@ pub fn router(
     let app_state = AppState {
         store: state,
         snapshot_dir,
+        snapshot_retention,
         indexer,
         events,
         verifier,
@@ -191,6 +200,8 @@ pub fn router(
         .route("/search", get(search_docs))
         .route("/snapshot", post(snapshot_now))
         .route("/restore", post(restore_snapshot))
+        .route("/snapshots", get(list_snapshots))
+        .route("/snapshots/{rev}/docs/{id}", get(get_snapshot_doc))
         .route("/ws", get(ws_stream))
         .route("/ws/docs/{id}", get(doc_ws))
         .with_state(app_state)
@@ -807,6 +818,9 @@ async fn snapshot_now(State(state): State<AppState>, _auth: AuthContext) -> Stat
     };
     match mgr.snapshot(&store) {
         Ok(_) => {
+            if let Some(max) = state.snapshot_retention {
+                let _ = mgr.prune_old_tags(max);
+            }
             store.clear_dirty();
             let _ = store.compact_history();
             StatusCode::NO_CONTENT
@@ -833,6 +847,47 @@ async fn restore_snapshot(
     match mgr.restore(&mut store, &req.revision) {
         Ok(_) => StatusCode::NO_CONTENT,
         Err(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    }
+}
+
+async fn list_snapshots(
+    State(state): State<AppState>,
+    _auth: AuthContext,
+) -> Result<Json<Vec<SnapshotEntry>>, StatusCode> {
+    let mgr = SnapshotManager::new(&state.snapshot_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let history = mgr
+        .history(state.snapshot_retention.unwrap_or(100))
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let entries = history
+        .into_iter()
+        .map(|h| SnapshotEntry {
+            id: h.id.to_string(),
+            timestamp: h.time.to_rfc3339(),
+        })
+        .collect();
+    Ok(Json(entries))
+}
+
+async fn get_snapshot_doc(
+    State(state): State<AppState>,
+    Path((rev, id)): Path<(String, Uuid)>,
+    _auth: AuthContext,
+) -> Result<Json<DocResponse>, StatusCode> {
+    let mgr = SnapshotManager::new(&state.snapshot_dir).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if let Some(doc) = mgr
+        .load_document_at(id, &rev)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    {
+        Ok(Json(DocResponse {
+            id,
+            name: doc.name().to_string(),
+            content: doc.text(),
+            parent_folder_id: doc.parent_folder_id(),
+            doc_type: doc.doc_type(),
+            owner: doc.owner().to_string(),
+        }))
+    } else {
+        Err(StatusCode::NOT_FOUND)
     }
 }
 
@@ -979,6 +1034,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
@@ -1061,6 +1117,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
@@ -1143,6 +1200,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
@@ -1216,6 +1274,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
@@ -1275,6 +1334,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
@@ -1351,6 +1411,7 @@ mod tests {
         let app = router(
             store.clone(),
             tempdir.path().into(),
+            None,
             indexer,
             events,
             verifier,
