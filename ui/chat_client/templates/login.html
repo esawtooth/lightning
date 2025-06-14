@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vextir Chat - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #fff;
+            color: #000;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .main-wrapper {
+            display: flex;
+            width: 100%;
+            max-width: 900px;
+            background: #fff;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .carousel-container {
+            position: relative;
+            flex: 1;
+            background: #fff;
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .slide {
+            position: absolute;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            padding: 2rem;
+        }
+        .slide.active { opacity: 1; }
+
+        .login-container {
+            background: white;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+            flex: 1;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo h1 {
+            color: #333;
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #333;
+            font-weight: 500;
+        }
+
+        input[type="text"], input[type="password"], input[type="email"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus {
+            outline: none;
+            border-color: #555;
+            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .alert {
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .alert-error {
+            background-color: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+        }
+
+        .alert-success {
+            background-color: #d1fae5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+        }
+
+        .auth-links {
+            text-align: center;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .auth-links a {
+            color: #000;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .auth-links a:hover {
+            text-decoration: underline;
+        }
+
+        .vextir-icon {
+            height: 300px;
+            margin: 0 auto 0.5rem auto;
+            display: block;
+            transform: translateX(-20px);
+        }
+    </style>
+</head>
+<body>
+    <div class="main-wrapper">
+        <div class="carousel-container">
+            <div class="slide active">
+                <h2>Welcome to Vextir</h2>
+                <p>Secure AI-powered conversations</p>
+            </div>
+            <div class="slide">
+                <h2>Collaborate Effortlessly</h2>
+                <p>Connect with your team using advanced AI assistance.</p>
+            </div>
+            <div class="slide">
+                <h2>Boost Productivity</h2>
+                <p>Harness smart agents to streamline your workflow.</p>
+            </div>
+        </div>
+        <div class="login-container">
+            <div class="logo">
+                <img class="vextir-icon" src="{{ url_for('static', path='vextir-logo.svg') }}" alt="Vextir logo">
+                <p>Secure AI-powered conversations</p>
+            </div>
+
+            {% if request.query_params.get("error") %}
+                <div class="alert alert-error">
+                    {% if show_register %}
+                        {% if request.query_params.get("error") == "password_mismatch" %}
+                            Passwords do not match. Please try again.
+                        {% elif request.query_params.get("error") == "password_too_short" %}
+                            Password must be at least 6 characters long.
+                        {% elif request.query_params.get("error") == "username_exists" %}
+                            Username already exists. Please choose a different one.
+                        {% elif request.query_params.get("error") == "service_error" %}
+                            Service temporarily unavailable. Please try again later.
+                        {% elif request.query_params.get("error") == "service_unavailable" %}
+                            Unable to connect to authentication service.
+                        {% else %}
+                            An error occurred. Please try again.
+                        {% endif %}
+                    {% else %}
+                        {% if request.query_params.get("error") == "invalid_credentials" %}
+                            Invalid username or password. Please try again.
+                        {% elif request.query_params.get("error") == "auth_failed" %}
+                            Authentication failed. Please try again.
+                        {% elif request.query_params.get("error") == "account_pending" %}
+                            Your account is pending admin approval. Please wait for approval before accessing the system.
+                        {% elif request.query_params.get("error") == "account_rejected" %}
+                            Your account access has been denied. Please contact the administrator.
+                        {% elif request.query_params.get("error") == "account_not_approved" %}
+                            Your account is not approved for access. Please contact the administrator.
+                        {% elif request.query_params.get("error") == "service_error" %}
+                            Service temporarily unavailable. Please try again later.
+                        {% elif request.query_params.get("error") == "service_unavailable" %}
+                            Unable to connect to authentication service.
+                        {% else %}
+                            An error occurred. Please try again.
+                        {% endif %}
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            {% if request.query_params.get("message") %}
+                <div class="alert alert-success">
+                    {% if request.query_params.get("message") == "registration_success" %}
+                        Registration successful! Please log in with your credentials.
+                    {% elif request.query_params.get("message") == "registration_waitlist" %}
+                        Registration successful! Your account is now on the waitlist for admin approval. You will be notified when approved.
+                    {% endif %}
+                </div>
+            {% endif %}
+
+            <div id="login-form">
+                <form action="/login" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="form-group">
+                        <label for="username">Username</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+
+                    <button type="submit" class="btn">Sign In</button>
+                </form>
+
+                <div class="auth-links">
+                    <p>Don't have an account? <a href="#" id="show-register">Create one here</a></p>
+                    <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
+                        Admin? <a href="/admin">Access Admin Panel</a>
+                    </p>
+                </div>
+            </div>
+
+            <div id="register-form" style="display: none;">
+                <form action="/register" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="form-group">
+                        <label for="reg_username">Username</label>
+                        <input type="text" id="reg_username" name="username" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="reg_email">Email</label>
+                        <input type="email" id="reg_email" name="email" required placeholder="your.email@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg_password">Password</label>
+                        <input type="password" id="reg_password" name="password" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="reg_confirm_password">Confirm Password</label>
+                        <input type="password" id="reg_confirm_password" name="confirm_password" required>
+                    </div>
+                    <button type="submit" class="btn">Register</button>
+                </form>
+                <div class="auth-links">
+                    <p>Existing user? <a href="#" id="show-login">Login</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const slides = document.querySelectorAll('.slide');
+        let currentSlide = 0;
+        setInterval(() => {
+            slides[currentSlide].classList.remove('active');
+            currentSlide = (currentSlide + 1) % slides.length;
+            slides[currentSlide].classList.add('active');
+        }, 3000);
+
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const showRegister = document.getElementById('show-register');
+        const showLogin = document.getElementById('show-login');
+
+        showRegister.addEventListener('click', function(e) {
+            e.preventDefault();
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+        });
+
+        showLogin.addEventListener('click', function(e) {
+            e.preventDefault();
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'block';
+        });
+
+        if ({{ 'true' if show_register else 'false' }}) {
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
