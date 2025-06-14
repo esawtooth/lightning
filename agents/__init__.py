@@ -1,6 +1,8 @@
 """Agents available to run worker tasks."""
 
 from typing import Dict, List
+import subprocess
+import sys
 
 
 class Agent:
@@ -8,9 +10,20 @@ class Agent:
 
     name: str = "base"
 
+    hub_cli: str = "contexthub"
+
     def run(self, commands: List[str]) -> str:
         """Execute the provided commands and return a result string."""
         raise NotImplementedError()
+
+    def hub(self, *args: str) -> str:
+        """Invoke the context hub CLI with the given arguments."""
+        cmd = [self.hub_cli, *args]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.stderr:
+            print(result.stderr, file=sys.stderr)
+        result.check_returncode()
+        return result.stdout
 
 
 AGENT_REGISTRY: Dict[str, Agent] = {}
