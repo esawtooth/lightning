@@ -59,7 +59,7 @@ async def root(request: Request):
             return RedirectResponse(url="/chat")
         except Exception:
             pass
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse("login.html", {"request": request, "show_register": False})
 
 
 @app.get("/login")
@@ -127,8 +127,8 @@ async def chat_redirect(request: Request):
 
 @app.get("/register", response_class=HTMLResponse)
 async def register_form(request: Request):
-    """Display the registration page."""
-    return templates.TemplateResponse("register.html", {"request": request})
+    """Display the registration form within the login page."""
+    return templates.TemplateResponse("login.html", {"request": request, "show_register": True})
 
 
 @app.post("/register")
