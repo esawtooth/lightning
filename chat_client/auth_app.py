@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 import requests
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -43,6 +44,8 @@ SCOPES = ["User.Read"]
 
 app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
