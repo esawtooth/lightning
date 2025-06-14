@@ -2,6 +2,8 @@ import os
 import json
 import secrets
 import hashlib
+import requests
+import logging
 from datetime import datetime
 
 import azure.functions as func
@@ -16,6 +18,7 @@ ACS_CONNECTION = os.environ.get("ACS_CONNECTION")
 ACS_SENDER = os.environ.get("ACS_SENDER")
 VERIFY_BASE = os.environ.get("VERIFY_BASE", "https://www.vextir.com")
 ADMIN_EMAIL = "mail@rohitja.in"  # Hardcoded for now
+CONTEXT_HUB_URL = os.environ.get("CONTEXT_HUB_URL", "http://localhost:3000")
 
 _client = CosmosClient.from_connection_string(COSMOS_CONN)
 _db = _client.create_database_if_not_exists(COSMOS_DB)
@@ -151,6 +154,116 @@ def _send_user_notification(email: str, approved: bool) -> None:
         pass
 
 
+def _initialize_user_context_hub(user_id: str) -> bool:
+    """Initialize context-hub for a newly approved user."""
+    try:
+        url = f"{CONTEXT_HUB_URL.rstrip('/')}/docs"
+        headers = {
+            "X-User-Id": user_id,
+            "Content-Type": "application/json"
+        }
+        
+        # Create root folder for user
+        root_folder_data = {
+            "name": f"{user_id}_workspace",
+            "content": "",
+            "parent_folder_id": None,
+            "doc_type": "Folder"
+        }
+        
+        response = requests.post(url, headers=headers, json=root_folder_data, timeout=10)
+        if response.status_code >= 300:
+            logging.error(f"Failed to create root folder for user {user_id}: {response.text}")
+            return False
+        
+        root_folder = response.json()
+        root_folder_id = root_folder.get("id")
+        
+        if not root_folder_id:
+            logging.error(f"No folder ID returned for user {user_id}")
+            return False
+        
+        # Create default subfolders
+        default_folders = [
+            {"name": "Projects", "description": "Project-related documents and notes"},
+            {"name": "Documents", "description": "General documents and files"},
+            {"name": "Notes", "description": "Personal notes and thoughts"},
+            {"name": "Research", "description": "Research materials and references"}
+        ]
+        
+        for folder_info in default_folders:
+            folder_data = {
+                "name": folder_info["name"],
+                "content": "",
+                "parent_folder_id": root_folder_id,
+                "doc_type": "Folder"
+            }
+            
+            folder_response = requests.post(url, headers=headers, json=folder_data, timeout=10)
+            if folder_response.status_code < 300:
+                folder = folder_response.json()
+                folder_id = folder.get("id")
+                
+                # Create index guide for each folder
+                guide_data = {
+                    "name": "Index Guide",
+                    "content": f"# {folder_info['name']} Folder\n\n{folder_info['description']}\n\nThis folder is for organizing your {folder_info['name'].lower()}.",
+                    "parent_folder_id": folder_id,
+                    "doc_type": "IndexGuide"
+                }
+                requests.post(url, headers=headers, json=guide_data, timeout=10)
+        
+        # Create welcome document
+        welcome_data = {
+            "name": "Welcome to Vextir",
+            "content": f"""# Welcome to Vextir, {user_id}!
+
+This is your personal context hub where you can store and organize your documents, notes, and project files.
+
+## Getting Started
+
+Your workspace includes the following folders:
+- **Projects**: For project-related documents and notes
+- **Documents**: For general documents and files  
+- **Notes**: For personal notes and thoughts
+- **Research**: For research materials and references
+
+## Features
+
+- **Search**: Use the search functionality to quickly find content across all your documents
+- **Chat Integration**: Your AI assistant can access and reference your documents during conversations
+- **Organization**: Create additional folders and organize your content as needed
+
+Start by uploading some documents or creating new notes to build your personal knowledge base!
+""",
+            "parent_folder_id": root_folder_id,
+            "doc_type": "Text"
+        }
+        
+        requests.post(url, headers=headers, json=welcome_data, timeout=10)
+        
+        # Update user record with context-hub info
+        items = list(_container.query_items(
+            query="SELECT * FROM c WHERE c.user_id=@user_id",
+            parameters=[{"name": "@user_id", "value": user_id}],
+            enable_cross_partition_query=True,
+        ))
+        
+        if items:
+            user = items[0]
+            user["context_hub_root_id"] = root_folder_id
+            user["context_hub_initialized"] = True
+            user["context_hub_initialized_at"] = datetime.utcnow().isoformat()
+            _container.upsert_item(user)
+        
+        logging.info(f"Successfully initialized context hub for user {user_id}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Error initializing context hub for user {user_id}: {e}")
+        return False
+
+
 def _get_user_status(user_id: str) -> func.HttpResponse:
     """Get approval status for a user."""
     try:
@@ -275,6 +388,12 @@ def _approve_user(data: dict) -> func.HttpResponse:
         
         _container.upsert_item(user)
         _send_user_notification(user.get("email"), approved)
+        
+        # Initialize context-hub for approved users
+        if approved:
+            context_initialized = _initialize_user_context_hub(user_id)
+            if not context_initialized:
+                logging.warning(f"Failed to initialize context hub for approved user {user_id}")
         
         return func.HttpResponse(
             json.dumps({"message": "user_updated", "status": user["status"]}),

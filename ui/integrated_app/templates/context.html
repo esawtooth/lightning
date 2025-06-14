@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block title %}My Context Hub - Vextir{% endblock %}
+{% block page_title %}My Context Hub{% endblock %}
+
+{% block content %}
+<!-- Context Hub Status -->
+<div class="mb-8">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Context Hub Status</h3>
+            <div id="context-status" class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600">
+                <i class="fas fa-spinner fa-spin mr-1"></i>
+                Loading...
+            </div>
+        </div>
+        <div id="context-info" class="hidden">
+            <p class="text-gray-600 mb-4">Your personal knowledge base where you can store and organize documents, notes, and project files.</p>
+            <div class="flex space-x-4">
+                <button id="init-context-btn" onclick="initializeContext()" class="hidden bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-plus mr-2"></i>
+                    Initialize Context Hub
+                </button>
+                <button onclick="refreshContext()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Search Bar -->
+<div class="mb-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Search Your Documents</h3>
+        <div class="flex space-x-4">
+            <input 
+                type="text" 
+                id="search-input" 
+                placeholder="Search your documents, notes, and files..."
+                class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onkeypress="handleSearchKeypress(event)"
+            >
+            <button onclick="searchContext()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                <i class="fas fa-search mr-2"></i>
+                Search
+            </button>
+        </div>
+        <div id="search-results" class="mt-4 hidden">
+            <h4 class="font-medium text-gray-900 mb-2">Search Results</h4>
+            <div id="search-results-list" class="space-y-2"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Folder Browser -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">My Documents</h3>
+                <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                    <i class="fas fa-plus mr-2"></i>
+                    New Document
+                </button>
+            </div>
+            <div class="p-6">
+                <div id="folder-browser" class="space-y-4">
+                    <!-- Folder structure will be loaded here -->
+                </div>
+                <div id="no-context" class="text-center py-8 text-gray-500 hidden">
+                    <i class="fas fa-folder-open text-4xl mb-4"></i>
+                    <p>Your context hub is not initialized yet.</p>
+                    <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Info -->
+    <div class="space-y-6">
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Quick Actions</h3>
+            </div>
+            <div class="p-6 space-y-3">
+                <button onclick="showCreateDocumentModal()" class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
+                    <i class="fas fa-file-alt mr-2"></i>
+                    Create Document
+                </button>
+                <button onclick="showUploadModal()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-upload mr-2"></i>
+                    Upload File
+                </button>
+                <button onclick="exportContext()" class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
+                    <i class="fas fa-download mr-2"></i>
+                    Export Data
+                </button>
+            </div>
+        </div>
+
+        <!-- Context Stats -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Statistics</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Total Documents</span>
+                    <span id="doc-count" class="text-lg font-semibold text-gray-900">-</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Folders</span>
+                    <span id="folder-count" class="text-lg font-semibold text-gray-900">-</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Last Updated</span>
+                    <span id="last-updated" class="text-xs text-gray-500">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tips -->
+        <div class="bg-blue-50 rounded-lg p-6">
+            <h4 class="font-medium text-blue-900 mb-2">
+                <i class="fas fa-lightbulb mr-2"></i>
+                Tips
+            </h4>
+            <ul class="text-sm text-blue-800 space-y-1">
+                <li>• Use descriptive names for your documents</li>
+                <li>• Organize files into relevant folders</li>
+                <li>• Your AI assistant can search these documents during chat</li>
+                <li>• Regular backups are recommended</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Create Document Modal -->
+<div id="create-doc-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Create New Document</h3>
+            </div>
+            <div class="p-6">
+                <form id="create-doc-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Document Name</label>
+                        <input type="text" id="doc-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter document name..." required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Folder</label>
+                        <select id="doc-folder" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Root Folder</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Content</label>
+                        <textarea id="doc-content" rows="10" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter document content..."></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeCreateDocumentModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Document</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Modal -->
+<div id="upload-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Upload File</h3>
+            </div>
+            <div class="p-6">
+                <div class="text-center py-8">
+                    <i class="fas fa-upload text-4xl text-gray-400 mb-4"></i>
+                    <p class="text-gray-600 mb-4">File upload functionality coming soon!</p>
+                    <p class="text-sm text-gray-500">For now, you can create documents manually using the "Create Document" feature.</p>
+                </div>
+                <div class="flex justify-end">
+                    <button onclick="closeUploadModal()" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Context hub functionality
+    let contextData = {
+        status: null,
+        folders: null
+    };
+
+    async function loadContextStatus() {
+        try {
+            const response = await fetch('/api/context/status');
+            if (response.ok) {
+                const data = await response.json();
+                contextData.status = data;
+                updateStatusDisplay(data);
+            } else {
+                updateStatusDisplay({ initialized: false });
+            }
+        } catch (error) {
+            console.error('Failed to load context status:', error);
+            updateStatusDisplay({ initialized: false });
+        }
+    }
+
+    function updateStatusDisplay(status) {
+        const statusEl = document.getElementById('context-status');
+        const infoEl = document.getElementById('context-info');
+        const initBtn = document.getElementById('init-context-btn');
+        const noContextEl = document.getElementById('no-context');
+
+        if (status.initialized) {
+            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Initialized';
+            statusEl.className = 'px-3 py-1 text-sm rounded-full bg-green-100 text-green-800';
+            initBtn.classList.add('hidden');
+            noContextEl.classList.add('hidden');
+            loadFolders();
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Not Initialized';
+            statusEl.className = 'px-3 py-1 text-sm rounded-full bg-yellow-100 text-yellow-800';
+            initBtn.classList.remove('hidden');
+            noContextEl.classList.remove('hidden');
+        }
+        
+        infoEl.classList.remove('hidden');
+    }
+
+    async function initializeContext() {
+        try {
+            const response = await fetch('/api/context/initialize', { method: 'POST' });
+            if (response.ok) {
+                alert('Context hub initialized successfully!');
+                loadContextStatus();
+            } else {
+                alert('Failed to initialize context hub');
+            }
+        } catch (error) {
+            console.error('Error initializing context:', error);
+            alert('Error initializing context hub');
+        }
+    }
+
+    async function loadFolders() {
+        try {
+            const response = await fetch('/api/context/folders');
+            if (response.ok) {
+                const data = await response.json();
+                contextData.folders = data;
+                updateFolderDisplay(data);
+                updateStats();
+            }
+        } catch (error) {
+            console.error('Failed to load folders:', error);
+        }
+    }
+
+    function updateFolderDisplay(folders) {
+        const browserEl = document.getElementById('folder-browser');
+        browserEl.innerHTML = '';
+
+        if (!folders || !folders.folders) {
+            browserEl.innerHTML = '<p class="text-gray-500">No folders found</p>';
+            return;
+        }
+
+        folders.folders.forEach(folder => {
+            const folderEl = document.createElement('div');
+            folderEl.className = 'border border-gray-200 rounded-lg p-4';
+            folderEl.innerHTML = `
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <i class="fas fa-folder text-blue-500 mr-3"></i>
+                        <span class="font-medium">${folder.name}</span>
+                    </div>
+                    <span class="text-sm text-gray-500">${folder.document_count || 0} documents</span>
+                </div>
+                ${folder.documents ? `
+                    <div class="mt-3 ml-6 space-y-2">
+                        ${folder.documents.map(doc => `
+                            <div class="flex items-center text-sm text-gray-600">
+                                <i class="fas fa-file-alt mr-2"></i>
+                                <span>${doc.name}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                ` : ''}
+            `;
+            browserEl.appendChild(folderEl);
+        });
+    }
+
+    function updateStats() {
+        if (!contextData.folders) return;
+
+        let docCount = 0;
+        let folderCount = contextData.folders.folders ? contextData.folders.folders.length : 0;
+
+        if (contextData.folders.folders) {
+            contextData.folders.folders.forEach(folder => {
+                docCount += folder.document_count || 0;
+            });
+        }
+
+        document.getElementById('doc-count').textContent = docCount;
+        document.getElementById('folder-count').textContent = folderCount;
+        document.getElementById('last-updated').textContent = 'Just now';
+    }
+
+    async function searchContext() {
+        const query = document.getElementById('search-input').value.trim();
+        if (!query) return;
+
+        try {
+            const response = await fetch(`/api/context/search?q=${encodeURIComponent(query)}&limit=10`);
+            if (response.ok) {
+                const data = await response.json();
+                displaySearchResults(data);
+            } else {
+                alert('Search failed');
+            }
+        } catch (error) {
+            console.error('Search error:', error);
+            alert('Search error');
+        }
+    }
+
+    function displaySearchResults(results) {
+        const resultsEl = document.getElementById('search-results');
+        const listEl = document.getElementById('search-results-list');
+        
+        listEl.innerHTML = '';
+        
+        if (!results.results || results.results.length === 0) {
+            listEl.innerHTML = '<p class="text-gray-500">No results found</p>';
+        } else {
+            results.results.forEach(result => {
+                const resultEl = document.createElement('div');
+                resultEl.className = 'border border-gray-200 rounded-lg p-3';
+                resultEl.innerHTML = `
+                    <div class="font-medium text-gray-900">${result.name}</div>
+                    <div class="text-sm text-gray-600 mt-1">${result.content ? result.content.substring(0, 200) + '...' : 'No content preview'}</div>
+                `;
+                listEl.appendChild(resultEl);
+            });
+        }
+        
+        resultsEl.classList.remove('hidden');
+    }
+
+    function handleSearchKeypress(event) {
+        if (event.key === 'Enter') {
+            searchContext();
+        }
+    }
+
+    function refreshContext() {
+        loadContextStatus();
+    }
+
+    function showCreateDocumentModal() {
+        document.getElementById('create-doc-modal').classList.remove('hidden');
+        populateFolderSelect();
+    }
+
+    function closeCreateDocumentModal() {
+        document.getElementById('create-doc-modal').classList.add('hidden');
+        document.getElementById('create-doc-form').reset();
+    }
+
+    function populateFolderSelect() {
+        const select = document.getElementById('doc-folder');
+        select.innerHTML = '<option value="">Root Folder</option>';
+        
+        if (contextData.folders && contextData.folders.folders) {
+            contextData.folders.folders.forEach(folder => {
+                const option = document.createElement('option');
+                option.value = folder.id;
+                option.textContent = folder.name;
+                select.appendChild(option);
+            });
+        }
+    }
+
+    function showUploadModal() {
+        document.getElementById('upload-modal').classList.remove('hidden');
+    }
+
+    function closeUploadModal() {
+        document.getElementById('upload-modal').classList.add('hidden');
+    }
+
+    function exportContext() {
+        alert('Export functionality coming soon!');
+    }
+
+    // Handle create document form submission
+    document.getElementById('create-doc-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('doc-name').value;
+        const content = document.getElementById('doc-content').value;
+        const folderId = document.getElementById('doc-folder').value || null;
+        
+        if (!name.trim()) {
+            alert('Please enter a document name');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/context/documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    content: content,
+                    folder_id: folderId
+                })
+            });
+            
+            if (response.ok) {
+                closeCreateDocumentModal();
+                loadFolders();
+                alert('Document created successfully!');
+            } else {
+                alert('Failed to create document');
+            }
+        } catch (error) {
+            console.error('Error creating document:', error);
+            alert('Error creating document');
+        }
+    });
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', () => {
+        loadContextStatus();
+    });
+
+    // Close modals when clicking outside
+    document.getElementById('create-doc-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'create-doc-modal') {
+            closeCreateDocumentModal();
+        }
+    });
+
+    document.getElementById('upload-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'upload-modal') {
+            closeUploadModal();
+        }
+    });
+</script>
+{% endblock %}

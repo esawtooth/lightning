@@ -103,6 +103,36 @@
             </div>
         </div>
 
+        <!-- Context Hub Status -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">My Context Hub</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Status</span>
+                    <span id="context-hub-status" class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                        <i class="fas fa-spinner fa-spin mr-1"></i>
+                        Loading...
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Documents</span>
+                    <span id="context-doc-count" class="text-sm font-medium text-gray-900">-</span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Folders</span>
+                    <span id="context-folder-count" class="text-sm font-medium text-gray-900">-</span>
+                </div>
+                <div class="mt-4">
+                    <a href="/context" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-center block text-sm">
+                        <i class="fas fa-folder-open mr-2"></i>
+                        Manage Context Hub
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <!-- System Status -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-gray-200">
@@ -347,11 +377,71 @@
         }
     });
 
+    async function loadContextHubStatus() {
+        try {
+            const response = await fetch('/api/context/status');
+            if (response.ok) {
+                const data = await response.json();
+                updateContextHubDisplay(data);
+            } else {
+                updateContextHubDisplay({ initialized: false });
+            }
+        } catch (error) {
+            console.error('Failed to load context hub status:', error);
+            updateContextHubDisplay({ initialized: false });
+        }
+    }
+
+    function updateContextHubDisplay(status) {
+        const statusEl = document.getElementById('context-hub-status');
+        const docCountEl = document.getElementById('context-doc-count');
+        const folderCountEl = document.getElementById('context-folder-count');
+
+        if (status.initialized) {
+            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Active';
+            statusEl.className = 'px-2 py-1 text-xs rounded-full bg-green-100 text-green-800';
+            
+            // Load folder stats
+            loadContextStats();
+        } else {
+            statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Not Initialized';
+            statusEl.className = 'px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800';
+            docCountEl.textContent = '0';
+            folderCountEl.textContent = '0';
+        }
+    }
+
+    async function loadContextStats() {
+        try {
+            const response = await fetch('/api/context/folders');
+            if (response.ok) {
+                const data = await response.json();
+                let docCount = 0;
+                let folderCount = data.folders ? data.folders.length : 0;
+
+                if (data.folders) {
+                    data.folders.forEach(folder => {
+                        docCount += folder.document_count || 0;
+                    });
+                }
+
+                document.getElementById('context-doc-count').textContent = docCount;
+                document.getElementById('context-folder-count').textContent = folderCount;
+            }
+        } catch (error) {
+            console.error('Failed to load context stats:', error);
+        }
+    }
+
     // Initialize dashboard
     document.addEventListener('DOMContentLoaded', () => {
         refreshData();
+        loadContextHubStatus();
         // Auto-refresh every 30 seconds
-        setInterval(refreshData, 30000);
+        setInterval(() => {
+            refreshData();
+            loadContextHubStatus();
+        }, 30000);
     });
 
     // Close modal when clicking outside

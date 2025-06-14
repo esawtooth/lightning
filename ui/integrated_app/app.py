@@ -244,6 +244,80 @@ async def create_event(event: EventIn, token: str = Depends(_get_token)):
     return {"status": "queued"}
 
 
+# Context Hub endpoints
+@app.get("/context", response_class=HTMLResponse)
+async def context_page(request: Request):
+    """Context hub management page."""
+    username = getattr(request.state, "username", "User")
+    return templates.TemplateResponse("context.html", {
+        "request": request,
+        "username": username,
+        "active_page": "context"
+    })
+
+
+@app.get("/api/context/status")
+async def context_status(token: str = Depends(_get_token)):
+    """Get user's context hub status."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/status", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.post("/api/context/initialize")
+async def initialize_context(token: str = Depends(_get_token)):
+    """Initialize user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.post(f"{API_BASE}/context/initialize", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/context/folders")
+async def get_folders(token: str = Depends(_get_token)):
+    """Get user's folder structure."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/folders", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/context/search")
+async def search_context(q: str, limit: int = 10, token: str = Depends(_get_token)):
+    """Search user's context hub."""
+    headers = _api_headers(token)
+    params = {"q": q, "limit": limit}
+    resp = requests.get(f"{API_BASE}/context/search", headers=headers, params=params)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+class DocumentIn(BaseModel):
+    name: str
+    content: str
+    folder_id: Optional[str] = None
+
+
+@app.post("/api/context/documents")
+async def create_document(doc: DocumentIn, token: str = Depends(_get_token)):
+    """Create a new document in user's context hub."""
+    headers = _api_headers(token)
+    payload = {
+        "name": doc.name,
+        "content": doc.content,
+        "folder_id": doc.folder_id
+    }
+    resp = requests.post(f"{API_BASE}/context/documents", json=payload, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
