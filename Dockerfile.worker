@@ -6,6 +6,8 @@ WORKDIR /app
 COPY agents/ ./agents/
 COPY events/ ./events/
 COPY worker.py ./
+COPY contexthub /usr/local/bin/contexthub
+RUN chmod +x /usr/local/bin/contexthub
 
 # Create a requirements.txt for the worker container
 COPY requirements-worker.txt ./requirements.txt
