@@ -1,6 +1,6 @@
 FROM rust:1.72-slim AS build
 WORKDIR /build
-COPY context-hub ./context-hub
+COPY . ./context-hub
 WORKDIR /build/context-hub
 RUN cargo build --release
 
