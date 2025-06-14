@@ -22,6 +22,12 @@ async def root():
     """Redirect to the authentication gateway."""
     return RedirectResponse(url="/auth")
 
+
+@app.get("/register", include_in_schema=False)
+async def register_root():
+    """Legacy registration path for convenience."""
+    return RedirectResponse(url="/auth/register")
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
