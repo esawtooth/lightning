@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vextir Chat - Login</title>
+    <title>Vextir Chat - Sign In</title>
     <style>
         * {
             margin: 0;
@@ -87,7 +87,7 @@
             font-weight: 500;
         }
 
-        input[type="text"], input[type="password"], input[type="email"] {
+        input[type="text"], input[type="email"] {
             width: 100%;
             padding: 0.75rem;
             border: 2px solid #e2e8f0;
@@ -96,7 +96,7 @@
             transition: border-color 0.2s, box-shadow 0.2s;
         }
 
-        input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus {
+        input[type="text"]:focus, input[type="email"]:focus {
             outline: none;
             border-color: #555;
             box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
@@ -105,7 +105,7 @@
         .btn {
             width: 100%;
             padding: 0.75rem;
-            background: #333;
+            background: #0078d4;
             color: white;
             border: none;
             border-radius: 8px;
@@ -113,11 +113,38 @@
             font-weight: 600;
             cursor: pointer;
             transition: transform 0.2s, box-shadow 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
         }
 
         .btn:hover {
+            background: #106ebe;
             transform: translateY(-1px);
             box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            margin-top: 1rem;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .microsoft-btn {
+            background: #0078d4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+        }
+
+        .microsoft-btn::before {
+            content: "🔷";
+            font-size: 1.2rem;
         }
 
         .alert {
@@ -139,6 +166,18 @@
             border: 1px solid #a7f3d0;
         }
 
+        .alert-warning {
+            background-color: #fef3c7;
+            color: #d97706;
+            border: 1px solid #fde68a;
+        }
+
+        .alert-info {
+            background-color: #dbeafe;
+            color: #1d4ed8;
+            border: 1px solid #93c5fd;
+        }
+
         .auth-links {
             text-align: center;
             margin-top: 1.5rem;
@@ -147,7 +186,7 @@
         }
 
         .auth-links a {
-            color: #000;
+            color: #0078d4;
             text-decoration: none;
             font-weight: 500;
         }
@@ -162,6 +201,21 @@
             display: block;
             transform: translateX(-20px);
         }
+
+        .pending-container {
+            text-align: center;
+        }
+
+        .pending-container h3 {
+            color: #d97706;
+            margin-bottom: 1rem;
+        }
+
+        .pending-container p {
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -169,11 +223,11 @@
         <div class="carousel-container">
             <div class="slide active">
                 <h2>Welcome to Vextir</h2>
-                <p>Secure AI-powered conversations</p>
+                <p>Secure AI-powered conversations with Microsoft authentication</p>
             </div>
             <div class="slide">
-                <h2>Collaborate Effortlessly</h2>
-                <p>Connect with your team using advanced AI assistance.</p>
+                <h2>Enterprise Ready</h2>
+                <p>Sign in with your Microsoft account for secure access.</p>
             </div>
             <div class="slide">
                 <h2>Boost Productivity</h2>
@@ -188,101 +242,70 @@
 
             {% if request.query_params.get("error") %}
                 <div class="alert alert-error">
-                    {% if show_register %}
-                        {% if request.query_params.get("error") == "password_mismatch" %}
-                            Passwords do not match. Please try again.
-                        {% elif request.query_params.get("error") == "password_too_short" %}
-                            Password must be at least 6 characters long.
-                        {% elif request.query_params.get("error") == "username_exists" %}
-                            Username already exists. Please choose a different one.
-                        {% elif request.query_params.get("error") == "service_error" %}
-                            Service temporarily unavailable. Please try again later.
-                        {% elif request.query_params.get("error") == "service_unavailable" %}
-                            Unable to connect to authentication service.
-                        {% else %}
-                            An error occurred. Please try again.
-                        {% endif %}
+                    {% if request.query_params.get("error") == "email_required" %}
+                        Please provide a valid email address.
+                    {% elif request.query_params.get("error") == "request_failed" %}
+                        Unable to process your request. Please try again later.
+                    {% elif request.query_params.get("error") == "auth_failed" %}
+                        Authentication failed. Please try again.
+                    {% elif request.query_params.get("error") == "service_unavailable" %}
+                        Service temporarily unavailable. Please try again later.
                     {% else %}
-                        {% if request.query_params.get("error") == "invalid_credentials" %}
-                            Invalid username or password. Please try again.
-                        {% elif request.query_params.get("error") == "auth_failed" %}
-                            Authentication failed. Please try again.
-                        {% elif request.query_params.get("error") == "account_pending" %}
-                            Your account is pending admin approval. Please wait for approval before accessing the system.
-                        {% elif request.query_params.get("error") == "account_rejected" %}
-                            Your account access has been denied. Please contact the administrator.
-                        {% elif request.query_params.get("error") == "account_not_approved" %}
-                            Your account is not approved for access. Please contact the administrator.
-                        {% elif request.query_params.get("error") == "service_error" %}
-                            Service temporarily unavailable. Please try again later.
-                        {% elif request.query_params.get("error") == "service_unavailable" %}
-                            Unable to connect to authentication service.
-                        {% else %}
-                            An error occurred. Please try again.
-                        {% endif %}
+                        An error occurred. Please try again.
                     {% endif %}
                 </div>
             {% endif %}
 
             {% if request.query_params.get("message") %}
                 <div class="alert alert-success">
-                    {% if request.query_params.get("message") == "registration_success" %}
-                        Registration successful! Please log in with your credentials.
-                    {% elif request.query_params.get("message") == "registration_waitlist" %}
-                        Registration successful! Your account is now on the waitlist for admin approval. You will be notified when approved.
+                    {% if request.query_params.get("message") == "access_requested" %}
+                        Access request submitted! We'll review your request and notify you via email.
                     {% endif %}
                 </div>
             {% endif %}
 
-            <div id="login-form">
-                <form action="/login" method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required>
+            {% if request.query_params.get("status") == "pending" or show_pending %}
+                <div class="pending-container">
+                    <div class="alert alert-warning">
+                        <h3>⏳ Access Pending</h3>
+                        <p>Your account is authenticated, but access is pending admin approval.</p>
+                        <p>We'll notify you via email once your access is approved.</p>
                     </div>
-
-                    <div class="form-group">
-                        <label for="password">Password</label>
-                        <input type="password" id="password" name="password" required>
+                    <a href="/logout" class="btn btn-secondary">Sign Out</a>
+                </div>
+            {% else %}
+                <div id="main-auth">
+                    <a href="/login" class="btn microsoft-btn">
+                        Sign in with Microsoft
+                    </a>
+                    
+                    <div class="auth-links">
+                        <p>Don't have access yet? <a href="#" id="show-request">Request Access</a></p>
                     </div>
+                </div>
 
-                    <button type="submit" class="btn">Sign In</button>
-                </form>
-
-                <div class="auth-links">
-                    <p>Don't have an account? <a href="#" id="show-register">Create one here</a></p>
-                    <p style="margin-top: 10px; font-size: 0.9em; color: #666;">
-                        Admin? <a href="/admin">Access Admin Panel</a>
+                <div id="request-form" style="display: none;">
+                    <h3 style="margin-bottom: 1rem; color: #333;">Request Access</h3>
+                    <p style="margin-bottom: 1.5rem; color: #666; font-size: 0.9rem;">
+                        Submit your information and we'll review your access request.
                     </p>
+                    
+                    <form action="/request-access" method="post">
+                        <div class="form-group">
+                            <label for="req_name">Name</label>
+                            <input type="text" id="req_name" name="name" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="req_email">Email</label>
+                            <input type="email" id="req_email" name="email" required placeholder="your.email@example.com">
+                        </div>
+                        <button type="submit" class="btn">Submit Request</button>
+                    </form>
+                    <div class="auth-links">
+                        <p>Already have access? <a href="#" id="show-main">Sign In</a></p>
+                    </div>
                 </div>
-            </div>
-
-            <div id="register-form" style="display: none;">
-                <form action="/register" method="post">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    <div class="form-group">
-                        <label for="reg_username">Username</label>
-                        <input type="text" id="reg_username" name="username" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="reg_email">Email</label>
-                        <input type="email" id="reg_email" name="email" required placeholder="your.email@example.com">
-                    </div>
-                    <div class="form-group">
-                        <label for="reg_password">Password</label>
-                        <input type="password" id="reg_password" name="password" required minlength="6">
-                    </div>
-                    <div class="form-group">
-                        <label for="reg_confirm_password">Confirm Password</label>
-                        <input type="password" id="reg_confirm_password" name="confirm_password" required>
-                    </div>
-                    <button type="submit" class="btn">Register</button>
-                </form>
-                <div class="auth-links">
-                    <p>Existing user? <a href="#" id="show-login">Login</a></p>
-                </div>
-            </div>
+            {% endif %}
         </div>
     </div>
 
@@ -293,28 +316,27 @@
             slides[currentSlide].classList.remove('active');
             currentSlide = (currentSlide + 1) % slides.length;
             slides[currentSlide].classList.add('active');
-        }, 3000);
+        }, 4000);
 
-        const loginForm = document.getElementById('login-form');
-        const registerForm = document.getElementById('register-form');
-        const showRegister = document.getElementById('show-register');
-        const showLogin = document.getElementById('show-login');
+        const mainAuth = document.getElementById('main-auth');
+        const requestForm = document.getElementById('request-form');
+        const showRequest = document.getElementById('show-request');
+        const showMain = document.getElementById('show-main');
 
-        showRegister.addEventListener('click', function(e) {
-            e.preventDefault();
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
-        });
+        if (showRequest) {
+            showRequest.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (mainAuth) mainAuth.style.display = 'none';
+                if (requestForm) requestForm.style.display = 'block';
+            });
+        }
 
-        showLogin.addEventListener('click', function(e) {
-            e.preventDefault();
-            registerForm.style.display = 'none';
-            loginForm.style.display = 'block';
-        });
-
-        if ({{ 'true' if show_register else 'false' }}) {
-            loginForm.style.display = 'none';
-            registerForm.style.display = 'block';
+        if (showMain) {
+            showMain.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (requestForm) requestForm.style.display = 'none';
+                if (mainAuth) mainAuth.style.display = 'block';
+            });
         }
     </script>
 </body>

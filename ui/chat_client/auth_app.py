@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Simplified authentication gateway using Azure Entra ID."""
+"""Simplified authentication gateway using Azure Entra ID with waitlist approval."""
 import os
 import logging
 from typing import Optional
@@ -49,17 +49,53 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 templates = Jinja2Templates(directory="templates")
 
 
+async def check_user_approval(user_id: str) -> dict:
+    """Check if user is approved to access the system."""
+    try:
+        resp = requests.get(
+            f"{AUTH_API_URL.rstrip('/')}/auth/status/{user_id}",
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json()
+        return {"status": "not_found", "approved": False}
+    except Exception:
+        return {"status": "error", "approved": False}
+
+
+async def request_access(user_id: str, email: str, name: str = None) -> bool:
+    """Request access for a new user."""
+    try:
+        resp = requests.post(
+            f"{AUTH_API_URL.rstrip('/')}/auth/request",
+            json={"user_id": user_id, "email": email, "name": name},
+            timeout=10,
+        )
+        return resp.status_code in (200, 201)
+    except Exception:
+        return False
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root(request: Request):
     """Login page or redirect if already authenticated."""
     token = request.cookies.get("auth_token")
     if token:
         try:
-            verify_token(token)
-            return RedirectResponse(url="/chat")
+            user_id = verify_token(token)
+            user_status = await check_user_approval(user_id)
+            if user_status.get("approved"):
+                return RedirectResponse(url="/chat")
+            else:
+                # User authenticated but not approved
+                return templates.TemplateResponse("login.html", {
+                    "request": request, 
+                    "show_pending": True,
+                    "user_status": user_status.get("status", "pending")
+                })
         except Exception:
             pass
-    return templates.TemplateResponse("login.html", {"request": request, "show_register": False})
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/login")
@@ -76,26 +112,48 @@ async def auth_callback(request: Request):
     code = request.query_params.get("code")
     if not code:
         raise HTTPException(status_code=400, detail="Missing code")
+    
     redirect_uri = request.url_for("auth_callback")
     result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
     token = result.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Authentication failed")
+    
     try:
         user_id = verify_token(token)
         request.session["user_id"] = user_id
-    except Exception:
+        
+        # Get user info from AAD token for registration
+        id_claims = result.get("id_token_claims", {})
+        user_email = id_claims.get("email") or id_claims.get("preferred_username")
+        user_name = id_claims.get("name")
+        
+        # Check if user is approved
+        user_status = await check_user_approval(user_id)
+        
+        if user_status.get("approved"):
+            # User is approved, set auth cookie and redirect to chat
+            resp = RedirectResponse(url="/chat")
+            resp.set_cookie(
+                key="auth_token",
+                value=token,
+                max_age=3600,
+                httponly=True,
+                secure=request.url.scheme == "https",
+                samesite="lax",
+            )
+            return resp
+        else:
+            # User not approved, automatically request access if new user
+            if user_status.get("status") == "not_found" and user_email:
+                await request_access(user_id, user_email, user_name)
+            
+            # Redirect to pending page
+            return RedirectResponse(url="/?status=pending")
+            
+    except Exception as e:
+        logging.error(f"Auth callback error: {e}")
         raise HTTPException(status_code=401, detail="Invalid token")
-    resp = RedirectResponse(url="/chat")
-    resp.set_cookie(
-        key="auth_token",
-        value=token,
-        max_age=3600,
-        httponly=True,
-        secure=request.url.scheme == "https",
-        samesite="lax",
-    )
-    return resp
 
 
 @app.get("/logout")
@@ -119,46 +177,33 @@ async def chat_redirect(request: Request):
     if not token:
         return RedirectResponse(url="/login")
     try:
-        verify_token(token)
+        user_id = verify_token(token)
+        user_status = await check_user_approval(user_id)
+        if not user_status.get("approved"):
+            return RedirectResponse(url="/?status=pending")
     except Exception:
         return RedirectResponse(url="/login")
     return RedirectResponse(_resolve_chainlit_url(request))
 
 
-@app.get("/register", response_class=HTMLResponse)
-async def register_form(request: Request):
-    """Display the registration form within the login page."""
-    return templates.TemplateResponse("login.html", {"request": request, "show_register": True})
-
-
-@app.post("/register")
-async def register_user(request: Request):
-    """Handle user registration via Azure Function."""
+@app.post("/request-access")
+async def manual_request_access(request: Request):
+    """Manual access request for users who want to join the waitlist."""
     form = await request.form()
-    username = form.get("username")
     email = form.get("email")
-    password = form.get("password")
-    confirm = form.get("confirm_password")
-
-    if password != confirm:
-        return RedirectResponse("/register?error=password_mismatch", status_code=303)
-    if not password or len(password) < 6:
-        return RedirectResponse("/register?error=password_too_short", status_code=303)
-
-    try:
-        resp = requests.post(
-            f"{AUTH_API_URL.rstrip('/')}/auth/register",
-            json={"username": username, "password": password, "email": email},
-            timeout=10,
-        )
-    except Exception:
-        return RedirectResponse("/register?error=service_unavailable", status_code=303)
-
-    if resp.status_code in (200, 201):
-        return RedirectResponse("/?message=registration_waitlist", status_code=303)
-    if resp.status_code == 409:
-        return RedirectResponse("/register?error=username_exists", status_code=303)
-    return RedirectResponse("/register?error=service_error", status_code=303)
+    name = form.get("name")
+    
+    if not email:
+        return RedirectResponse("/?error=email_required", status_code=303)
+    
+    # For manual requests, we don't have an AAD user ID yet
+    # Store the request with email as identifier
+    success = await request_access(email, email, name)
+    
+    if success:
+        return RedirectResponse("/?message=access_requested", status_code=303)
+    else:
+        return RedirectResponse("/?error=request_failed", status_code=303)
 
 
 @app.get("/health")
