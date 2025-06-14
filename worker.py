@@ -22,7 +22,7 @@ def main() -> int:
         print(f"Invalid WORKER_EVENT: {e}", file=sys.stderr)
         return 1
 
-    agent_name = event.metadata.get("agent", "openai-shell")
+    agent_name = event.metadata.get("agent", "conseil")
     agent = AGENT_REGISTRY.get(agent_name)
     if not agent:
         print(f"Unknown agent: {agent_name}", file=sys.stderr)
