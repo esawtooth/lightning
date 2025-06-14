@@ -4,17 +4,24 @@ set -e
 
 echo "⚡ Vextir Chat - Starting Gateway"
 
-# Verify required environment variables
-check_env_var() {
-    if [ -z "${!1}" ]; then
-        echo "❌ Missing required environment variable: $1"
-        exit 1
-    fi
+# Verify required environment variables (with fallbacks for legacy names)
+check_any_env_var() {
+    canonical=$1
+    shift
+    for var in "$@"; do
+        if [ -n "${!var}" ]; then
+            export "$canonical"="${!var}"
+            return 0
+        fi
+    done
+    echo "❌ Missing required environment variable: $canonical"
+    exit 1
 }
 
-check_env_var "AAD_CLIENT_ID"
-check_env_var "AAD_TENANT_ID"
-check_env_var "AAD_CLIENT_SECRET"
+# Support old ARM_/AZURE_ variable names for compatibility
+check_any_env_var "AAD_CLIENT_ID" "AAD_CLIENT_ID" "ARM_CLIENT_ID" "AZURE_CLIENT_ID"
+check_any_env_var "AAD_TENANT_ID" "AAD_TENANT_ID" "ARM_TENANT_ID" "AZURE_TENANT_ID"
+check_any_env_var "AAD_CLIENT_SECRET" "AAD_CLIENT_SECRET" "ARM_CLIENT_SECRET" "AZURE_CLIENT_SECRET"
 
 # Run the gateway on HTTP port 80
 exec python -m uvicorn gateway_app:app --host 0.0.0.0 --port 80
