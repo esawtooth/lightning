@@ -783,7 +783,14 @@ fd_ep = cdn.afd_endpoint.AFDEndpoint(
     location="global",
 )
 
-def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int, https: bool = True):
+def origin_group(
+    name: str,
+    probe_path: str,
+    host: pulumi.Input[str],
+    port: int,
+    https: bool = True,
+    host_header: pulumi.Input[str] | None = None,
+):
     protocol = cdn.ProbeProtocol.HTTPS if https else cdn.ProbeProtocol.HTTP
     og = cdn.afd_origin_group.AFDOriginGroup(
         f"{name}-og",
@@ -809,16 +816,37 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int,
         origin_group_name=og.name,
         origin_name=f"{name}Origin",
         host_name=host,
-        origin_host_header=host,
+        origin_host_header=host_header or host,
         http_port=port if not https else None,
         https_port=port if https else None,
         enabled_state=cdn.EnabledState.ENABLED,
     )
     return og, origin
 
-ui_og, ui_origin   = origin_group("ui",    "/health",    ui_cg.ip_address.apply(lambda ip: ip.fqdn), 80, https=False)
-api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443, https=True)
-voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081, https=False)
+ui_og, ui_origin = origin_group(
+    "ui",
+    "/health",
+    ui_cg.ip_address.apply(lambda ip: ip.fqdn),
+    80,
+    https=False,
+    host_header=f"www.{domain}",
+)
+api_og, api_origin = origin_group(
+    "api",
+    "/api/health",
+    func_app.default_host_name,
+    443,
+    https=True,
+    host_header=f"api.{domain}",
+)
+voice_og, voice_origin = origin_group(
+    "voice",
+    "/",
+    voice_cg.ip_address.apply(lambda ip: ip.fqdn),
+    8081,
+    https=False,
+    host_header=f"voice-ws.{domain}",
+)
 
 
 def afd_domain(label, sub):
