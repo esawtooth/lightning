@@ -529,8 +529,8 @@ async fn list_folder(
             ) {
                 return Err(StatusCode::FORBIDDEN);
             }
-            let items = doc
-                .children()
+            let items = store
+                .get_folder_children_with_shared(id, &auth.user_id)
                 .into_iter()
                 .map(|(cid, name, typ)| FolderItem {
                     id: cid,

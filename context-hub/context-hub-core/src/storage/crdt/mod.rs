@@ -788,9 +788,19 @@ impl DocumentStore {
         doc_type: DocumentType,
     ) -> Result<Uuid> {
         let id = Uuid::new_v4();
-        let mut doc = Document::new(id, name, text, owner.clone(), parent_folder_id, doc_type)?;
+        let mut doc = Document::new(id, name.clone(), text, owner.clone(), parent_folder_id, doc_type)?;
         doc.save(&self.path(id))?;
         self.docs.insert(id, doc);
+        
+        // Add this document to the parent folder's children list if parent is specified
+        if let Some(parent_id) = parent_folder_id {
+            let parent_path = self.path(parent_id);
+            if let Some(parent_doc) = self.docs.get_mut(&parent_id) {
+                parent_doc.add_child(id, &name, doc_type)?;
+                parent_doc.save(&parent_path)?;
+            }
+        }
+        
         if doc_type == DocumentType::Folder && parent_folder_id.is_none() {
             self.roots.insert(owner, id);
         }
@@ -1111,6 +1121,48 @@ impl DocumentStore {
             doc.reload(&path)?;
         }
         Ok(())
+    }
+
+    /// Find all folders that have been shared with the given user
+    pub fn shared_folders_for_user(&self, user: &str) -> Vec<Uuid> {
+        let mut shared_folders = Vec::new();
+        for (id, doc) in self.docs.iter() {
+            if doc.doc_type() == DocumentType::Folder {
+                // Skip folders owned by the user (they already appear in their tree)
+                if doc.owner() == user {
+                    continue;
+                }
+                // Check if this folder has been shared with the user
+                for acl_entry in doc.acl() {
+                    if acl_entry.principal == user {
+                        shared_folders.push(*id);
+                        break;
+                    }
+                }
+            }
+        }
+        shared_folders
+    }
+
+    /// Get the children of a folder, including shared folders if this is a user's root folder
+    pub fn get_folder_children_with_shared(&self, folder_id: Uuid, user: &str) -> Vec<(Uuid, String, DocumentType)> {
+        let mut children = if let Some(doc) = self.get(folder_id) {
+            doc.children()
+        } else {
+            Vec::new()
+        };
+        
+        // If this is the user's root folder, add shared folders
+        if self.roots.get(user) == Some(&folder_id) {
+            for shared_id in self.shared_folders_for_user(user) {
+                if let Some(shared_doc) = self.get(shared_id) {
+                    // Don't append "(shared)" to avoid path resolution issues in CLI
+                    children.push((shared_id, shared_doc.name().to_string(), DocumentType::Folder));
+                }
+            }
+        }
+        
+        children
     }
 }
 
