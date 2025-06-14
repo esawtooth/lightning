@@ -816,7 +816,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int,
     )
     return og, origin
 
-ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 80, https=False)
+ui_og, ui_origin   = origin_group("ui",    "/health",    ui_cg.ip_address.apply(lambda ip: ip.fqdn), 80, https=False)
 api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443, https=True)
 voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081, https=False)
 
