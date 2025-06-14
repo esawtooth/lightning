@@ -581,24 +581,7 @@ gitea_cg = aci_group(
     ],
 )
 
-ui_cg = aci_group(
-    "chatui",
-    ui_image,
-    80,
-    [
-        containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
-        containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
-        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
-        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_password.value),
-        containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
-        containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", value=aad_password.value),
-        containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
-        containerinstance.EnvironmentVariableArgs(name="CHAINLIT_URL", value=pulumi.Output.concat("https://www.", domain, "/chat")),
-        containerinstance.EnvironmentVariableArgs(name="GITEA_URL", value=gitea_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")),
-        containerinstance.EnvironmentVariableArgs(name="DEPLOYMENT_ID", value="fix-aad-secrets-v2"),
-    ],
-    public=True,
-)
+# UI container moved after function app definition
 
 voice_cg = aci_group(
     "voicews",
@@ -624,7 +607,6 @@ hub_cg = aci_group(
 )
 hub_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
 
-pulumi.export("uiFqdn", ui_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("contextHubIp", hub_cg.ip_address.apply(lambda ip: ip.ip))
 
@@ -770,6 +752,29 @@ web.WebAppApplicationSettings(
     opts=pulumi.ResourceOptions(depends_on=[func_blob_reader]),
 )
 pulumi.export("functionEndpoint", pulumi.Output.concat("https://", func_app.default_host_name, "/api/events"))
+
+# UI container definition (moved here after func_app is defined)
+ui_cg = aci_group(
+    "chatui",
+    ui_image,
+    80,
+    [
+        containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
+        containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_password.value),
+        containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
+        containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", value=aad_password.value),
+        containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
+        containerinstance.EnvironmentVariableArgs(name="CHAINLIT_URL", value=pulumi.Output.concat("https://www.", domain, "/chat")),
+        containerinstance.EnvironmentVariableArgs(name="GITEA_URL", value=gitea_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")),
+        containerinstance.EnvironmentVariableArgs(name="DEPLOYMENT_ID", value="fix-aad-secrets-v2"),
+    ],
+    public=True,
+)
+
+# Export UI FQDN after ui_cg is defined
+pulumi.export("uiFqdn", ui_cg.ip_address.apply(lambda ip: ip.fqdn))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 14. FRONT DOOR + DNS
