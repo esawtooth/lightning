@@ -164,6 +164,15 @@ jobs:
           cd infra
           pulumi stack select dev --non-interactive
           
+          # Re-set all required configuration (needed because config doesn't persist between jobs)
+          pulumi config set domain "vextir.com"
+          pulumi config set aadClientId "$ARM_CLIENT_ID" --secret
+          pulumi config set aadClientSecret "$ARM_CLIENT_SECRET" --secret  
+          pulumi config set aadTenantId "$ARM_TENANT_ID"
+          pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
+          pulumi config set twilioAccountSid "${{ secrets.TWILIO_ACCOUNT_SID }}" --secret
+          pulumi config set twilioAuthToken "${{ secrets.TWILIO_AUTH_TOKEN }}" --secret
+          
           # Update to real images
           pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${{ github.sha }}"
           pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }}"
