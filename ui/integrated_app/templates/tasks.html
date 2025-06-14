@@ -1,0 +1,478 @@
+{% extends "base.html" %}
+
+{% block title %}Tasks - Vextir{% endblock %}
+{% block page_title %}Task Management{% endblock %}
+
+{% block content %}
+<!-- Task Filters and Controls -->
+<div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+        <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2">
+                <label for="statusFilter" class="text-sm font-medium text-gray-700">Filter by status:</label>
+                <select id="statusFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="all">All Tasks</option>
+                    <option value="queued">Queued</option>
+                    <option value="running">Running</option>
+                    <option value="success">Success</option>
+                    <option value="failed">Failed</option>
+                    <option value="pending">Pending</option>
+                </select>
+            </div>
+            <div class="flex items-center space-x-2">
+                <label for="sortBy" class="text-sm font-medium text-gray-700">Sort by:</label>
+                <select id="sortBy" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="created_at">Created Date</option>
+                    <option value="updated_at">Updated Date</option>
+                    <option value="status">Status</option>
+                    <option value="cost">Cost</option>
+                </select>
+            </div>
+        </div>
+        <div class="flex items-center space-x-3">
+            <button onclick="refreshTasks()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2">
+                <i class="fas fa-sync-alt"></i>
+                <span>Refresh</span>
+            </button>
+            <button onclick="exportTasks()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2">
+                <i class="fas fa-download"></i>
+                <span>Export</span>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Task Statistics -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600">Total Tasks</p>
+                <p id="stats-total" class="text-2xl font-semibold text-gray-900">0</p>
+            </div>
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                <i class="fas fa-tasks"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600">Running</p>
+                <p id="stats-running" class="text-2xl font-semibold text-blue-600">0</p>
+            </div>
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                <i class="fas fa-play"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600">Completed</p>
+                <p id="stats-completed" class="text-2xl font-semibold text-green-600">0</p>
+            </div>
+            <div class="p-3 rounded-full bg-green-100 text-green-600">
+                <i class="fas fa-check"></i>
+            </div>
+        </div>
+    </div>
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm font-medium text-gray-600">Total Cost</p>
+                <p id="stats-cost" class="text-2xl font-semibold text-purple-600">$0.00</p>
+            </div>
+            <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Tasks Table -->
+<div class="bg-white rounded-lg shadow overflow-hidden">
+    <div class="px-6 py-4 border-b border-gray-200">
+        <h3 class="text-lg font-medium text-gray-900">Tasks</h3>
+    </div>
+    
+    <!-- Loading State -->
+    <div id="loading-state" class="p-8 text-center">
+        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-4"></i>
+        <p class="text-gray-500">Loading tasks...</p>
+    </div>
+    
+    <!-- Error State -->
+    <div id="error-state" class="p-8 text-center hidden">
+        <i class="fas fa-exclamation-triangle text-2xl text-red-400 mb-4"></i>
+        <p id="error-message" class="text-red-600 mb-4">Failed to load tasks</p>
+        <button onclick="refreshTasks()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+            Try Again
+        </button>
+    </div>
+    
+    <!-- Tasks Table -->
+    <div id="tasks-table" class="hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cost</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="tasks-tbody" class="bg-white divide-y divide-gray-200">
+                    <!-- Tasks will be populated here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State -->
+        <div id="empty-state" class="p-8 text-center hidden">
+            <i class="fas fa-inbox text-4xl text-gray-300 mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">No tasks found</h3>
+            <p class="text-gray-500 mb-4">No tasks match your current filters.</p>
+            <button onclick="clearFilters()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700">
+                Clear Filters
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Task Details Modal -->
+<div id="task-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-screen overflow-y-auto">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Task Details</h3>
+                <button onclick="closeTaskModal()" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <div id="modal-content">
+                    <!-- Task details will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let allTasks = [];
+    let filteredTasks = [];
+    let currentTask = null;
+
+    // Load tasks from API
+    async function loadTasks() {
+        showLoadingState();
+        
+        try {
+            const response = await fetch('/api/tasks');
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            allTasks = await response.json();
+            applyFilters();
+            updateStatistics();
+            hideLoadingState();
+            
+        } catch (error) {
+            console.error('Failed to load tasks:', error);
+            showErrorState(error.message);
+        }
+    }
+
+    // Apply current filters and sorting
+    function applyFilters() {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const sortBy = document.getElementById('sortBy').value;
+        
+        // Filter tasks
+        filteredTasks = allTasks.filter(task => {
+            if (statusFilter === 'all') return true;
+            return task.status === statusFilter;
+        });
+        
+        // Sort tasks
+        filteredTasks.sort((a, b) => {
+            let aVal = a[sortBy];
+            let bVal = b[sortBy];
+            
+            if (sortBy === 'cost') {
+                aVal = parseFloat(a.cost?.cost || 0);
+                bVal = parseFloat(b.cost?.cost || 0);
+            }
+            
+            if (aVal < bVal) return -1;
+            if (aVal > bVal) return 1;
+            return 0;
+        });
+        
+        renderTasks();
+    }
+
+    // Render tasks table
+    function renderTasks() {
+        const tbody = document.getElementById('tasks-tbody');
+        const emptyState = document.getElementById('empty-state');
+        
+        if (filteredTasks.length === 0) {
+            tbody.innerHTML = '';
+            emptyState.classList.remove('hidden');
+            return;
+        }
+        
+        emptyState.classList.add('hidden');
+        
+        tbody.innerHTML = filteredTasks.map(task => {
+            const statusBadge = getStatusBadge(task.status);
+            const cost = task.cost?.cost ? `$${parseFloat(task.cost.cost).toFixed(4)}` : '-';
+            const createdAt = formatDate(task.created_at);
+            const taskType = task.type || 'Unknown';
+            
+            return `
+                <tr class="hover:bg-gray-50">
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-900">${task.id}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        ${statusBadge}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${taskType}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${createdAt}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm text-gray-900">${cost}</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <button onclick="viewTaskDetails('${task.id}')" class="text-blue-600 hover:text-blue-900 mr-3">
+                            <i class="fas fa-eye mr-1"></i>View
+                        </button>
+                        <button onclick="viewTaskLogs('${task.id}')" class="text-green-600 hover:text-green-900">
+                            <i class="fas fa-file-alt mr-1"></i>Logs
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    // Update statistics
+    function updateStatistics() {
+        const total = allTasks.length;
+        const running = allTasks.filter(t => t.status === 'running' || t.status === 'started').length;
+        const completed = allTasks.filter(t => t.status === 'success' || t.status === 'completed').length;
+        const totalCost = allTasks.reduce((sum, task) => {
+            const cost = parseFloat(task.cost?.cost || 0);
+            return sum + cost;
+        }, 0);
+        
+        document.getElementById('stats-total').textContent = total;
+        document.getElementById('stats-running').textContent = running;
+        document.getElementById('stats-completed').textContent = completed;
+        document.getElementById('stats-cost').textContent = `$${totalCost.toFixed(4)}`;
+    }
+
+    // Get status badge HTML
+    function getStatusBadge(status) {
+        const badges = {
+            'pending': 'bg-yellow-100 text-yellow-800',
+            'queued': 'bg-yellow-100 text-yellow-800',
+            'running': 'bg-blue-100 text-blue-800',
+            'started': 'bg-blue-100 text-blue-800',
+            'success': 'bg-green-100 text-green-800',
+            'completed': 'bg-green-100 text-green-800',
+            'failed': 'bg-red-100 text-red-800',
+            'error': 'bg-red-100 text-red-800'
+        };
+        
+        const badgeClass = badges[status] || 'bg-gray-100 text-gray-800';
+        return `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${badgeClass}">${status}</span>`;
+    }
+
+    // Format date
+    function formatDate(dateString) {
+        if (!dateString) return '-';
+        const date = new Date(dateString);
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    // View task details
+    async function viewTaskDetails(taskId) {
+        try {
+            const response = await fetch(`/api/tasks/${taskId}`);
+            if (!response.ok) {
+                throw new Error('Failed to load task details');
+            }
+            
+            const task = await response.json();
+            currentTask = task;
+            showTaskModal(task);
+            
+        } catch (error) {
+            console.error('Error loading task details:', error);
+            alert('Failed to load task details');
+        }
+    }
+
+    // Show task modal
+    function showTaskModal(task) {
+        const modal = document.getElementById('task-modal');
+        const title = document.getElementById('modal-title');
+        const content = document.getElementById('modal-content');
+        
+        title.textContent = `Task ${task.id}`;
+        
+        const cost = task.cost?.cost ? `$${parseFloat(task.cost.cost).toFixed(4)}` : 'N/A';
+        const statusBadge = getStatusBadge(task.status);
+        
+        content.innerHTML = `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Basic Information</h4>
+                    <dl class="space-y-2">
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500">Status:</dt>
+                            <dd>${statusBadge}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500">Type:</dt>
+                            <dd class="text-sm text-gray-900">${task.type || 'Unknown'}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500">Cost:</dt>
+                            <dd class="text-sm text-gray-900">${cost}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500">Created:</dt>
+                            <dd class="text-sm text-gray-900">${formatDate(task.created_at)}</dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-sm text-gray-500">Updated:</dt>
+                            <dd class="text-sm text-gray-900">${formatDate(task.updated_at)}</dd>
+                        </div>
+                    </dl>
+                </div>
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Metadata</h4>
+                    <pre class="text-xs bg-gray-100 p-3 rounded-lg overflow-auto max-h-40">${JSON.stringify(task.metadata || {}, null, 2)}</pre>
+                </div>
+            </div>
+            
+            ${task.logs ? `
+                <div>
+                    <h4 class="text-sm font-medium text-gray-900 mb-2">Logs</h4>
+                    <div class="bg-gray-900 text-green-400 p-4 rounded-lg overflow-auto max-h-96 text-sm font-mono">
+                        <pre>${task.logs}</pre>
+                    </div>
+                </div>
+            ` : ''}
+        `;
+        
+        modal.classList.remove('hidden');
+    }
+
+    // View task logs
+    function viewTaskLogs(taskId) {
+        viewTaskDetails(taskId); // For now, same as view details
+    }
+
+    // Close task modal
+    function closeTaskModal() {
+        document.getElementById('task-modal').classList.add('hidden');
+        currentTask = null;
+    }
+
+    // Show/hide states
+    function showLoadingState() {
+        document.getElementById('loading-state').classList.remove('hidden');
+        document.getElementById('error-state').classList.add('hidden');
+        document.getElementById('tasks-table').classList.add('hidden');
+    }
+
+    function showErrorState(message) {
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('error-state').classList.remove('hidden');
+        document.getElementById('tasks-table').classList.add('hidden');
+        document.getElementById('error-message').textContent = message;
+    }
+
+    function hideLoadingState() {
+        document.getElementById('loading-state').classList.add('hidden');
+        document.getElementById('error-state').classList.add('hidden');
+        document.getElementById('tasks-table').classList.remove('hidden');
+    }
+
+    // Utility functions
+    function refreshTasks() {
+        loadTasks();
+    }
+
+    function clearFilters() {
+        document.getElementById('statusFilter').value = 'all';
+        document.getElementById('sortBy').value = 'created_at';
+        applyFilters();
+    }
+
+    function exportTasks() {
+        const csv = convertToCSV(filteredTasks);
+        downloadCSV(csv, 'tasks.csv');
+    }
+
+    function convertToCSV(tasks) {
+        const headers = ['ID', 'Status', 'Type', 'Created', 'Updated', 'Cost'];
+        const rows = tasks.map(task => [
+            task.id,
+            task.status,
+            task.type || '',
+            task.created_at || '',
+            task.updated_at || '',
+            task.cost?.cost || '0'
+        ]);
+        
+        return [headers, ...rows].map(row => 
+            row.map(field => `"${field}"`).join(',')
+        ).join('\n');
+    }
+
+    function downloadCSV(csv, filename) {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    }
+
+    // Event listeners
+    document.getElementById('statusFilter').addEventListener('change', applyFilters);
+    document.getElementById('sortBy').addEventListener('change', applyFilters);
+
+    // Close modal when clicking outside
+    document.getElementById('task-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'task-modal') {
+            closeTaskModal();
+        }
+    });
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+        loadTasks();
+        
+        // Auto-refresh every 30 seconds
+        setInterval(loadTasks, 30000);
+    });
+</script>
+{% endblock %}

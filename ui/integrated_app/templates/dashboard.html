@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Vextir{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Analytics Cards -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+    <!-- Total Tasks Card -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                <i class="fas fa-tasks text-xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">Total Tasks</p>
+                <p id="total-tasks" class="text-2xl font-semibold text-gray-900">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pending Tasks Card -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                <i class="fas fa-clock text-xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">Pending</p>
+                <p id="pending-count" class="text-2xl font-semibold text-gray-900">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Running Tasks Card -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-green-100 text-green-600">
+                <i class="fas fa-play text-xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">Running</p>
+                <p id="started-count" class="text-2xl font-semibold text-gray-900">0</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Total Cost Card -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex items-center">
+            <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                <i class="fas fa-dollar-sign text-xl"></i>
+            </div>
+            <div class="ml-4">
+                <p class="text-sm font-medium text-gray-600">Total Cost</p>
+                <p id="total-cost" class="text-2xl font-semibold text-gray-900">$0.00</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Activity Feed -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Recent Activity</h3>
+            </div>
+            <div class="p-6">
+                <div id="activity-feed" class="space-y-4">
+                    <!-- Activity items will be loaded here -->
+                </div>
+                <div class="mt-4">
+                    <a href="/tasks" class="text-blue-600 hover:text-blue-800 font-medium">
+                        View all tasks →
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions & Status -->
+    <div class="space-y-6">
+        <!-- Quick Actions -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Quick Actions</h3>
+            </div>
+            <div class="p-6 space-y-3">
+                <button onclick="createNewTask()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-plus mr-2"></i>
+                    New Task
+                </button>
+                <a href="/chat" class="block w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-center">
+                    <i class="fas fa-comments mr-2"></i>
+                    Start Chat
+                </a>
+                <button onclick="refreshData()" class="w-full bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i>
+                    Refresh Data
+                </button>
+            </div>
+        </div>
+
+        <!-- System Status -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">System Status</h3>
+            </div>
+            <div class="p-6 space-y-4">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">API Status</span>
+                    <span id="api-status" class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                        <i class="fas fa-circle mr-1"></i>
+                        Online
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Chat Service</span>
+                    <span id="chat-status" class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">
+                        <i class="fas fa-circle mr-1"></i>
+                        Online
+                    </span>
+                </div>
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Last Updated</span>
+                    <span id="last-updated" class="text-xs text-gray-500">Just now</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Summary -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Error Summary</h3>
+            </div>
+            <div class="p-6">
+                <div class="flex items-center justify-between">
+                    <span class="text-sm text-gray-600">Failed Tasks</span>
+                    <span id="error-count" class="text-lg font-semibold text-red-600">0</span>
+                </div>
+                <div class="mt-2">
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="error-percentage" class="bg-red-600 h-2 rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Task Modal -->
+<div id="new-task-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Create New Task</h3>
+            </div>
+            <div class="p-6">
+                <form id="new-task-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Task Type</label>
+                        <select id="task-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="llm.chat">Chat Task</option>
+                            <option value="worker.task">Worker Task</option>
+                            <option value="voice.call">Voice Call</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea id="task-description" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter task description..."></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeNewTaskModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Task</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Dashboard functionality
+    let dashboardData = {
+        analytics: null,
+        notifications: null
+    };
+
+    async function loadAnalytics() {
+        try {
+            const response = await fetch('/api/analytics');
+            if (response.ok) {
+                const data = await response.json();
+                dashboardData.analytics = data;
+                updateAnalyticsDisplay(data);
+            }
+        } catch (error) {
+            console.error('Failed to load analytics:', error);
+        }
+    }
+
+    async function loadActivityFeed() {
+        try {
+            const response = await fetch('/api/notifications');
+            if (response.ok) {
+                const data = await response.json();
+                dashboardData.notifications = data;
+                updateActivityFeed(data.notifications || []);
+            }
+        } catch (error) {
+            console.error('Failed to load activity feed:', error);
+        }
+    }
+
+    function updateAnalyticsDisplay(data) {
+        document.getElementById('total-tasks').textContent = data.total || 0;
+        document.getElementById('total-cost').textContent = '$' + (data.cost || 0).toFixed(4);
+        
+        const status = data.status || {};
+        document.getElementById('pending-count').textContent = status.pending || 0;
+        document.getElementById('started-count').textContent = status.started || 0;
+        document.getElementById('error-count').textContent = status.error || 0;
+        
+        // Update error percentage
+        const errorPercentage = data.total > 0 ? ((status.error || 0) / data.total) * 100 : 0;
+        document.getElementById('error-percentage').style.width = errorPercentage + '%';
+    }
+
+    function updateActivityFeed(notifications) {
+        const feed = document.getElementById('activity-feed');
+        feed.innerHTML = '';
+        
+        if (notifications.length === 0) {
+            feed.innerHTML = '<p class="text-gray-500 text-center py-4">No recent activity</p>';
+            return;
+        }
+        
+        notifications.slice(0, 5).forEach(notification => {
+            const item = document.createElement('div');
+            item.className = 'flex items-center space-x-3 p-3 bg-gray-50 rounded-lg';
+            
+            const statusColor = getStatusColor(notification.status);
+            const timeAgo = getTimeAgo(notification.updated_at);
+            
+            item.innerHTML = `
+                <div class="w-3 h-3 rounded-full ${statusColor}"></div>
+                <div class="flex-1">
+                    <p class="text-sm font-medium text-gray-900">Task ${notification.id}</p>
+                    <p class="text-xs text-gray-500">${notification.status} • ${timeAgo}</p>
+                </div>
+                <button onclick="viewTask('${notification.id}')" class="text-blue-600 hover:text-blue-800 text-sm">
+                    View
+                </button>
+            `;
+            feed.appendChild(item);
+        });
+    }
+
+    function getStatusColor(status) {
+        const colors = {
+            'pending': 'bg-yellow-400',
+            'started': 'bg-blue-400',
+            'running': 'bg-blue-400',
+            'success': 'bg-green-400',
+            'completed': 'bg-green-400',
+            'error': 'bg-red-400',
+            'failed': 'bg-red-400'
+        };
+        return colors[status] || 'bg-gray-400';
+    }
+
+    function getTimeAgo(timestamp) {
+        if (!timestamp) return 'Unknown';
+        const now = new Date();
+        const time = new Date(timestamp);
+        const diffMs = now - time;
+        const diffMins = Math.floor(diffMs / 60000);
+        
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffHours < 24) return `${diffHours}h ago`;
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+    }
+
+    function refreshData() {
+        loadAnalytics();
+        loadActivityFeed();
+        document.getElementById('last-updated').textContent = 'Just now';
+    }
+
+    function createNewTask() {
+        document.getElementById('new-task-modal').classList.remove('hidden');
+    }
+
+    function closeNewTaskModal() {
+        document.getElementById('new-task-modal').classList.add('hidden');
+        document.getElementById('new-task-form').reset();
+    }
+
+    function viewTask(taskId) {
+        window.location.href = `/tasks?id=${taskId}`;
+    }
+
+    // Handle new task form submission
+    document.getElementById('new-task-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const taskType = document.getElementById('task-type').value;
+        const description = document.getElementById('task-description').value;
+        
+        if (!description.trim()) {
+            alert('Please enter a task description');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/events', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    type: taskType,
+                    metadata: {
+                        description: description,
+                        source: 'dashboard'
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                closeNewTaskModal();
+                refreshData();
+                alert('Task created successfully!');
+            } else {
+                alert('Failed to create task');
+            }
+        } catch (error) {
+            console.error('Error creating task:', error);
+            alert('Error creating task');
+        }
+    });
+
+    // Initialize dashboard
+    document.addEventListener('DOMContentLoaded', () => {
+        refreshData();
+        // Auto-refresh every 30 seconds
+        setInterval(refreshData, 30000);
+    });
+
+    // Close modal when clicking outside
+    document.getElementById('new-task-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'new-task-modal') {
+            closeNewTaskModal();
+        }
+    });
+</script>
+{% endblock %}

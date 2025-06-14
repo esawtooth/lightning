@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+
+{% block title %}Chat - Vextir{% endblock %}
+{% block page_title %}AI Chat{% endblock %}
+
+{% block content %}
+<div class="h-full flex flex-col bg-white rounded-lg shadow">
+    <!-- Chat Header -->
+    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <i class="fas fa-robot text-white"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-medium text-gray-900">AI Assistant</h3>
+                <p class="text-sm text-gray-500">Ready to help you with any questions</p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                <i class="fas fa-circle mr-1"></i>
+                Online
+            </span>
+            <button onclick="clearChat()" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                <i class="fas fa-trash"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Chat Messages Container -->
+    <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4" style="height: calc(100vh - 200px);">
+        <!-- Welcome Message -->
+        <div class="flex items-start space-x-3">
+            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-robot text-white text-sm"></i>
+            </div>
+            <div class="flex-1">
+                <div class="bg-gray-100 rounded-lg p-4">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <img src="/static/vextir-logo.svg" alt="Vextir" class="w-6 h-6">
+                        <span class="font-medium text-gray-900">Vextir Assistant</span>
+                    </div>
+                    <p class="text-gray-700">
+                        🌟 <strong>Welcome to Vextir Chat, {{ username }}!</strong>
+                    </p>
+                    <p class="text-gray-700 mt-2">
+                        I'm your AI assistant, ready to help you with:
+                    </p>
+                    <ul class="list-disc list-inside text-gray-700 mt-2 space-y-1">
+                        <li>Answering questions</li>
+                        <li>Code assistance</li>
+                        <li>Repository analysis</li>
+                        <li>General conversation</li>
+                    </ul>
+                    <p class="text-gray-700 mt-2">
+                        What would you like to explore today?
+                    </p>
+                </div>
+                <div class="text-xs text-gray-500 mt-1">Just now</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chat Input -->
+    <div class="px-6 py-4 border-t border-gray-200">
+        <form id="chat-form" class="flex items-end space-x-3">
+            <div class="flex-1">
+                <textarea 
+                    id="chat-input" 
+                    rows="1" 
+                    placeholder="Type your message here..." 
+                    class="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                    style="min-height: 44px; max-height: 120px;"
+                ></textarea>
+            </div>
+            <button 
+                type="submit" 
+                id="send-button"
+                class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+                <i class="fas fa-paper-plane"></i>
+                <span>Send</span>
+            </button>
+        </form>
+        
+        <!-- Quick Actions -->
+        <div class="mt-3 flex flex-wrap gap-2">
+            <button onclick="insertQuickMessage('Help me understand this codebase')" class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors">
+                📁 Analyze codebase
+            </button>
+            <button onclick="insertQuickMessage('What are the recent tasks and their status?')" class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors">
+                📊 Check tasks
+            </button>
+            <button onclick="insertQuickMessage('Help me debug an issue')" class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors">
+                🐛 Debug help
+            </button>
+            <button onclick="insertQuickMessage('Explain how this system works')" class="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200 transition-colors">
+                💡 System overview
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Loading indicator -->
+<div id="loading-indicator" class="hidden fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg">
+    <i class="fas fa-spinner fa-spin mr-2"></i>
+    Processing...
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    let chatHistory = [];
+    let isProcessing = false;
+
+    // Auto-resize textarea
+    const chatInput = document.getElementById('chat-input');
+    chatInput.addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+
+    // Handle Enter key (Shift+Enter for new line)
+    chatInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+        }
+    });
+
+    // Handle form submission
+    document.getElementById('chat-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const message = chatInput.value.trim();
+        if (!message || isProcessing) return;
+        
+        // Add user message to chat
+        addMessage(message, 'user');
+        
+        // Clear input and reset height
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+        
+        // Set processing state
+        setProcessing(true);
+        
+        try {
+            // Send message to backend
+            const response = await fetch('/api/events', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    type: 'llm.chat',
+                    metadata: {
+                        messages: [{ role: 'user', content: message }],
+                        source: 'integrated_chat'
+                    }
+                })
+            });
+            
+            if (response.ok) {
+                // Add success message
+                addMessage('Message queued successfully! 🚀', 'assistant');
+                
+                // Simulate typing and response (in real implementation, this would come from WebSocket)
+                setTimeout(() => {
+                    addMessage('I\'ve received your message and it\'s being processed. In a full implementation, this would connect to the actual Chainlit backend for real-time responses.', 'assistant');
+                }, 1500);
+            } else {
+                addMessage('Sorry, there was an error sending your message. Please try again.', 'assistant', 'error');
+            }
+        } catch (error) {
+            console.error('Error sending message:', error);
+            addMessage('Failed to send message. Please check your connection and try again.', 'assistant', 'error');
+        } finally {
+            setProcessing(false);
+        }
+    });
+
+    function addMessage(content, sender, type = 'normal') {
+        const messagesContainer = document.getElementById('chat-messages');
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'flex items-start space-x-3';
+        
+        const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        if (sender === 'user') {
+            messageDiv.innerHTML = `
+                <div class="flex-1"></div>
+                <div class="max-w-xs lg:max-w-md">
+                    <div class="bg-blue-600 text-white rounded-lg p-4">
+                        <p>${escapeHtml(content)}</p>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1 text-right">${timestamp}</div>
+                </div>
+                <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-user text-white text-sm"></i>
+                </div>
+            `;
+        } else {
+            const bgColor = type === 'error' ? 'bg-red-100' : 'bg-gray-100';
+            const textColor = type === 'error' ? 'text-red-700' : 'text-gray-700';
+            
+            messageDiv.innerHTML = `
+                <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i class="fas fa-robot text-white text-sm"></i>
+                </div>
+                <div class="flex-1 max-w-xs lg:max-w-md">
+                    <div class="${bgColor} rounded-lg p-4">
+                        <p class="${textColor}">${escapeHtml(content)}</p>
+                    </div>
+                    <div class="text-xs text-gray-500 mt-1">${timestamp}</div>
+                </div>
+            `;
+        }
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        
+        // Store in history
+        chatHistory.push({ content, sender, timestamp, type });
+    }
+
+    function setProcessing(processing) {
+        isProcessing = processing;
+        const sendButton = document.getElementById('send-button');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        
+        if (processing) {
+            sendButton.disabled = true;
+            sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i><span>Sending...</span>';
+            loadingIndicator.classList.remove('hidden');
+        } else {
+            sendButton.disabled = false;
+            sendButton.innerHTML = '<i class="fas fa-paper-plane"></i><span>Send</span>';
+            loadingIndicator.classList.add('hidden');
+        }
+    }
+
+    function insertQuickMessage(message) {
+        chatInput.value = message;
+        chatInput.focus();
+        chatInput.style.height = 'auto';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+    }
+
+    function clearChat() {
+        if (confirm('Are you sure you want to clear the chat history?')) {
+            const messagesContainer = document.getElementById('chat-messages');
+            // Keep only the welcome message (first child)
+            const welcomeMessage = messagesContainer.firstElementChild;
+            messagesContainer.innerHTML = '';
+            messagesContainer.appendChild(welcomeMessage);
+            chatHistory = [];
+        }
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // Focus on input when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        chatInput.focus();
+    });
+
+    // In a real implementation, you would set up WebSocket connection here
+    // to receive real-time responses from the Chainlit backend
+    /*
+    function setupWebSocket() {
+        const ws = new WebSocket('ws://localhost:8000/ws');
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === 'message') {
+                addMessage(data.content, 'assistant');
+            }
+        };
+        
+        ws.onopen = function() {
+            console.log('WebSocket connected');
+        };
+        
+        ws.onclose = function() {
+            console.log('WebSocket disconnected');
+            // Attempt to reconnect
+            setTimeout(setupWebSocket, 3000);
+        };
+    }
+    
+    // setupWebSocket();
+    */
+</script>
+{% endblock %}
