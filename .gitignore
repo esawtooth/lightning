@@ -6,3 +6,18 @@ node_modules/
 .env
 context-hub/target/
 target/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+azure-function/.venv/
+
+# Azure Functions
+azure-function/__azurite_db_*.json
+azure-function/__blobstorage__/
+azure-function/__queuestorage__/
+azure-function/AzuriteConfig
