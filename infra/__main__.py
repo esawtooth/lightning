@@ -790,6 +790,8 @@ def origin_group(
     port: int,
     https: bool = True,
     host_header: pulumi.Input[str] | None = None,
+    *,
+    enforce_cert: bool = True,
 ):
     protocol = cdn.ProbeProtocol.HTTPS if https else cdn.ProbeProtocol.HTTP
     og = cdn.afd_origin_group.AFDOriginGroup(
@@ -820,6 +822,7 @@ def origin_group(
         http_port=port if not https else None,
         https_port=port if https else None,
         enabled_state=cdn.EnabledState.ENABLED,
+        enforce_certificate_name_check=enforce_cert,
     )
     return og, origin
 
@@ -830,6 +833,7 @@ ui_og, ui_origin = origin_group(
     80,
     https=False,
     host_header=f"www.{domain}",
+    enforce_cert=False,
 )
 api_og, api_origin = origin_group(
     "api",

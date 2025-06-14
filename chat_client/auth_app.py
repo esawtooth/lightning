@@ -6,6 +6,7 @@ from typing import Optional
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
+import requests
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 import msal
@@ -27,6 +28,7 @@ AAD_CLIENT_SECRET = (
     or os.environ.get("AZURE_CLIENT_SECRET")
 )
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "change-me")
+AUTH_API_URL = os.environ.get("AUTH_API_URL", "/api")
 
 if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):
     logging.warning("AAD configuration incomplete")
@@ -42,6 +44,19 @@ SCOPES = ["User.Read"]
 app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 templates = Jinja2Templates(directory="templates")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Login page or redirect if already authenticated."""
+    token = request.cookies.get("auth_token")
+    if token:
+        try:
+            verify_token(token)
+            return RedirectResponse(url="/chat")
+        except Exception:
+            pass
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/login")
@@ -105,6 +120,42 @@ async def chat_redirect(request: Request):
     except Exception:
         return RedirectResponse(url="/login")
     return RedirectResponse(_resolve_chainlit_url(request))
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_form(request: Request):
+    """Display the registration page."""
+    return templates.TemplateResponse("register.html", {"request": request})
+
+
+@app.post("/register")
+async def register_user(request: Request):
+    """Handle user registration via Azure Function."""
+    form = await request.form()
+    username = form.get("username")
+    email = form.get("email")
+    password = form.get("password")
+    confirm = form.get("confirm_password")
+
+    if password != confirm:
+        return RedirectResponse("/register?error=password_mismatch", status_code=303)
+    if not password or len(password) < 6:
+        return RedirectResponse("/register?error=password_too_short", status_code=303)
+
+    try:
+        resp = requests.post(
+            f"{AUTH_API_URL.rstrip('/')}/auth/register",
+            json={"username": username, "password": password, "email": email},
+            timeout=10,
+        )
+    except Exception:
+        return RedirectResponse("/register?error=service_unavailable", status_code=303)
+
+    if resp.status_code in (200, 201):
+        return RedirectResponse("/?message=registration_waitlist", status_code=303)
+    if resp.status_code == 409:
+        return RedirectResponse("/register?error=username_exists", status_code=303)
+    return RedirectResponse("/register?error=service_error", status_code=303)
 
 
 @app.get("/health")
