@@ -11,6 +11,7 @@ COPY chat_client/gateway_app.py ./gateway_app.py
 COPY events/ ./events/
 COPY dashboard/ ./dashboard/
 COPY common/ ./common/
+COPY .chainlit/ ./.chainlit/
 
 # Copy Python dependencies
 COPY chat_client/requirements.txt ./requirements.txt
