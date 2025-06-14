@@ -790,6 +790,8 @@ def origin_group(
     port: int,
     https: bool = True,
     host_header: pulumi.Input[str] | None = None,
+    *,
+    enforce_cert: bool = True,
 ):
     protocol = cdn.ProbeProtocol.HTTPS if https else cdn.ProbeProtocol.HTTP
     og = cdn.afd_origin_group.AFDOriginGroup(
@@ -820,6 +822,7 @@ def origin_group(
         http_port=port if not https else None,
         https_port=port if https else None,
         enabled_state=cdn.EnabledState.ENABLED,
+        enforce_certificate_name_check=enforce_cert,
     )
     return og, origin
 
@@ -830,6 +833,7 @@ ui_og, ui_origin = origin_group(
     80,
     https=False,
     host_header=f"www.{domain}",
+    enforce_cert=False,
 )
 api_og, api_origin = origin_group(
     "api",
@@ -881,7 +885,7 @@ def afd_route(name, pattern, og, origin, cd, fp):
         custom_domains=[cdn.ActivatedResourceReferenceArgs(id=cd.id)],
         opts=pulumi.ResourceOptions(depends_on=[og, origin]),
     )
-afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTPS_ONLY)
+afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
 afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
 
