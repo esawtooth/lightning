@@ -1,0 +1,59 @@
+# Git and version control
+.git
+.gitignore
+*.md
+
+# Build artifacts
+target/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# Logs
+*.log
+
+# Test and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+.env
+
+# Azure and infrastructure
+infra/__pycache__/
+infra/.pulumi/
+
+# Context hub data
+context-hub/data/
+context-hub/index/
+context-hub/snapshots/
+
+# Azure function artifacts
+azure-function/AzuriteConfig
+azure-function/__azurite_db_*.json
+azure-function/__blobstorage__/
+azure-function/local.settings.json.bak
+
+# Temporary files
+*.tmp
+*.temp 

@@ -6,6 +6,7 @@ WORKDIR /app
 COPY chat_client/chainlit_app.py ./chainlit_app.py
 COPY chat_client/auth_app.py ./auth_app.py
 COPY chat_client/templates/ ./templates/
+COPY chat_client/static/ ./static/
 COPY chat_client/start.sh ./start.sh
 COPY chat_client/gateway_app.py ./gateway_app.py
 COPY events/ ./events/
