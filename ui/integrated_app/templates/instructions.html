@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+
+{% block title %}Instructions - Vextir Dashboard{% endblock %}
+{% block page_title %}Instructions{% endblock %}
+
+{% block extra_head %}
+<style>
+    .instruction-card {
+        transition: all 0.3s ease;
+    }
+    .instruction-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    .trigger-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .action-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .json-editor {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+    }
+    .modal {
+        display: none;
+    }
+    .modal.show {
+        display: flex;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with Create Button -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Email & Calendar Instructions</h2>
+            <p class="text-gray-600 mt-1">Define how your email and calendar events should be processed</p>
+        </div>
+        <button id="create-instruction-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+            <i class="fas fa-plus"></i>
+            <span>Create Instruction</span>
+        </button>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Total Instructions</p>
+                    <p id="total-instructions" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Active</p>
+                    <p id="active-instructions" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                    <i class="fas fa-play"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Total Executions</p>
+                    <p id="total-executions" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Last Execution</p>
+                    <p id="last-execution" class="text-sm font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Instructions List -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Your Instructions</h3>
+        </div>
+        <div id="instructions-container" class="p-6">
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                <p class="text-gray-500 mt-2">Loading instructions...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Instruction Modal -->
+<div id="instruction-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Create New Instruction</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Modal Form -->
+            <form id="instruction-form" class="space-y-6">
+                <input type="hidden" id="instruction-id" name="instruction_id">
+                
+                <!-- Basic Info -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="instruction-name" class="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" id="instruction-name" name="name" required 
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="instruction-enabled" class="block text-sm font-medium text-gray-700">Status</label>
+                        <select id="instruction-enabled" name="enabled" 
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="true">Enabled</option>
+                            <option value="false">Disabled</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label for="instruction-description" class="block text-sm font-medium text-gray-700">Description</label>
+                    <textarea id="instruction-description" name="description" rows="2" 
+                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                </div>
+
+                <!-- Trigger Configuration -->
+                <div class="border rounded-lg p-4">
+                    <h4 class="text-md font-medium text-gray-900 mb-3">Trigger Configuration</h4>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div>
+                            <label for="event-type" class="block text-sm font-medium text-gray-700">Event Type</label>
+                            <select id="event-type" name="event_type" 
+                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                <option value="email.received">Email Received</option>
+                                <option value="email.sent">Email Sent</option>
+                                <option value="calendar.received">Calendar Event Received</option>
+                                <option value="calendar.created">Calendar Event Created</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="providers" class="block text-sm font-medium text-gray-700">Providers</label>
+                            <div class="mt-1 space-y-2">
+                                <label class="inline-flex items-center">
+                                    <input type="checkbox" name="providers" value="gmail" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2">Gmail</span>
+                                </label>
+                                <label class="inline-flex items-center ml-4">
+                                    <input type="checkbox" name="providers" value="outlook" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2">Outlook</span>
+                                </label>
+                                <label class="inline-flex items-center ml-4">
+                                    <input type="checkbox" name="providers" value="icloud" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                                    <span class="ml-2">iCloud</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Filters -->
+                    <div>
+                        <label for="subject-contains" class="block text-sm font-medium text-gray-700">Subject Contains (comma-separated)</label>
+                        <input type="text" id="subject-contains" name="subject_contains" 
+                               placeholder="project, urgent, meeting"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Action Configuration -->
+                <div class="border rounded-lg p-4">
+                    <h4 class="text-md font-medium text-gray-900 mb-3">Action Configuration</h4>
+                    
+                    <div class="mb-4">
+                        <label for="action-type" class="block text-sm font-medium text-gray-700">Action Type</label>
+                        <select id="action-type" name="action_type" 
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="update_context_summary">Update Context Summary (Fast)</option>
+                            <option value="send_email">Send Email (Fast)</option>
+                            <option value="create_task">Create Task (Fast)</option>
+                            <option value="send_notification">Send Notification (Fast)</option>
+                            <option value="conseil_task">AI-Powered Task (Conseil)</option>
+                        </select>
+                    </div>
+
+                    <!-- Context Summary Action -->
+                    <div id="context-action-config" class="space-y-4">
+                        <div>
+                            <label for="context-key" class="block text-sm font-medium text-gray-700">Context Key</label>
+                            <input type="text" id="context-key" name="context_key" 
+                                   placeholder="email_summary, meeting_schedule, etc."
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="synthesis-prompt" class="block text-sm font-medium text-gray-700">Synthesis Prompt</label>
+                            <textarea id="synthesis-prompt" name="synthesis_prompt" rows="3" 
+                                      placeholder="Update the summary with key information: action items, deadlines, and important decisions."
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Email Action -->
+                    <div id="email-action-config" class="space-y-4 hidden">
+                        <div>
+                            <label for="email-to" class="block text-sm font-medium text-gray-700">Send To</label>
+                            <input type="email" id="email-to" name="email_to" 
+                                   placeholder="user@example.com"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="email-subject" class="block text-sm font-medium text-gray-700">Subject Template</label>
+                            <input type="text" id="email-subject" name="email_subject" 
+                                   placeholder="Alert: {subject}"
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="email-body" class="block text-sm font-medium text-gray-700">Body Template</label>
+                            <textarea id="email-body" name="email_body" rows="3" 
+                                      placeholder="New email from {from}: {subject}"
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Conseil Task Action -->
+                    <div id="conseil-action-config" class="space-y-4 hidden">
+                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                            <div class="flex items-start">
+                                <div class="flex-shrink-0">
+                                    <i class="fas fa-robot text-blue-600 text-lg"></i>
+                                </div>
+                                <div class="ml-3">
+                                    <h5 class="text-sm font-medium text-blue-800">AI-Powered Processing</h5>
+                                    <p class="text-sm text-blue-700 mt-1">
+                                        This action will spawn a Conseil AI worker with full context about the event. 
+                                        The AI can perform complex reasoning, update context, create events, and execute system commands.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label for="conseil-prompt" class="block text-sm font-medium text-gray-700">Task Prompt</label>
+                            <textarea id="conseil-prompt" name="conseil_prompt" rows="4" 
+                                      placeholder="Analyze this email and extract key information. If it contains action items, create tasks for each one. Update the project status context with any relevant updates. Send me a summary if there are urgent items."
+                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                            <p class="text-sm text-gray-500 mt-1">
+                                Describe what you want the AI to do with this event. Be specific about actions to take, context to update, or events to create.
+                            </p>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="conseil-complexity" class="block text-sm font-medium text-gray-700">Complexity Level</label>
+                                <select id="conseil-complexity" name="conseil_complexity" 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="simple">Simple (Quick processing)</option>
+                                    <option value="complex" selected>Complex (Full AI reasoning)</option>
+                                    <option value="advanced">Advanced (Extended processing)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="conseil-fallback" class="block text-sm font-medium text-gray-700">Fallback Action</label>
+                                <select id="conseil-fallback" name="conseil_fallback" 
+                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="">None</option>
+                                    <option value="send_notification">Send Notification</option>
+                                    <option value="log_event">Log Event Only</option>
+                                </select>
+                                <p class="text-sm text-gray-500 mt-1">Action to take if Conseil processing fails</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" id="cancel-btn" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700">
+                        Save Instruction
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let instructions = [];
+let editingInstructionId = null;
+
+// Load instructions on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadInstructions();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Modal controls
+    document.getElementById('create-instruction-btn').addEventListener('click', () => openModal());
+    document.getElementById('close-modal').addEventListener('click', () => closeModal());
+    document.getElementById('cancel-btn').addEventListener('click', () => closeModal());
+    
+    // Form submission
+    document.getElementById('instruction-form').addEventListener('submit', handleFormSubmit);
+    
+    // Action type change
+    document.getElementById('action-type').addEventListener('change', handleActionTypeChange);
+    
+    // Close modal on outside click
+    document.getElementById('instruction-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+}
+
+async function loadInstructions() {
+    try {
+        const response = await fetch('/api/instructions');
+        if (response.ok) {
+            instructions = await response.json();
+            renderInstructions();
+            updateStats();
+        } else {
+            showError('Failed to load instructions');
+        }
+    } catch (error) {
+        console.error('Error loading instructions:', error);
+        showError('Failed to load instructions');
+    }
+}
+
+function renderInstructions() {
+    const container = document.getElementById('instructions-container');
+    
+    if (instructions.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-cogs text-gray-400 text-4xl mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No Instructions Yet</h3>
+                <p class="text-gray-500 mb-4">Create your first instruction to start processing email and calendar events</p>
+                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+                    Create First Instruction
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    const html = instructions.map(instruction => `
+        <div class="instruction-card bg-gray-50 rounded-lg p-4 mb-4">
+            <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                    <h4 class="text-lg font-medium text-gray-900">${instruction.name}</h4>
+                    <p class="text-gray-600 text-sm mt-1">${instruction.description || 'No description'}</p>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="trigger-badge ${instruction.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} rounded-full">
+                        ${instruction.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                    <div class="flex space-x-1">
+                        <button onclick="toggleInstruction('${instruction.id}')" 
+                                class="p-2 text-gray-400 hover:text-gray-600" title="Toggle">
+                            <i class="fas fa-power-off"></i>
+                        </button>
+                        <button onclick="editInstruction('${instruction.id}')" 
+                                class="p-2 text-gray-400 hover:text-blue-600" title="Edit">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="deleteInstruction('${instruction.id}')" 
+                                class="p-2 text-gray-400 hover:text-red-600" title="Delete">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="font-medium text-gray-700">Trigger:</span>
+                    <div class="mt-1">
+                        <span class="trigger-badge bg-blue-100 text-blue-800 rounded-full">
+                            ${instruction.trigger.event_type}
+                        </span>
+                        ${(instruction.trigger.providers || []).map(p => 
+                            `<span class="trigger-badge bg-purple-100 text-purple-800 rounded-full ml-1">${p}</span>`
+                        ).join('')}
+                    </div>
+                </div>
+                <div>
+                    <span class="font-medium text-gray-700">Action:</span>
+                    <div class="mt-1">
+                        <span class="action-badge bg-orange-100 text-orange-800 rounded-full">
+                            ${instruction.action.type}
+                        </span>
+                    </div>
+                </div>
+                <div>
+                    <span class="font-medium text-gray-700">Executions:</span>
+                    <div class="mt-1">
+                        <span class="text-gray-900">${instruction.execution_count || 0}</span>
+                        ${instruction.last_executed_at ? 
+                            `<div class="text-xs text-gray-500">Last: ${new Date(instruction.last_executed_at).toLocaleDateString()}</div>` : 
+                            '<div class="text-xs text-gray-500">Never executed</div>'
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function updateStats() {
+    document.getElementById('total-instructions').textContent = instructions.length;
+    document.getElementById('active-instructions').textContent = instructions.filter(i => i.enabled).length;
+    
+    const totalExecutions = instructions.reduce((sum, i) => sum + (i.execution_count || 0), 0);
+    document.getElementById('total-executions').textContent = totalExecutions;
+    
+    const lastExecution = instructions
+        .filter(i => i.last_executed_at)
+        .sort((a, b) => new Date(b.last_executed_at) - new Date(a.last_executed_at))[0];
+    
+    document.getElementById('last-execution').textContent = lastExecution ? 
+        new Date(lastExecution.last_executed_at).toLocaleDateString() : 'Never';
+}
+
+function openModal(instruction = null) {
+    editingInstructionId = instruction?.id || null;
+    document.getElementById('modal-title').textContent = instruction ? 'Edit Instruction' : 'Create New Instruction';
+    
+    if (instruction) {
+        // Populate form with instruction data
+        document.getElementById('instruction-id').value = instruction.id;
+        document.getElementById('instruction-name').value = instruction.name;
+        document.getElementById('instruction-description').value = instruction.description || '';
+        document.getElementById('instruction-enabled').value = instruction.enabled.toString();
+        document.getElementById('event-type').value = instruction.trigger.event_type;
+        
+        // Set providers
+        const providerCheckboxes = document.querySelectorAll('input[name="providers"]');
+        providerCheckboxes.forEach(cb => {
+            cb.checked = (instruction.trigger.providers || []).includes(cb.value);
+        });
+        
+        // Set content filters
+        const subjectContains = instruction.trigger.conditions?.content_filters?.subject_contains || [];
+        document.getElementById('subject-contains').value = subjectContains.join(', ');
+        
+        // Set action
+        document.getElementById('action-type').value = instruction.action.type;
+        handleActionTypeChange();
+        
+        if (instruction.action.type === 'update_context_summary') {
+            document.getElementById('context-key').value = instruction.action.config?.context_key || '';
+            document.getElementById('synthesis-prompt').value = instruction.action.config?.synthesis_prompt || '';
+        } else if (instruction.action.type === 'send_email') {
+            document.getElementById('email-to').value = instruction.action.config?.email?.to || '';
+            document.getElementById('email-subject').value = instruction.action.config?.email?.subject || '';
+            document.getElementById('email-body').value = instruction.action.config?.email?.body_template || '';
+        }
+    } else {
+        // Reset form
+        document.getElementById('instruction-form').reset();
+        document.getElementById('instruction-id').value = '';
+        handleActionTypeChange();
+    }
+    
+    document.getElementById('instruction-modal').classList.add('show');
+}
+
+function closeModal() {
+    document.getElementById('instruction-modal').classList.remove('show');
+    editingInstructionId = null;
+}
+
+function handleActionTypeChange() {
+    const actionType = document.getElementById('action-type').value;
+    const contextConfig = document.getElementById('context-action-config');
+    const emailConfig = document.getElementById('email-action-config');
+    const conseilConfig = document.getElementById('conseil-action-config');
+    
+    // Hide all configs
+    contextConfig.classList.add('hidden');
+    emailConfig.classList.add('hidden');
+    conseilConfig.classList.add('hidden');
+    
+    // Show relevant config
+    if (actionType === 'update_context_summary') {
+        contextConfig.classList.remove('hidden');
+    } else if (actionType === 'send_email') {
+        emailConfig.classList.remove('hidden');
+    } else if (actionType === 'conseil_task') {
+        conseilConfig.classList.remove('hidden');
+    }
+}
+
+async function handleFormSubmit(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const providers = Array.from(document.querySelectorAll('input[name="providers"]:checked')).map(cb => cb.value);
+    const subjectContains = formData.get('subject_contains').split(',').map(s => s.trim()).filter(s => s);
+    
+    const instruction = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        enabled: formData.get('enabled') === 'true',
+        trigger: {
+            event_type: formData.get('event_type'),
+            providers: providers,
+            conditions: {
+                content_filters: {
+                    subject_contains: subjectContains
+                }
+            }
+        },
+        action: {
+            type: formData.get('action_type'),
+            config: {}
+        }
+    };
+    
+    // Set action config based on type
+    if (instruction.action.type === 'update_context_summary') {
+        instruction.action.config = {
+            context_key: formData.get('context_key'),
+            synthesis_prompt: formData.get('synthesis_prompt')
+        };
+    } else if (instruction.action.type === 'send_email') {
+        instruction.action.config = {
+            email: {
+                to: formData.get('email_to'),
+                subject: formData.get('email_subject'),
+                body_template: formData.get('email_body')
+            }
+        };
+    } else if (instruction.action.type === 'conseil_task') {
+        instruction.action.config = {
+            prompt: formData.get('conseil_prompt'),
+            complexity: formData.get('conseil_complexity'),
+            fallback_action: formData.get('conseil_fallback') || null
+        };
+    }
+    
+    try {
+        const url = editingInstructionId ? `/api/instructions/${editingInstructionId}` : '/api/instructions';
+        const method = editingInstructionId ? 'PUT' : 'POST';
+        
+        const response = await fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(instruction)
+        });
+        
+        if (response.ok) {
+            closeModal();
+            loadInstructions();
+            showSuccess(editingInstructionId ? 'Instruction updated successfully' : 'Instruction created successfully');
+        } else {
+            const error = await response.text();
+            showError(`Failed to save instruction: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error saving instruction:', error);
+        showError('Failed to save instruction');
+    }
+}
+
+function editInstruction(id) {
+    const instruction = instructions.find(i => i.id === id);
+    if (instruction) {
+        openModal(instruction);
+    }
+}
+
+async function toggleInstruction(id) {
+    try {
+        const response = await fetch(`/api/instructions/${id}/toggle`, {
+            method: 'PATCH'
+        });
+        
+        if (response.ok) {
+            loadInstructions();
+            showSuccess('Instruction status updated');
+        } else {
+            showError('Failed to toggle instruction');
+        }
+    } catch (error) {
+        console.error('Error toggling instruction:', error);
+        showError('Failed to toggle instruction');
+    }
+}
+
+async function deleteInstruction(id) {
+    if (!confirm('Are you sure you want to delete this instruction?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/instructions/${id}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            loadInstructions();
+            showSuccess('Instruction deleted successfully');
+        } else {
+            showError('Failed to delete instruction');
+        }
+    } catch (error) {
+        console.error('Error deleting instruction:', error);
+        showError('Failed to delete instruction');
+    }
+}
+
+function showSuccess(message) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showError(message) {
+    // Simple toast notification
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+</script>
+{% endblock %}

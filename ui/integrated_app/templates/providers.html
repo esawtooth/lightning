@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+
+{% block title %}Providers - Vextir Dashboard{% endblock %}
+{% block page_title %}Providers{% endblock %}
+
+{% block extra_head %}
+<style>
+    .provider-card {
+        transition: all 0.3s ease;
+    }
+    .provider-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    .status-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .provider-logo {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        color: white;
+    }
+    .gmail-bg { background: linear-gradient(135deg, #ea4335, #fbbc05); }
+    .outlook-bg { background: linear-gradient(135deg, #0078d4, #106ebe); }
+    .icloud-bg { background: linear-gradient(135deg, #007aff, #5856d6); }
+    .oauth-popup {
+        width: 500px;
+        height: 600px;
+    }
+    .webhook-url {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 0.75rem;
+        word-break: break-all;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Email & Calendar Providers</h2>
+            <p class="text-gray-600 mt-1">Connect and manage your email and calendar providers</p>
+        </div>
+        <button id="refresh-status-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+            <i class="fas fa-sync-alt"></i>
+            <span>Refresh Status</span>
+        </button>
+    </div>
+
+    <!-- Provider Status Overview -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Connected</p>
+                    <p id="connected-count" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Needs Setup</p>
+                    <p id="setup-needed-count" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-red-100 text-red-600">
+                    <i class="fas fa-times-circle"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Disconnected</p>
+                    <p id="disconnected-count" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Provider Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <!-- Gmail Card -->
+        <div class="provider-card bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="provider-logo gmail-bg">
+                        <i class="fab fa-google"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">Gmail</h3>
+                        <p class="text-sm text-gray-500">Google Email & Calendar</p>
+                    </div>
+                </div>
+                <span id="gmail-status" class="status-badge bg-gray-100 text-gray-800 rounded-full">
+                    Checking...
+                </span>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="text-sm">
+                    <span class="font-medium text-gray-700">Features:</span>
+                    <ul class="mt-1 text-gray-600 list-disc list-inside">
+                        <li>Email reading and sending</li>
+                        <li>Calendar events and invites</li>
+                        <li>Real-time notifications</li>
+                    </ul>
+                </div>
+                
+                <div id="gmail-actions" class="flex space-x-2">
+                    <button onclick="connectProvider('gmail')" 
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm">
+                        Connect
+                    </button>
+                    <button onclick="testProvider('gmail')" 
+                            class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                        Test
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Outlook Card -->
+        <div class="provider-card bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="provider-logo outlook-bg">
+                        <i class="fab fa-microsoft"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">Outlook</h3>
+                        <p class="text-sm text-gray-500">Microsoft 365 & Exchange</p>
+                    </div>
+                </div>
+                <span id="outlook-status" class="status-badge bg-gray-100 text-gray-800 rounded-full">
+                    Checking...
+                </span>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="text-sm">
+                    <span class="font-medium text-gray-700">Features:</span>
+                    <ul class="mt-1 text-gray-600 list-disc list-inside">
+                        <li>Exchange email integration</li>
+                        <li>Teams calendar sync</li>
+                        <li>Enterprise features</li>
+                    </ul>
+                </div>
+                
+                <div id="outlook-actions" class="flex space-x-2">
+                    <button onclick="connectProvider('outlook')" 
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm">
+                        Connect
+                    </button>
+                    <button onclick="testProvider('outlook')" 
+                            class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                        Test
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- iCloud Card -->
+        <div class="provider-card bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center space-x-3">
+                    <div class="provider-logo icloud-bg">
+                        <i class="fab fa-apple"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900">iCloud</h3>
+                        <p class="text-sm text-gray-500">Apple Mail & Calendar</p>
+                    </div>
+                </div>
+                <span id="icloud-status" class="status-badge bg-gray-100 text-gray-800 rounded-full">
+                    Checking...
+                </span>
+            </div>
+            
+            <div class="space-y-3">
+                <div class="text-sm">
+                    <span class="font-medium text-gray-700">Features:</span>
+                    <ul class="mt-1 text-gray-600 list-disc list-inside">
+                        <li>iCloud Mail access</li>
+                        <li>Calendar synchronization</li>
+                        <li>App-specific passwords</li>
+                    </ul>
+                </div>
+                
+                <div id="icloud-actions" class="flex space-x-2">
+                    <button onclick="connectProvider('icloud')" 
+                            class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm">
+                        Connect
+                    </button>
+                    <button onclick="testProvider('icloud')" 
+                            class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                        Test
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Webhook Configuration -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Webhook Configuration</h3>
+            <p class="text-sm text-gray-500 mt-1">Configure these webhook URLs in your provider settings for real-time updates</p>
+        </div>
+        <div class="p-6 space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Gmail Webhook URL</label>
+                <div class="webhook-url" id="gmail-webhook-url">
+                    Loading...
+                </div>
+                <button onclick="copyWebhookUrl('gmail')" class="mt-2 text-sm text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-copy mr-1"></i>Copy URL
+                </button>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Outlook Webhook URL</label>
+                <div class="webhook-url" id="outlook-webhook-url">
+                    Loading...
+                </div>
+                <button onclick="copyWebhookUrl('outlook')" class="mt-2 text-sm text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-copy mr-1"></i>Copy URL
+                </button>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">iCloud Configuration</label>
+                <div class="text-sm text-gray-600 bg-blue-50 p-3 rounded">
+                    <i class="fas fa-info-circle text-blue-500 mr-2"></i>
+                    iCloud uses IMAP/SMTP polling instead of webhooks. Configure your app-specific password in the connection settings.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Instructions -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Setup Instructions</h3>
+        </div>
+        <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <!-- Gmail Setup -->
+                <div class="space-y-3">
+                    <h4 class="font-medium text-gray-900 flex items-center">
+                        <i class="fab fa-google text-red-500 mr-2"></i>
+                        Gmail Setup
+                    </h4>
+                    <ol class="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                        <li>Create a Google Cloud Project</li>
+                        <li>Enable Gmail and Calendar APIs</li>
+                        <li>Create OAuth2 credentials</li>
+                        <li>Add redirect URI from webhook config</li>
+                        <li>Click "Connect" to authorize</li>
+                    </ol>
+                </div>
+
+                <!-- Outlook Setup -->
+                <div class="space-y-3">
+                    <h4 class="font-medium text-gray-900 flex items-center">
+                        <i class="fab fa-microsoft text-blue-500 mr-2"></i>
+                        Outlook Setup
+                    </h4>
+                    <ol class="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                        <li>Register app in Azure AD</li>
+                        <li>Configure Microsoft Graph permissions</li>
+                        <li>Set redirect URI from webhook config</li>
+                        <li>Enable Mail and Calendar scopes</li>
+                        <li>Click "Connect" to authorize</li>
+                    </ol>
+                </div>
+
+                <!-- iCloud Setup -->
+                <div class="space-y-3">
+                    <h4 class="font-medium text-gray-900 flex items-center">
+                        <i class="fab fa-apple text-gray-700 mr-2"></i>
+                        iCloud Setup
+                    </h4>
+                    <ol class="text-sm text-gray-600 space-y-1 list-decimal list-inside">
+                        <li>Enable 2FA on Apple ID</li>
+                        <li>Generate app-specific password</li>
+                        <li>Configure IMAP/SMTP settings</li>
+                        <li>Set up CalDAV for calendar</li>
+                        <li>Click "Connect" to configure</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Provider Connection Modal -->
+<div id="provider-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-md shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-title" class="text-lg font-medium text-gray-900">Connect Provider</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div id="modal-content" class="space-y-4">
+                <!-- Content will be dynamically populated -->
+            </div>
+
+            <!-- Modal Actions -->
+            <div id="modal-actions" class="flex justify-end space-x-3 pt-4 border-t mt-4">
+                <!-- Actions will be dynamically populated -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let providerStatus = {};
+let webhookUrls = {};
+
+// Load provider status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadProviderStatus();
+    loadWebhookUrls();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    // Refresh button
+    document.getElementById('refresh-status-btn').addEventListener('click', loadProviderStatus);
+    
+    // Modal controls
+    document.getElementById('close-modal').addEventListener('click', closeModal);
+    
+    // Close modal on outside click
+    document.getElementById('provider-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+}
+
+async function loadProviderStatus() {
+    try {
+        const response = await fetch('/api/providers/status');
+        if (response.ok) {
+            providerStatus = await response.json();
+            updateProviderCards();
+            updateStatusCounts();
+        } else {
+            showError('Failed to load provider status');
+        }
+    } catch (error) {
+        console.error('Error loading provider status:', error);
+        showError('Failed to load provider status');
+    }
+}
+
+function loadWebhookUrls() {
+    // Generate webhook URLs based on current domain
+    const baseUrl = window.location.origin.replace(/:\d+$/, ''); // Remove port if present
+    const functionUrl = baseUrl.includes('localhost') ? 'http://localhost:7071' : baseUrl;
+    
+    webhookUrls = {
+        gmail: `${functionUrl}/api/connector/webhook/gmail?type=email&user_id={user_id}`,
+        outlook: `${functionUrl}/api/connector/webhook/outlook?type=email&user_id={user_id}`
+    };
+    
+    document.getElementById('gmail-webhook-url').textContent = webhookUrls.gmail;
+    document.getElementById('outlook-webhook-url').textContent = webhookUrls.outlook;
+}
+
+function updateProviderCards() {
+    const providers = ['gmail', 'outlook', 'icloud'];
+    
+    providers.forEach(provider => {
+        const status = providerStatus[provider] || { connected: false, last_sync: null, error: null };
+        const statusElement = document.getElementById(`${provider}-status`);
+        const actionsElement = document.getElementById(`${provider}-actions`);
+        
+        // Update status badge
+        if (status.connected) {
+            statusElement.className = 'status-badge bg-green-100 text-green-800 rounded-full';
+            statusElement.textContent = 'Connected';
+        } else if (status.error) {
+            statusElement.className = 'status-badge bg-red-100 text-red-800 rounded-full';
+            statusElement.textContent = 'Error';
+        } else {
+            statusElement.className = 'status-badge bg-gray-100 text-gray-800 rounded-full';
+            statusElement.textContent = 'Not Connected';
+        }
+        
+        // Update action buttons
+        if (status.connected) {
+            actionsElement.innerHTML = `
+                <button onclick="testProvider('${provider}')" 
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded text-sm">
+                    Test Connection
+                </button>
+                <button onclick="disconnectProvider('${provider}')" 
+                        class="px-3 py-2 border border-red-300 text-red-600 rounded text-sm hover:bg-red-50">
+                    Disconnect
+                </button>
+            `;
+        } else {
+            actionsElement.innerHTML = `
+                <button onclick="connectProvider('${provider}')" 
+                        class="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-sm">
+                    Connect
+                </button>
+                <button onclick="testProvider('${provider}')" 
+                        class="px-3 py-2 border border-gray-300 rounded text-sm hover:bg-gray-50">
+                    Test
+                </button>
+            `;
+        }
+    });
+}
+
+function updateStatusCounts() {
+    const providers = Object.values(providerStatus);
+    const connected = providers.filter(p => p.connected).length;
+    const needsSetup = providers.filter(p => !p.connected && !p.error).length;
+    const disconnected = providers.filter(p => p.error).length;
+    
+    document.getElementById('connected-count').textContent = connected;
+    document.getElementById('setup-needed-count').textContent = needsSetup;
+    document.getElementById('disconnected-count').textContent = disconnected;
+}
+
+async function connectProvider(provider) {
+    try {
+        const response = await fetch(`/api/providers/${provider}/auth`);
+        if (response.ok) {
+            const data = await response.json();
+            
+            if (data.auth_url) {
+                // OAuth flow - open popup
+                const popup = window.open(
+                    data.auth_url,
+                    'oauth',
+                    'width=500,height=600,scrollbars=yes,resizable=yes'
+                );
+                
+                // Monitor popup for completion
+                const checkClosed = setInterval(() => {
+                    if (popup.closed) {
+                        clearInterval(checkClosed);
+                        // Refresh status after OAuth completion
+                        setTimeout(loadProviderStatus, 1000);
+                    }
+                }, 1000);
+            } else {
+                // Manual configuration required (e.g., iCloud)
+                showProviderConfigModal(provider);
+            }
+        } else {
+            showError(`Failed to start ${provider} connection`);
+        }
+    } catch (error) {
+        console.error(`Error connecting ${provider}:`, error);
+        showError(`Failed to connect ${provider}`);
+    }
+}
+
+async function testProvider(provider) {
+    try {
+        const response = await fetch(`/api/providers/${provider}/test`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            showSuccess(`${provider} connection test successful`);
+        } else {
+            const error = await response.text();
+            showError(`${provider} connection test failed: ${error}`);
+        }
+    } catch (error) {
+        console.error(`Error testing ${provider}:`, error);
+        showError(`Failed to test ${provider} connection`);
+    }
+}
+
+async function disconnectProvider(provider) {
+    if (!confirm(`Are you sure you want to disconnect ${provider}?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/providers/${provider}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showSuccess(`${provider} disconnected successfully`);
+            loadProviderStatus();
+        } else {
+            showError(`Failed to disconnect ${provider}`);
+        }
+    } catch (error) {
+        console.error(`Error disconnecting ${provider}:`, error);
+        showError(`Failed to disconnect ${provider}`);
+    }
+}
+
+function showProviderConfigModal(provider) {
+    const modal = document.getElementById('provider-modal');
+    const title = document.getElementById('modal-title');
+    const content = document.getElementById('modal-content');
+    const actions = document.getElementById('modal-actions');
+    
+    title.textContent = `Configure ${provider.charAt(0).toUpperCase() + provider.slice(1)}`;
+    
+    if (provider === 'icloud') {
+        content.innerHTML = `
+            <div class="space-y-4">
+                <div>
+                    <label for="icloud-email" class="block text-sm font-medium text-gray-700">iCloud Email</label>
+                    <input type="email" id="icloud-email" 
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="your-email@icloud.com">
+                </div>
+                <div>
+                    <label for="icloud-password" class="block text-sm font-medium text-gray-700">App-Specific Password</label>
+                    <input type="password" id="icloud-password" 
+                           class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="xxxx-xxxx-xxxx-xxxx">
+                    <p class="mt-1 text-xs text-gray-500">Generate this in your Apple ID settings</p>
+                </div>
+            </div>
+        `;
+        
+        actions.innerHTML = `
+            <button onclick="closeModal()" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Cancel
+            </button>
+            <button onclick="saveICloudConfig()" class="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700">
+                Save Configuration
+            </button>
+        `;
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+async function saveICloudConfig() {
+    const email = document.getElementById('icloud-email').value;
+    const password = document.getElementById('icloud-password').value;
+    
+    if (!email || !password) {
+        showError('Please fill in all fields');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/providers/icloud/configure', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                email: email,
+                app_password: password
+            })
+        });
+        
+        if (response.ok) {
+            closeModal();
+            showSuccess('iCloud configured successfully');
+            loadProviderStatus();
+        } else {
+            const error = await response.text();
+            showError(`Failed to configure iCloud: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error configuring iCloud:', error);
+        showError('Failed to configure iCloud');
+    }
+}
+
+function closeModal() {
+    document.getElementById('provider-modal').classList.add('hidden');
+}
+
+function copyWebhookUrl(provider) {
+    const url = webhookUrls[provider];
+    if (url) {
+        navigator.clipboard.writeText(url).then(() => {
+            showSuccess('Webhook URL copied to clipboard');
+        }).catch(() => {
+            showError('Failed to copy URL');
+        });
+    }
+}
+
+function showSuccess(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showError(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+</script>
+{% endblock %}

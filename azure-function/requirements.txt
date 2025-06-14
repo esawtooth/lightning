@@ -1,9 +1,17 @@
 azure-functions
-azure-servicebus  # or azure-eventhub if using Event Hub trigger
-openai
-requests
+azure-servicebus
 azure-cosmos
-croniter
 azure-identity
 azure-mgmt-containerinstance
 azure-communication-email
+azure-storage-blob
+azure-storage-queue
+azure-keyvault-secrets
+openai
+requests
+PyJWT
+cryptography
+python-multipart
+pydantic
+croniter
+firecrawl-py

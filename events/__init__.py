@@ -156,3 +156,152 @@ class VoiceCallEvent(Event):
             meta["objective"] = self.objective
         d["metadata"] = meta
         return d
+
+
+@dataclass
+class EmailEvent(Event):
+    """Event for email operations across providers."""
+
+    operation: str = ""  # "fetch", "send", "reply", "forward", "received"
+    provider: str = ""  # "gmail", "outlook", "icloud"
+    email_data: Dict[str, Any] = field(default_factory=dict)
+    filters: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "EmailEvent":
+        base = Event.from_dict(data)
+        operation = base.metadata.get("operation")
+        if not operation:
+            raise ValueError("metadata.operation required")
+        provider = base.metadata.get("provider")
+        if not provider:
+            raise ValueError("metadata.provider required")
+        email_data = base.metadata.get("email_data", {})
+        filters = base.metadata.get("filters")
+        return cls(
+            **asdict(base),
+            operation=operation,
+            provider=provider,
+            email_data=email_data,
+            filters=filters,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["operation"] = self.operation
+        meta["provider"] = self.provider
+        meta["email_data"] = self.email_data
+        if self.filters is not None:
+            meta["filters"] = self.filters
+        d["metadata"] = meta
+        return d
+
+
+@dataclass
+class CalendarEvent(Event):
+    """Event for calendar operations across providers."""
+
+    operation: str = ""  # "fetch", "create", "update", "delete", "send_invite", "received"
+    provider: str = ""  # "gmail", "outlook", "icloud"
+    calendar_data: Dict[str, Any] = field(default_factory=dict)
+    time_range: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CalendarEvent":
+        base = Event.from_dict(data)
+        operation = base.metadata.get("operation")
+        if not operation:
+            raise ValueError("metadata.operation required")
+        provider = base.metadata.get("provider")
+        if not provider:
+            raise ValueError("metadata.provider required")
+        calendar_data = base.metadata.get("calendar_data", {})
+        time_range = base.metadata.get("time_range")
+        return cls(
+            **asdict(base),
+            operation=operation,
+            provider=provider,
+            calendar_data=calendar_data,
+            time_range=time_range,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["operation"] = self.operation
+        meta["provider"] = self.provider
+        meta["calendar_data"] = self.calendar_data
+        if self.time_range is not None:
+            meta["time_range"] = self.time_range
+        d["metadata"] = meta
+        return d
+
+
+@dataclass
+class InstructionEvent(Event):
+    """Event for managing user instructions."""
+
+    instruction_operation: str = ""  # "create", "update", "delete", "execute"
+    instruction_data: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "InstructionEvent":
+        base = Event.from_dict(data)
+        instruction_operation = base.metadata.get("instruction_operation")
+        if not instruction_operation:
+            raise ValueError("metadata.instruction_operation required")
+        instruction_data = base.metadata.get("instruction_data", {})
+        return cls(
+            **asdict(base),
+            instruction_operation=instruction_operation,
+            instruction_data=instruction_data,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["instruction_operation"] = self.instruction_operation
+        meta["instruction_data"] = self.instruction_data
+        d["metadata"] = meta
+        return d
+
+
+@dataclass
+class ContextUpdateEvent(Event):
+    """Event for updating user context in the context hub."""
+
+    context_key: str = ""
+    update_operation: str = ""  # "append", "replace", "synthesize", "merge"
+    content: str = ""
+    synthesis_prompt: Optional[str] = None
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ContextUpdateEvent":
+        base = Event.from_dict(data)
+        context_key = base.metadata.get("context_key")
+        if not context_key:
+            raise ValueError("metadata.context_key required")
+        update_operation = base.metadata.get("update_operation")
+        if not update_operation:
+            raise ValueError("metadata.update_operation required")
+        content = base.metadata.get("content", "")
+        synthesis_prompt = base.metadata.get("synthesis_prompt")
+        return cls(
+            **asdict(base),
+            context_key=context_key,
+            update_operation=update_operation,
+            content=content,
+            synthesis_prompt=synthesis_prompt,
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        d = super().to_dict()
+        meta = dict(d.get("metadata", {}))
+        meta["context_key"] = self.context_key
+        meta["update_operation"] = self.update_operation
+        meta["content"] = self.content
+        if self.synthesis_prompt is not None:
+            meta["synthesis_prompt"] = self.synthesis_prompt
+        d["metadata"] = meta
+        return d

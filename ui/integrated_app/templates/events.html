@@ -1,0 +1,636 @@
+{% extends "base.html" %}
+
+{% block title %}Events - Vextir Dashboard{% endblock %}
+{% block page_title %}Events{% endblock %}
+
+{% block extra_head %}
+<style>
+    .event-card {
+        transition: all 0.3s ease;
+    }
+    .event-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .event-type-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .provider-badge {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .event-details {
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.3s ease;
+    }
+    .event-details.expanded {
+        max-height: 500px;
+    }
+    .json-viewer {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 0.375rem;
+        padding: 1rem;
+        white-space: pre-wrap;
+        word-break: break-all;
+    }
+    .filter-active {
+        background-color: #3b82f6 !important;
+        color: white !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header with Test Event Button -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">Event Stream</h2>
+            <p class="text-gray-600 mt-1">Monitor email and calendar events in real-time</p>
+        </div>
+        <button id="create-test-event-btn" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+            <i class="fas fa-flask"></i>
+            <span>Create Test Event</span>
+        </button>
+    </div>
+
+    <!-- Filters and Controls -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+            <!-- Event Type Filters -->
+            <div class="flex items-center space-x-2">
+                <span class="text-sm font-medium text-gray-700">Event Type:</span>
+                <button class="filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-filter="all">
+                    All
+                </button>
+                <button class="filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-filter="email">
+                    Email
+                </button>
+                <button class="filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-filter="calendar">
+                    Calendar
+                </button>
+            </div>
+
+            <!-- Provider Filters -->
+            <div class="flex items-center space-x-2">
+                <span class="text-sm font-medium text-gray-700">Provider:</span>
+                <button class="provider-filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-provider="all">
+                    All
+                </button>
+                <button class="provider-filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-provider="gmail">
+                    Gmail
+                </button>
+                <button class="provider-filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-provider="outlook">
+                    Outlook
+                </button>
+                <button class="provider-filter-btn px-3 py-1 text-sm rounded-full border border-gray-300 hover:bg-gray-50" data-provider="icloud">
+                    iCloud
+                </button>
+            </div>
+
+            <!-- Refresh Controls -->
+            <div class="flex items-center space-x-2">
+                <button id="refresh-events" class="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="fas fa-sync-alt mr-1"></i>
+                    Refresh
+                </button>
+                <label class="inline-flex items-center">
+                    <input type="checkbox" id="auto-refresh" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                    <span class="ml-2 text-sm text-gray-700">Auto-refresh</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Event Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-blue-100 text-blue-600">
+                    <i class="fas fa-stream"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Total Events</p>
+                    <p id="total-events" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-green-100 text-green-600">
+                    <i class="fas fa-envelope"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Email Events</p>
+                    <p id="email-events" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-purple-100 text-purple-600">
+                    <i class="fas fa-calendar"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Calendar Events</p>
+                    <p id="calendar-events" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-lg shadow">
+            <div class="flex items-center">
+                <div class="p-3 rounded-full bg-yellow-100 text-yellow-600">
+                    <i class="fas fa-cogs"></i>
+                </div>
+                <div class="ml-4">
+                    <p class="text-sm font-medium text-gray-600">Processed</p>
+                    <p id="processed-events" class="text-2xl font-semibold text-gray-900">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Events List -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">Recent Events</h3>
+        </div>
+        <div id="events-container" class="p-6">
+            <div class="text-center py-8">
+                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                <p class="text-gray-500 mt-2">Loading events...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Test Event Modal -->
+<div id="test-event-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 hidden">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-2xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Create Test Event</h3>
+                <button id="close-test-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <!-- Modal Form -->
+            <form id="test-event-form" class="space-y-4">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="test-event-type" class="block text-sm font-medium text-gray-700">Event Type</label>
+                        <select id="test-event-type" name="event_type" required 
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="email.received">Email Received</option>
+                            <option value="email.sent">Email Sent</option>
+                            <option value="calendar.received">Calendar Event Received</option>
+                            <option value="calendar.created">Calendar Event Created</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="test-provider" class="block text-sm font-medium text-gray-700">Provider</label>
+                        <select id="test-provider" name="provider" required 
+                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                            <option value="gmail">Gmail</option>
+                            <option value="outlook">Outlook</option>
+                            <option value="icloud">iCloud</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Email Test Data -->
+                <div id="email-test-data" class="space-y-4">
+                    <div>
+                        <label for="test-email-from" class="block text-sm font-medium text-gray-700">From</label>
+                        <input type="email" id="test-email-from" name="email_from" 
+                               value="test@example.com"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="test-email-subject" class="block text-sm font-medium text-gray-700">Subject</label>
+                        <input type="text" id="test-email-subject" name="email_subject" 
+                               value="Test Email Subject"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label for="test-email-body" class="block text-sm font-medium text-gray-700">Body</label>
+                        <textarea id="test-email-body" name="email_body" rows="3" 
+                                  class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">This is a test email body with some content to test instruction matching.</textarea>
+                    </div>
+                </div>
+
+                <!-- Calendar Test Data -->
+                <div id="calendar-test-data" class="space-y-4 hidden">
+                    <div>
+                        <label for="test-calendar-title" class="block text-sm font-medium text-gray-700">Title</label>
+                        <input type="text" id="test-calendar-title" name="calendar_title" 
+                               value="Test Meeting"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="test-calendar-start" class="block text-sm font-medium text-gray-700">Start Time</label>
+                            <input type="datetime-local" id="test-calendar-start" name="calendar_start" 
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label for="test-calendar-end" class="block text-sm font-medium text-gray-700">End Time</label>
+                            <input type="datetime-local" id="test-calendar-end" name="calendar_end" 
+                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                    </div>
+                    <div>
+                        <label for="test-calendar-attendees" class="block text-sm font-medium text-gray-700">Attendees (comma-separated)</label>
+                        <input type="text" id="test-calendar-attendees" name="calendar_attendees" 
+                               value="attendee1@example.com, attendee2@example.com"
+                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                </div>
+
+                <!-- Modal Actions -->
+                <div class="flex justify-end space-x-3 pt-4 border-t">
+                    <button type="button" id="cancel-test-btn" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Cancel
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-green-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-green-700">
+                        Create Test Event
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+let events = [];
+let currentFilter = 'all';
+let currentProviderFilter = 'all';
+let autoRefreshInterval = null;
+
+// Load events on page load
+document.addEventListener('DOMContentLoaded', function() {
+    loadEvents();
+    setupEventListeners();
+    setDefaultDateTime();
+});
+
+function setupEventListeners() {
+    // Test event modal
+    document.getElementById('create-test-event-btn').addEventListener('click', () => openTestModal());
+    document.getElementById('close-test-modal').addEventListener('click', () => closeTestModal());
+    document.getElementById('cancel-test-btn').addEventListener('click', () => closeTestModal());
+    
+    // Test event form
+    document.getElementById('test-event-form').addEventListener('submit', handleTestEventSubmit);
+    document.getElementById('test-event-type').addEventListener('change', handleTestEventTypeChange);
+    
+    // Refresh controls
+    document.getElementById('refresh-events').addEventListener('click', loadEvents);
+    document.getElementById('auto-refresh').addEventListener('change', handleAutoRefreshToggle);
+    
+    // Filter buttons
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            currentFilter = e.target.dataset.filter;
+            updateFilterButtons();
+            filterEvents();
+        });
+    });
+    
+    document.querySelectorAll('.provider-filter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            currentProviderFilter = e.target.dataset.provider;
+            updateProviderFilterButtons();
+            filterEvents();
+        });
+    });
+    
+    // Close modal on outside click
+    document.getElementById('test-event-modal').addEventListener('click', function(e) {
+        if (e.target === this) closeTestModal();
+    });
+}
+
+function setDefaultDateTime() {
+    const now = new Date();
+    const start = new Date(now.getTime() + 60 * 60 * 1000); // 1 hour from now
+    const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour after start
+    
+    document.getElementById('test-calendar-start').value = start.toISOString().slice(0, 16);
+    document.getElementById('test-calendar-end').value = end.toISOString().slice(0, 16);
+}
+
+async function loadEvents() {
+    try {
+        const response = await fetch('/api/events/stream?limit=50');
+        if (response.ok) {
+            events = await response.json();
+            renderEvents();
+            updateStats();
+        } else {
+            showError('Failed to load events');
+        }
+    } catch (error) {
+        console.error('Error loading events:', error);
+        showError('Failed to load events');
+    }
+}
+
+function renderEvents() {
+    const container = document.getElementById('events-container');
+    
+    if (events.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-stream text-gray-400 text-4xl mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No Events Yet</h3>
+                <p class="text-gray-500 mb-4">Events will appear here as they are processed</p>
+                <button onclick="openTestModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg">
+                    Create Test Event
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    filterEvents();
+}
+
+function filterEvents() {
+    let filteredEvents = events;
+    
+    // Filter by event type
+    if (currentFilter !== 'all') {
+        filteredEvents = filteredEvents.filter(event => 
+            event.type.startsWith(currentFilter)
+        );
+    }
+    
+    // Filter by provider
+    if (currentProviderFilter !== 'all') {
+        filteredEvents = filteredEvents.filter(event => 
+            event.metadata?.provider === currentProviderFilter
+        );
+    }
+    
+    const container = document.getElementById('events-container');
+    
+    if (filteredEvents.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-filter text-gray-400 text-4xl mb-4"></i>
+                <h3 class="text-lg font-medium text-gray-900 mb-2">No Events Match Filter</h3>
+                <p class="text-gray-500">Try adjusting your filters or create a test event</p>
+            </div>
+        `;
+        return;
+    }
+
+    const html = filteredEvents.map((event, index) => `
+        <div class="event-card bg-gray-50 rounded-lg p-4 mb-4">
+            <div class="flex justify-between items-start mb-3">
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2 mb-2">
+                        <span class="event-type-badge ${getEventTypeColor(event.type)} rounded-full">
+                            ${event.type}
+                        </span>
+                        ${event.metadata?.provider ? 
+                            `<span class="provider-badge ${getProviderColor(event.metadata.provider)} rounded-full">
+                                ${event.metadata.provider}
+                            </span>` : ''
+                        }
+                        <span class="text-xs text-gray-500">
+                            ${new Date(event.timestamp).toLocaleString()}
+                        </span>
+                    </div>
+                    <div class="text-sm text-gray-600">
+                        ${getEventSummary(event)}
+                    </div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-xs px-2 py-1 rounded-full ${event.source === 'UI-Test' ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800'}">
+                        ${event.source || 'System'}
+                    </span>
+                    <button onclick="toggleEventDetails(${index})" 
+                            class="p-2 text-gray-400 hover:text-gray-600" title="View Details">
+                        <i class="fas fa-chevron-down transform transition-transform" id="chevron-${index}"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="event-details-${index}" class="event-details">
+                <div class="border-t pt-3 mt-3">
+                    <h5 class="text-sm font-medium text-gray-900 mb-2">Event Data:</h5>
+                    <div class="json-viewer">
+${JSON.stringify(event, null, 2)}
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+}
+
+function getEventSummary(event) {
+    if (event.type.startsWith('email')) {
+        const emailData = event.metadata?.email_data;
+        if (emailData) {
+            return `<strong>From:</strong> ${emailData.from || 'Unknown'} <strong>Subject:</strong> ${emailData.subject || 'No subject'}`;
+        }
+    } else if (event.type.startsWith('calendar')) {
+        const calendarData = event.metadata?.calendar_data;
+        if (calendarData) {
+            return `<strong>Title:</strong> ${calendarData.title || 'Untitled'} <strong>Start:</strong> ${calendarData.start_time ? new Date(calendarData.start_time).toLocaleString() : 'Unknown'}`;
+        }
+    }
+    return `Event from ${event.metadata?.provider || 'unknown provider'}`;
+}
+
+function getEventTypeColor(type) {
+    if (type.startsWith('email')) return 'bg-green-100 text-green-800';
+    if (type.startsWith('calendar')) return 'bg-purple-100 text-purple-800';
+    return 'bg-gray-100 text-gray-800';
+}
+
+function getProviderColor(provider) {
+    switch (provider) {
+        case 'gmail': return 'bg-red-100 text-red-800';
+        case 'outlook': return 'bg-blue-100 text-blue-800';
+        case 'icloud': return 'bg-gray-100 text-gray-800';
+        default: return 'bg-gray-100 text-gray-800';
+    }
+}
+
+function toggleEventDetails(index) {
+    const details = document.getElementById(`event-details-${index}`);
+    const chevron = document.getElementById(`chevron-${index}`);
+    
+    if (details.classList.contains('expanded')) {
+        details.classList.remove('expanded');
+        chevron.classList.remove('rotate-180');
+    } else {
+        details.classList.add('expanded');
+        chevron.classList.add('rotate-180');
+    }
+}
+
+function updateStats() {
+    document.getElementById('total-events').textContent = events.length;
+    
+    const emailEvents = events.filter(e => e.type.startsWith('email')).length;
+    document.getElementById('email-events').textContent = emailEvents;
+    
+    const calendarEvents = events.filter(e => e.type.startsWith('calendar')).length;
+    document.getElementById('calendar-events').textContent = calendarEvents;
+    
+    // For now, assume all events are processed
+    document.getElementById('processed-events').textContent = events.length;
+}
+
+function updateFilterButtons() {
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        if (btn.dataset.filter === currentFilter) {
+            btn.classList.add('filter-active');
+        } else {
+            btn.classList.remove('filter-active');
+        }
+    });
+}
+
+function updateProviderFilterButtons() {
+    document.querySelectorAll('.provider-filter-btn').forEach(btn => {
+        if (btn.dataset.provider === currentProviderFilter) {
+            btn.classList.add('filter-active');
+        } else {
+            btn.classList.remove('filter-active');
+        }
+    });
+}
+
+function handleAutoRefreshToggle(e) {
+    if (e.target.checked) {
+        autoRefreshInterval = setInterval(loadEvents, 10000); // Refresh every 10 seconds
+    } else {
+        if (autoRefreshInterval) {
+            clearInterval(autoRefreshInterval);
+            autoRefreshInterval = null;
+        }
+    }
+}
+
+function openTestModal() {
+    document.getElementById('test-event-modal').classList.remove('hidden');
+    handleTestEventTypeChange(); // Set initial form state
+}
+
+function closeTestModal() {
+    document.getElementById('test-event-modal').classList.add('hidden');
+}
+
+function handleTestEventTypeChange() {
+    const eventType = document.getElementById('test-event-type').value;
+    const emailData = document.getElementById('email-test-data');
+    const calendarData = document.getElementById('calendar-test-data');
+    
+    if (eventType.startsWith('email')) {
+        emailData.classList.remove('hidden');
+        calendarData.classList.add('hidden');
+    } else if (eventType.startsWith('calendar')) {
+        emailData.classList.add('hidden');
+        calendarData.classList.remove('hidden');
+    }
+}
+
+async function handleTestEventSubmit(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const eventType = formData.get('event_type');
+    const provider = formData.get('provider');
+    
+    let testData = {};
+    
+    if (eventType.startsWith('email')) {
+        testData = {
+            email_data: {
+                from: formData.get('email_from'),
+                to: ['user@example.com'],
+                subject: formData.get('email_subject'),
+                body: formData.get('email_body'),
+                timestamp: new Date().toISOString()
+            }
+        };
+    } else if (eventType.startsWith('calendar')) {
+        const attendees = formData.get('calendar_attendees').split(',').map(s => s.trim()).filter(s => s);
+        testData = {
+            calendar_data: {
+                title: formData.get('calendar_title'),
+                start_time: new Date(formData.get('calendar_start')).toISOString(),
+                end_time: new Date(formData.get('calendar_end')).toISOString(),
+                attendees: attendees,
+                location: 'Test Location'
+            }
+        };
+    }
+    
+    try {
+        const response = await fetch('/api/events/test', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                event_type: eventType,
+                provider: provider,
+                test_data: testData
+            })
+        });
+        
+        if (response.ok) {
+            closeTestModal();
+            showSuccess('Test event created successfully');
+            // Refresh events after a short delay to allow processing
+            setTimeout(loadEvents, 1000);
+        } else {
+            const error = await response.text();
+            showError(`Failed to create test event: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error creating test event:', error);
+        showError('Failed to create test event');
+    }
+}
+
+function showSuccess(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+}
+
+function showError(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 5000);
+}
+
+// Initialize filter buttons
+document.addEventListener('DOMContentLoaded', function() {
+    updateFilterButtons();
+    updateProviderFilterButtons();
+});
+</script>
+{% endblock %}
