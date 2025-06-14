@@ -886,7 +886,7 @@ def afd_route(name, pattern, og, origin, cd, fp):
         opts=pulumi.ResourceOptions(depends_on=[og, origin]),
     )
 afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
-afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
+afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
 
 dns_zone = dns.Zone(

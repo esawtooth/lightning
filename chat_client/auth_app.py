@@ -44,6 +44,19 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 templates = Jinja2Templates(directory="templates")
 
 
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    """Login page or redirect if already authenticated."""
+    token = request.cookies.get("auth_token")
+    if token:
+        try:
+            verify_token(token)
+            return RedirectResponse(url="/chat")
+        except Exception:
+            pass
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
 @app.get("/login")
 async def login(request: Request):
     """Redirect user to Azure login."""
