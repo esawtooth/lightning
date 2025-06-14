@@ -622,6 +622,7 @@ hub_cg = aci_group(
     3000,
     [],
 )
+hub_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
 
 pulumi.export("uiFqdn", ui_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
@@ -726,6 +727,7 @@ func_settings = {
     "AAD_CLIENT_SECRET": aad_password.value,
     "AAD_TENANT_ID": aad_tenant_id,
     "NOTIFY_URL": pulumi.Output.concat("https://www.", domain, "/chat/notify"),
+    "HUB_URL": hub_url,
 }
 web.WebAppApplicationSettings(
     "func-settings",

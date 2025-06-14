@@ -102,6 +102,7 @@ def main(msg: func.ServiceBusMessage) -> None:
             EnvironmentVariable(name="COSMOS_CONNECTION", value=COSMOS_CONN or ""),
             EnvironmentVariable(name="COSMOS_DATABASE", value=COSMOS_DB),
             EnvironmentVariable(name="TASK_CONTAINER", value=TASK_CONTAINER),
+            EnvironmentVariable(name="HUB_URL", value=os.environ.get("HUB_URL", "")),
         ]
         container = Container(
             name="worker",

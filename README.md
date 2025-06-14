@@ -238,7 +238,8 @@ Functions Core Tools) or through a `.env` file in the repository root.
     "USER_CONTAINER": "users",
     "REPO_CONTAINER": "repos",
     "SCHEDULE_CONTAINER": "schedules",
-    "TASK_CONTAINER": "tasks"
+    "TASK_CONTAINER": "tasks",
+    "HUB_URL": "http://localhost:3000"
   }
 }
 ```
@@ -260,6 +261,7 @@ USER_CONTAINER=users
 REPO_CONTAINER=repos
 SCHEDULE_CONTAINER=schedules
 TASK_CONTAINER=tasks
+HUB_URL=http://localhost:3000
 ACS_CONNECTION=<acs-connection>
 ACS_SENDER=no-reply@example.com
 VERIFY_BASE_URL=https://localhost
@@ -335,6 +337,10 @@ The `agents/` directory contains agent implementations that the worker container
 invoke to process tasks. Each agent registers itself in `agents.AGENT_REGISTRY`
 and exposes a `run()` method used to handle the commands from a
 `WorkerTaskEvent`.
+
+All worker images include the `contexthub` CLI tool. Agents can invoke this
+command (or use the `Agent.hub()` helper) to interact with the deployed Context
+Hub service defined by the `HUB_URL` environment variable.
 
 ## Tests
 
