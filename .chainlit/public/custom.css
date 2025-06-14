@@ -1,0 +1,10 @@
+:root {
+  --background: #000;
+  --foreground: #ffffff;
+  --accent: #ffffff;
+  --accent-foreground: #000000;
+  --sidebar-background: #000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-accent: #333333;
+  --sidebar-accent-foreground: #ffffff;
+}
