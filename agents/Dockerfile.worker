@@ -5,12 +5,12 @@ WORKDIR /app
 # Copy the agents folder and events module
 COPY agents/ ./agents/
 COPY events/ ./events/
-COPY worker.py ./
+COPY scripts/worker.py ./
 COPY contexthub /usr/local/bin/contexthub
 RUN chmod +x /usr/local/bin/contexthub
 
 # Create a requirements.txt for the worker container
-COPY requirements-worker.txt ./requirements.txt
+COPY agents/requirements-worker.txt ./requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt

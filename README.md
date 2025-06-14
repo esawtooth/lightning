@@ -347,7 +347,7 @@ Hub service defined by the `HUB_URL` environment variable.
 Install the Python dependencies and run unit tests with `pytest`:
 
 ```bash
-pip install -r requirements-worker.txt
+pip install -r agents/requirements-worker.txt
 pytest
 ```
 

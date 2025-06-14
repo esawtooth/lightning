@@ -31,14 +31,14 @@ Set your API key in the ``FIRECRAWL_API_KEY`` environment variable before
 running either script.
 
 Both scripts require the `firecrawl-py` package which is listed in
-`requirements-worker.txt`.
+`agents/requirements-worker.txt`.
 
 ## Setup
 
 Before running tasks in this repository, install the Python dependencies with:
 
 ```bash
-pip install -r requirements-worker.txt
+pip install -r agents/requirements-worker.txt
 ```
 
 Run this command from the project root so all utilities work correctly.

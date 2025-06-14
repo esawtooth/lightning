@@ -26,10 +26,10 @@ jobs:
         include:
           - image_tag: worker-task
             context: .
-            file: ./Dockerfile.worker
+            file: ./agents/Dockerfile.worker
           - image_tag: chainlit-client
             context: .
-            file: ./chat_client/Dockerfile
+            file: ./ui/chat_client/Dockerfile
           - image_tag: voice-ws
             context: ./agents/voice-agent/websocket-server
             file: ./agents/voice-agent/websocket-server/Dockerfile

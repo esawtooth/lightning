@@ -108,12 +108,12 @@ def load_chainlit_app(monkeypatch, capture):
     monkeypatch.setitem(sys.modules, 'fastapi.responses', responses_mod)
     monkeypatch.setitem(sys.modules, 'fastapi.staticfiles', staticfiles_mod)
     # Stub dashboard module
-    dashboard_mod = types.ModuleType('dashboard')
-    dashboard_app_mod = types.ModuleType('dashboard.app')
+    dashboard_mod = types.ModuleType('ui.dashboard')
+    dashboard_app_mod = types.ModuleType('ui.dashboard.app')
     dashboard_app_mod.app = types.SimpleNamespace()
     dashboard_mod.app = dashboard_app_mod.app
-    monkeypatch.setitem(sys.modules, 'dashboard', dashboard_mod)
-    monkeypatch.setitem(sys.modules, 'dashboard.app', dashboard_app_mod)
+    monkeypatch.setitem(sys.modules, 'ui.dashboard', dashboard_mod)
+    monkeypatch.setitem(sys.modules, 'ui.dashboard.app', dashboard_app_mod)
     # Stub pydantic
     pydantic_mod = types.ModuleType('pydantic')
     class BaseModel:
@@ -138,17 +138,17 @@ def load_chainlit_app(monkeypatch, capture):
     req_mod.post = post
     monkeypatch.setitem(sys.modules, 'requests', req_mod)
 
-    dash_mod = types.ModuleType('dashboard.app')
+    dash_mod = types.ModuleType('ui.dashboard.app')
     dash_mod.app = object()
-    monkeypatch.setitem(sys.modules, 'dashboard.app', dash_mod)
+    monkeypatch.setitem(sys.modules, 'ui.dashboard.app', dash_mod)
 
     # Load module
     spec = importlib.util.spec_from_file_location(
-        'chat_client.chainlit_app',
-        os.path.join(os.path.dirname(__file__), '..', 'chat_client', 'chainlit_app.py')
+        'ui.chat_client.chainlit_app',
+        os.path.join(os.path.dirname(__file__), '..', 'ui', 'chat_client', 'chainlit_app.py')
     )
     module = importlib.util.module_from_spec(spec)
-    sys.modules['chat_client.chainlit_app'] = module
+    sys.modules['ui.chat_client.chainlit_app'] = module
     spec.loader.exec_module(module)
     return handlers['handler'], module
 

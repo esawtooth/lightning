@@ -30,9 +30,9 @@ def load_gateway_app(monkeypatch, capture, with_url=True):
     else:
         monkeypatch.delenv('GITEA_URL', raising=False)
 
-    spec = importlib.util.spec_from_file_location('chat_client.gateway_app', os.path.join(os.path.dirname(__file__), '..', 'chat_client', 'gateway_app.py'))
+    spec = importlib.util.spec_from_file_location('ui.chat_client.gateway_app', os.path.join(os.path.dirname(__file__), '..', 'ui', 'chat_client', 'gateway_app.py'))
     module = importlib.util.module_from_spec(spec)
-    sys.modules['chat_client.gateway_app'] = module
+    sys.modules['ui.chat_client.gateway_app'] = module
     spec.loader.exec_module(module)
     return module
 

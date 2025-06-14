@@ -12,7 +12,7 @@ def load_app(monkeypatch, env=None):
                 monkeypatch.delenv(key, raising=False)
             else:
                 monkeypatch.setenv(key, value)
-    import dashboard.app as app_module
+    import ui.dashboard.app as app_module
     importlib.reload(app_module)
     return app_module
 
