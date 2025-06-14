@@ -7,7 +7,7 @@ import azure.functions as func
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
 from events import Event
-from auth import verify_token
+from simple_auth import get_user_id_permissive
 
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")
 SERVICEBUS_QUEUE = os.environ.get("SERVICEBUS_QUEUE")
@@ -33,7 +33,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Invalid JSON", status_code=400)
 
     try:
-        user_id = verify_token(req.headers.get("Authorization"))
+        user_id = get_user_id_permissive(req)
     except Exception:
         return func.HttpResponse("Unauthorized", status_code=401)
     data["userID"] = user_id

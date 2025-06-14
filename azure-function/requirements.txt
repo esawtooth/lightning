@@ -6,6 +6,4 @@ azure-cosmos
 croniter
 azure-identity
 azure-mgmt-containerinstance
-pyjwt[crypto]
-cryptography==41.0.7
 azure-communication-email

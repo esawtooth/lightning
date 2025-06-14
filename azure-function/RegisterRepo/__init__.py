@@ -6,7 +6,7 @@ import requests
 
 import azure.functions as func
 from azure.cosmos import CosmosClient, PartitionKey
-from auth import verify_token
+from simple_auth import get_user_id_permissive
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
@@ -49,7 +49,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         pass
 
     try:
-        user_id = verify_token(req.headers.get("Authorization"))
+        user_id = get_user_id_permissive(req)
     except Exception:
         return func.HttpResponse("Unauthorized", status_code=401)
 

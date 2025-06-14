@@ -14,6 +14,7 @@ COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
 USER_CONTAINER = os.environ.get("USER_CONTAINER", "users")
 ACS_CONNECTION = os.environ.get("ACS_CONNECTION")
 ACS_SENDER = os.environ.get("ACS_SENDER")
+VERIFY_BASE = os.environ.get("VERIFY_BASE", "https://www.vextir.com")
 ADMIN_EMAIL = "mail@rohitja.in"  # Hardcoded for now
 
 _client = CosmosClient.from_connection_string(COSMOS_CONN)

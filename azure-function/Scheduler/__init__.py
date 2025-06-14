@@ -8,7 +8,7 @@ from azure.cosmos import CosmosClient, PartitionKey
 from croniter import croniter
 
 from events import Event
-from auth import verify_token
+from simple_auth import get_user_id_permissive
 
 COSMOS_CONN = os.environ.get("COSMOS_CONNECTION")
 COSMOS_DB = os.environ.get("COSMOS_DATABASE", "vextir")
@@ -28,7 +28,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         return func.HttpResponse("Invalid JSON", status_code=400)
 
     try:
-        user_id = verify_token(req.headers.get("Authorization"))
+        user_id = get_user_id_permissive(req)
     except Exception:
         return func.HttpResponse("Unauthorized", status_code=401)
 
