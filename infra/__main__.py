@@ -629,7 +629,37 @@ pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("contextHubIp", hub_cg.ip_address.apply(lambda ip: ip.ip))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 12. FUNCTION APP
+# 12. COMMUNICATION SERVICE  (kept data_location="United States" – supported)
+# ─────────────────────────────────────────────────────────────────────────────
+comm_svc = communication.CommunicationService(
+    "comm",
+    resource_group_name=rg.name,
+    location="global",
+    communication_service_name=f"vextir-comm-{stack_suffix}",
+    data_location="United States",
+)
+email_svc = communication.EmailService(
+    "email",
+    resource_group_name=rg.name,
+    location="global",
+    email_service_name=f"vextir-email-{stack_suffix}",
+    data_location="United States",
+)
+email_domain = communication.Domain(
+    "email-domain",
+    resource_group_name=rg.name,
+    email_service_name=email_svc.name,
+    domain_name=domain,
+    domain_management=communication.DomainManagement.CUSTOMER_MANAGED,
+    user_engagement_tracking=communication.UserEngagementTracking.DISABLED,
+    location="global",
+)
+comm_keys = communication.list_communication_service_keys_output(
+    resource_group_name=rg.name, communication_service_name=comm_svc.name
+)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 13. FUNCTION APP
 # ─────────────────────────────────────────────────────────────────────────────
 plan = web.AppServicePlan(
     "func-plan",
@@ -742,37 +772,7 @@ web.WebAppApplicationSettings(
 pulumi.export("functionEndpoint", pulumi.Output.concat("https://", func_app.default_host_name, "/api/events"))
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 13. COMMUNICATION SERVICE  (kept data_location="United States" – supported)
-# ─────────────────────────────────────────────────────────────────────────────
-comm_svc = communication.CommunicationService(
-    "comm",
-    resource_group_name=rg.name,
-    location="global",
-    communication_service_name=f"vextir-comm-{stack_suffix}",
-    data_location="United States",
-)
-email_svc = communication.EmailService(
-    "email",
-    resource_group_name=rg.name,
-    location="global",
-    email_service_name=f"vextir-email-{stack_suffix}",
-    data_location="United States",
-)
-email_domain = communication.Domain(
-    "email-domain",
-    resource_group_name=rg.name,
-    email_service_name=email_svc.name,
-    domain_name=domain,
-    domain_management=communication.DomainManagement.CUSTOMER_MANAGED,
-    user_engagement_tracking=communication.UserEngagementTracking.DISABLED,
-    location="global",
-)
-comm_keys = communication.list_communication_service_keys_output(
-    resource_group_name=rg.name, communication_service_name=comm_svc.name
-)
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 14. FRONT DOOR + DNS
+# 14. FRONT DOOR + DNS
 # ─────────────────────────────────────────────────────────────────────────────
 fd_profile = cdn.Profile(
     "fd-prof",
