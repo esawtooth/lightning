@@ -584,7 +584,7 @@ gitea_cg = aci_group(
 ui_cg = aci_group(
     "chatui",
     ui_image,
-    443,
+    80,
     [
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://api.", domain)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://api.", domain, "/events")),
@@ -815,7 +815,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
     )
     return og, origin
 
-ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
+ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 80)
 api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
 voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
 
@@ -852,8 +852,8 @@ def afd_route(name, pattern, og, origin, cd, fp):
         custom_domains=[cdn.ActivatedResourceReferenceArgs(id=cd.id)],
         opts=pulumi.ResourceOptions(depends_on=[og, origin]),
     )
-afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTPS_ONLY)
-afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTPS_ONLY)
+afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
+afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
 
 dns_zone = dns.Zone(

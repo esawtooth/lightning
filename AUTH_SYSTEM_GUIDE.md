@@ -7,7 +7,7 @@ The Vextir Chat UI container has been enhanced with a comprehensive authenticati
 ## Architecture
 
 -### Multi-Service Design
-- **Gateway** (Port 443): Routes `/auth` to the auth service and `/chat` to the chat interface
+- **Gateway** (Port 80): Routes `/auth` to the auth service and `/chat` to the chat interface
 - **Azure Functions**: Backend API for user management and authentication
 
 ### Authorization Flow
@@ -80,7 +80,7 @@ chmod +x start.sh
 
 # Docker deployment
 docker build -t vextir-chat .
-docker run -p 443:443 \
+docker run -p 80:80 \
   -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api" \
   -e JWT_SIGNING_KEY="your-jwt-signing-key" \
   vextir-chat

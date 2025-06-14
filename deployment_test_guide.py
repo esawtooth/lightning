@@ -74,7 +74,7 @@ def get_azure_resources():
     print("1. Go to https://portal.azure.com")
     print("2. Navigate to Resource Group 'vextir'")
     print("3. Look for:")
-    print("   - Container Instance 'chat-ui' → Get public IP (Gateway on :443)")
+    print("   - Container Instance 'chat-ui' → Get public IP (Gateway on :80)")
     print("   - Function App 'vextir-func-*' → Get URL (API endpoints)")
     print("   - Container Registry 'vextiracr' → Container images")
     print("   - Cosmos DB 'vextir-cosmos-*' → User and event storage")

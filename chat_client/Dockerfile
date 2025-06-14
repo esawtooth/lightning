@@ -21,8 +21,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Make startup script executable
 RUN chmod +x ./start.sh
 
-# Expose HTTPS port for the gateway
-EXPOSE 443
+# Expose HTTP port for the gateway (TLS is terminated by Azure Front Door)
+EXPOSE 80
 
 # Run the multi-service startup script
 CMD ["./start.sh"]

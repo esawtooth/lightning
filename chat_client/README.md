@@ -4,7 +4,7 @@ This directory contains the Vextir Chat client secured with Azure Entra ID.
 
 ## Architecture
 
-The chat client exposes a gateway service on port 443 that handles the OAuth
+The chat client exposes a gateway service on port 80 that handles the OAuth
 flow with Azure Entra ID and proxies the Chainlit interface.
 
 ## Features
@@ -83,7 +83,7 @@ docker build -t vextir-chat .
 
 ### Run
 ```bash
-docker run -p 443:443 \
+docker run -p 80:80 \
   -e AAD_CLIENT_ID="<app-id>" \
   -e AAD_TENANT_ID="<tenant-id>" \
   -e AAD_CLIENT_SECRET="<client-secret>" \
@@ -147,7 +147,7 @@ Make sure your Azure Function has the UserAuth function deployed and configured.
 
 1. **Services won't start**
    - Check environment variables are set
-   - Verify port 443 is available
+   - Verify port 80 is available
    - Check Python dependencies are installed
 
 2. **Authentication fails**
@@ -156,7 +156,7 @@ Make sure your Azure Function has the UserAuth function deployed and configured.
 
 3. **Chat not accessible**
    - Confirm authentication is working
-   - Check the gateway service is running on port 443
+   - Check the gateway service is running on port 80
    - Verify authentication middleware is working
 
 ### Logs
