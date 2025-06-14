@@ -159,7 +159,7 @@
             </div>
         {% endif %}
         
-        <form action="/register" method="post">
+        <form action="/auth/register" method="post">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-group">
                 <label for="username">Username</label>
