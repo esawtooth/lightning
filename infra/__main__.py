@@ -52,8 +52,6 @@ hub_image_cfg     = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/
 ui_image          = cfg.require("uiImage")
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
-aad_client_id     = cfg.require_secret("aadClientId")
-aad_client_secret = cfg.require_secret("aadClientSecret")
 aad_tenant_id     = cfg.require("aadTenantId")
 twilio_account_sid= cfg.require_secret("twilioAccountSid")
 twilio_auth_token = cfg.require_secret("twilioAuthToken")
