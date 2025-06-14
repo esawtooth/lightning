@@ -728,6 +728,9 @@ func_settings = {
     "AAD_TENANT_ID": aad_tenant_id,
     "NOTIFY_URL": pulumi.Output.concat("https://www.", domain, "/chat/notify"),
     "HUB_URL": hub_url,
+    "ACS_CONNECTION": comm_keys.primary_connection_string,
+    "ACS_SENDER": pulumi.Output.concat("no-reply@", domain),
+    "VERIFY_BASE": pulumi.Output.concat("https://www.", domain),
 }
 web.WebAppApplicationSettings(
     "func-settings",
