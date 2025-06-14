@@ -20,7 +20,7 @@ from rich.table import Table
 from rich.tree import Tree
 from rich.text import Text
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from rich import print as rprint
 
 
@@ -34,8 +34,74 @@ DEFAULT_CONFIG = {
     "url": "http://localhost:3000",
     "user": None,
     "agent": None,
-    "current_workspace": None
+    "current_workspace": None,
+    "verbose": False,
+    "json_output": False
 }
+
+# Global flags for output control
+VERBOSE_MODE = False
+JSON_OUTPUT = False
+
+
+def set_output_mode(verbose: bool = False, json_output: bool = False):
+    """Set global output mode for agent-friendly reporting."""
+    global VERBOSE_MODE, JSON_OUTPUT
+    VERBOSE_MODE = verbose
+    JSON_OUTPUT = json_output
+
+
+def agent_log(message: str, level: str = "info", data: Dict[str, Any] = None):
+    """Agent-friendly logging with structured output."""
+    if JSON_OUTPUT:
+        log_entry = {
+            "timestamp": datetime.now().isoformat(),
+            "level": level,
+            "message": message,
+            "data": data or {}
+        }
+        print(json.dumps(log_entry))
+    elif VERBOSE_MODE:
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        color = {"info": "blue", "success": "green", "warning": "yellow", "error": "red"}.get(level, "white")
+        console.print(f"[dim]{timestamp}[/dim] [{color}]{level.upper()}[/{color}] {message}")
+        if data:
+            console.print(f"[dim]  Data: {data}[/dim]")
+
+
+def operation_summary(operation: str, stats: Dict[str, Any]):
+    """Provide detailed operation summary for agents."""
+    if JSON_OUTPUT:
+        summary = {
+            "operation": operation,
+            "timestamp": datetime.now().isoformat(),
+            "stats": stats,
+            "success": stats.get("errors", 0) == 0
+        }
+        print(json.dumps(summary))
+    else:
+        console.print(f"\n[bold]Operation Summary: {operation}[/bold]")
+        for key, value in stats.items():
+            if key == "duration":
+                console.print(f"  {key}: {value:.2f}s")
+            else:
+                console.print(f"  {key}: {value}")
+
+
+def enhanced_progress_bar(description: str, total: Optional[int] = None):
+    """Create an enhanced progress bar with agent-friendly output."""
+    if JSON_OUTPUT:
+        return None  # Don't show progress bars in JSON mode
+    
+    return Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn() if total else "",
+        TaskProgressColumn() if total else "",
+        TimeRemainingColumn() if total else "",
+        console=console,
+        transient=not VERBOSE_MODE  # Keep progress visible in verbose mode
+    )
 
 
 def load_config() -> Dict[str, Any]:
@@ -204,20 +270,33 @@ def download_folder_recursive(folder_id: str, local_path: Path, progress=None, t
     local_path.mkdir(parents=True, exist_ok=True)
     path_to_id = {}
     
+    agent_log(f"Downloading folder {folder_id} to {local_path}", "info", {
+        "folder_id": folder_id,
+        "local_path": str(local_path)
+    })
+    
     # Get folder contents
     items = api_request("GET", f"/folders/{folder_id}")
+    agent_log(f"Found {len(items)} items in folder", "info", {"item_count": len(items)})
     
-    for item in items:
+    for i, item in enumerate(items):
         item_path = local_path / item["name"]
         rel_path = str(item_path.relative_to(local_path.parent))
         path_to_id[rel_path] = item["id"]
         
+        agent_log(f"Processing item {i+1}/{len(items)}: {item['name']}", "info", {
+            "item_name": item["name"],
+            "item_type": item["doc_type"],
+            "progress": f"{i+1}/{len(items)}"
+        })
+        
         if progress and task_id:
-            progress.update(task_id, description=f"Downloading {item['name']}")
+            progress.update(task_id, description=f"Downloading {item['name']} ({i+1}/{len(items)})")
         
         if item["doc_type"] == "Folder":
             # Skip index guides for cleaner local structure
             if item["name"] == "_index.guide":
+                agent_log("Skipping index guide", "info")
                 continue
                 
             # Recursively download subfolder
@@ -230,8 +309,13 @@ def download_folder_recursive(folder_id: str, local_path: Path, progress=None, t
             
             # Skip index guides
             if doc["doc_type"] == "IndexGuide":
+                agent_log("Skipping index guide document", "info")
                 continue
-                
+            
+            agent_log(f"Writing file: {item['name']}", "info", {
+                "file_size": len(content),
+                "encoding": "utf-8"
+            })
             item_path.write_text(content, encoding="utf-8")
     
     return path_to_id
@@ -351,9 +435,22 @@ def create_folder_path(local_dir: Path, folder_path: Path, root_id: str, path_ma
 # ============================================================================
 
 @click.group(invoke_without_command=True)
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose output for agents")
+@click.option("--json", "json_output", is_flag=True, help="Output in JSON format for machine parsing")
 @click.pass_context
-def cli(ctx):
+def cli(ctx, verbose: bool, json_output: bool):
     """Context Hub - Git-like collaboration for AI agents and humans."""
+    
+    # Set global output modes
+    set_output_mode(verbose, json_output)
+    
+    # Load config and apply persistent settings
+    config = load_config()
+    if config.get("verbose", False):
+        set_output_mode(True, json_output)
+    if config.get("json_output", False):
+        set_output_mode(verbose, True)
+    
     if ctx.invoked_subcommand is None:
         # Show status when no command given (like git)
         ctx.invoke(status)
@@ -700,46 +797,107 @@ def show():
     console.print(table)
 
 
+@config.command()
+@click.argument("setting")
+@click.argument("value", required=False)
+def set(setting: str, value: Optional[str]):
+    """Set persistent configuration options."""
+    config = load_config()
+    
+    if setting == "verbose":
+        config["verbose"] = value.lower() in ("true", "1", "yes", "on") if value else True
+        save_config(config)
+        console.print(f"[green]Verbose mode: {'enabled' if config['verbose'] else 'disabled'}[/green]")
+    
+    elif setting == "json":
+        config["json_output"] = value.lower() in ("true", "1", "yes", "on") if value else True
+        save_config(config)
+        console.print(f"[green]JSON output: {'enabled' if config['json_output'] else 'disabled'}[/green]")
+    
+    else:
+        console.print(f"[red]Unknown setting: {setting}[/red]")
+        console.print("Available settings: verbose, json")
+        sys.exit(1)
+
+
+@config.command()
+def reset():
+    """Reset all configuration to defaults."""
+    config = DEFAULT_CONFIG.copy()
+    save_config(config)
+    console.print("[green]Configuration reset to defaults[/green]")
+
+
 @cli.command()
 @click.argument("hub_path")
 @click.argument("local_path")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing local directory")
 def pull(hub_path: str, local_path: str, force: bool):
     """Pull Context Hub folder to local filesystem for editing."""
+    start_time = time.time()
     local_dir = Path(local_path)
+    
+    agent_log("Starting pull operation", "info", {
+        "hub_path": hub_path,
+        "local_path": local_path,
+        "force": force
+    })
     
     # Check if local directory exists
     if local_dir.exists() and not force:
         if list(local_dir.iterdir()):  # Not empty
+            agent_log("Directory exists and is not empty", "error", {
+                "path": local_path,
+                "solution": "use --force flag"
+            })
             console.print(f"[red]Directory {local_path} already exists and is not empty.[/red]")
             console.print("Use --force to overwrite or choose a different path.")
             sys.exit(1)
     
     # Resolve hub path to ID
+    agent_log("Resolving hub path", "info", {"hub_path": hub_path})
+    resolve_start = time.time()
     hub_folder_id = resolve_path(hub_path)
+    resolve_duration = time.time() - resolve_start
+    
     hub_doc = api_request("GET", f"/docs/{hub_folder_id}")
+    agent_log("Hub path resolved", "info", {
+        "hub_folder_id": hub_folder_id,
+        "folder_name": hub_doc["name"],
+        "resolve_duration": resolve_duration
+    })
     
     if hub_doc["doc_type"] != "Folder":
+        agent_log("Path is not a folder", "error", {
+            "path": hub_path,
+            "actual_type": hub_doc["doc_type"]
+        })
         console.print(f"[red]Path is not a folder: {hub_path}[/red]")
         sys.exit(1)
     
-    console.print(f"[blue]Pulling '{hub_doc['name']}' to {local_path}...[/blue]")
+    if not JSON_OUTPUT:
+        console.print(f"[blue]Pulling '{hub_doc['name']}' to {local_path}...[/blue]")
     
     # Create/clear local directory
     if local_dir.exists() and force:
+        agent_log("Removing existing directory", "info", {"path": local_path})
         shutil.rmtree(local_dir)
     local_dir.mkdir(parents=True, exist_ok=True)
     
-    # Download with progress
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-        transient=True
-    ) as progress:
-        task = progress.add_task("Downloading files...", total=None)
-        path_to_id = download_folder_recursive(hub_folder_id, local_dir, progress, task)
-        progress.update(task, description="Download complete!")
+    # Download with enhanced progress
+    agent_log("Starting download", "info")
+    download_start = time.time()
+    
+    progress_bar = enhanced_progress_bar("Downloading files...")
+    if progress_bar:
+        with progress_bar as progress:
+            task = progress.add_task("Downloading files...", total=None)
+            path_to_id = download_folder_recursive(hub_folder_id, local_dir, progress, task)
+            progress.update(task, description="Download complete!")
+    else:
+        path_to_id = download_folder_recursive(hub_folder_id, local_dir)
+    
+    download_duration = time.time() - download_start
     
     # Save sync state for future push
     initial_state = scan_local_tree(local_dir)
@@ -753,14 +911,34 @@ def pull(hub_path: str, local_path: str, force: bool):
     }
     save_sync_state(local_dir, sync_state)
     
-    # Show summary
+    # Calculate statistics
     file_count = len([s for s in initial_state.values() if s["type"] == "file"])
     folder_count = len([s for s in initial_state.values() if s["type"] == "folder"])
+    total_size = sum(s.get("size", 0) for s in initial_state.values() if s["type"] == "file")
+    
+    pull_stats = {
+        "result": "success",
+        "duration": time.time() - start_time,
+        "download_duration": download_duration,
+        "resolve_duration": resolve_duration,
+        "files_downloaded": file_count,
+        "folders_created": folder_count,
+        "total_size_bytes": total_size,
+        "items_total": len(path_to_id)
+    }
+    
+    agent_log("Pull completed successfully", "success", pull_stats)
     
     console.print(f"\n[green]✓ Successfully pulled to {local_path}[/green]")
     console.print(f"Files: {file_count}, Folders: {folder_count}")
+    if VERBOSE_MODE:
+        console.print(f"Total size: {total_size} bytes")
+        console.print(f"Download time: {download_duration:.2f}s")
+    
     console.print(f"\n[dim]Work locally with normal tools, then run:[/dim]")
     console.print(f"[cyan]ch push {local_path} {hub_path}[/cyan]")
+    
+    operation_summary("pull", pull_stats)
 
 
 @cli.command()
@@ -770,15 +948,26 @@ def pull(hub_path: str, local_path: str, force: bool):
 @click.option("--no-confirm", is_flag=True, help="Skip confirmation prompt (for automated workflows)")
 def push(local_path: str, hub_path: Optional[str], dry_run: bool, no_confirm: bool):
     """Push local changes back to Context Hub with auto conflict resolution."""
+    start_time = time.time()
     local_dir = Path(local_path)
     
+    agent_log("Starting push operation", "info", {
+        "local_path": local_path,
+        "hub_path": hub_path,
+        "dry_run": dry_run,
+        "no_confirm": no_confirm
+    })
+    
     if not local_dir.exists():
+        agent_log("Directory does not exist", "error", {"path": local_path})
         console.print(f"[red]Local directory does not exist: {local_path}[/red]")
         sys.exit(1)
     
     # Load sync state
+    agent_log("Loading sync state", "info")
     sync_state = load_sync_state(local_dir)
     if not sync_state:
+        agent_log("No sync state found", "error", {"local_path": local_path})
         console.print(f"[red]No sync state found in {local_path}[/red]")
         console.print("This directory was not pulled from Context Hub.")
         console.print("Use 'ch pull <hub_path> <local_path>' first.")
@@ -787,15 +976,27 @@ def push(local_path: str, hub_path: Optional[str], dry_run: bool, no_confirm: bo
     # Use hub path from sync state if not provided
     if not hub_path:
         hub_path = sync_state["hub_path"]
-        console.print(f"[dim]Using hub path from sync state: {hub_path}[/dim]")
+        agent_log("Using hub path from sync state", "info", {"hub_path": hub_path})
+        if not JSON_OUTPUT:
+            console.print(f"[dim]Using hub path from sync state: {hub_path}[/dim]")
     
     hub_folder_id = sync_state["hub_folder_id"]
     old_state = sync_state["initial_state"]
     path_to_id = sync_state["path_to_id"]
     
     # Scan current local state
-    console.print("[blue]Scanning local changes...[/blue]")
+    agent_log("Scanning local changes", "info")
+    if not JSON_OUTPUT:
+        console.print("[blue]Scanning local changes...[/blue]")
+    
+    scan_start = time.time()
     current_state = scan_local_tree(local_dir)
+    scan_duration = time.time() - scan_start
+    
+    agent_log("Scan completed", "info", {
+        "scan_duration": scan_duration,
+        "files_scanned": len(current_state)
+    })
     
     # Detect changes
     added = set(current_state.keys()) - set(old_state.keys())
@@ -810,49 +1011,82 @@ def push(local_path: str, hub_path: Optional[str], dry_run: bool, no_confirm: bo
             if old_item.get("hash") != new_item.get("hash"):
                 modified.append(path)
     
-    # Show summary
-    total_changes = len(added) + len(removed) + len(modified)
-    if total_changes == 0:
+    # Detailed change analysis
+    change_stats = {
+        "added": len(added),
+        "removed": len(removed), 
+        "modified": len(modified),
+        "total_changes": len(added) + len(removed) + len(modified)
+    }
+    
+    agent_log("Change detection completed", "info", change_stats)
+    
+    if change_stats["total_changes"] == 0:
+        agent_log("No changes detected", "info")
         console.print("[green]No changes detected.[/green]")
+        operation_summary("push", {
+            "result": "no_changes",
+            "duration": time.time() - start_time,
+            **change_stats
+        })
         return
     
-    console.print(f"\n[bold]Changes detected:[/bold]")
-    if added:
-        console.print(f"[green]Added ({len(added)}):[/green]")
-        for path in sorted(added):
-            item_type = current_state[path]["type"]
-            console.print(f"  + {path} ({item_type})")
-    
-    if removed:
-        console.print(f"[red]Removed ({len(removed)}):[/red]")
-        for path in sorted(removed):
-            item_type = old_state[path]["type"]
-            console.print(f"  - {path} ({item_type})")
-    
-    if modified:
-        console.print(f"[blue]Modified ({len(modified)}):[/blue]")
-        for path in sorted(modified):
-            console.print(f"  ~ {path}")
+    # Show detailed change summary
+    if not JSON_OUTPUT:
+        console.print(f"\n[bold]Changes detected:[/bold]")
+        if added:
+            console.print(f"[green]Added ({len(added)}):[/green]")
+            for path in sorted(added):
+                item_type = current_state[path]["type"]
+                size_info = f" ({current_state[path].get('size', 0)} bytes)" if item_type == "file" else ""
+                console.print(f"  + {path} ({item_type}){size_info}")
+        
+        if removed:
+            console.print(f"[red]Removed ({len(removed)}):[/red]")
+            for path in sorted(removed):
+                item_type = old_state[path]["type"]
+                console.print(f"  - {path} ({item_type})")
+        
+        if modified:
+            console.print(f"[blue]Modified ({len(modified)}):[/blue]")
+            for path in sorted(modified):
+                old_size = old_state[path].get("size", 0)
+                new_size = current_state[path].get("size", 0)
+                size_change = f" ({old_size} → {new_size} bytes)" if old_size != new_size else ""
+                console.print(f"  ~ {path}{size_change}")
     
     if dry_run:
+        agent_log("Dry run completed", "info", change_stats)
         console.print(f"\n[dim]Dry run complete. Use 'ch push {local_path}' to apply changes.[/dim]")
+        operation_summary("push_dry_run", {
+            "result": "dry_run",
+            "duration": time.time() - start_time,
+            **change_stats
+        })
         return
     
     # Confirm push (agent-friendly: default Yes, or skip entirely)
     if not no_confirm:
-        if not click.confirm(f"\nPush {total_changes} changes to Context Hub?", default=True):
+        if not click.confirm(f"\nPush {change_stats['total_changes']} changes to Context Hub?", default=True):
+            agent_log("Push cancelled by user", "info")
             console.print("Push cancelled.")
             return
     else:
-        console.print(f"\n[dim]Auto-pushing {total_changes} changes (--no-confirm)[/dim]")
+        agent_log("Auto-confirming push", "info", {"reason": "no_confirm_flag"})
+        if not JSON_OUTPUT:
+            console.print(f"\n[dim]Auto-pushing {change_stats['total_changes']} changes (--no-confirm)[/dim]")
     
     # Upload changes
-    console.print(f"\n[blue]Pushing changes to {hub_path}...[/blue]")
+    agent_log("Starting upload process", "info", change_stats)
+    if not JSON_OUTPUT:
+        console.print(f"\n[blue]Pushing changes to {hub_path}...[/blue]")
     
+    upload_start = time.time()
     try:
         updated_mapping = upload_changes_recursive(
             local_dir, hub_folder_id, path_to_id, old_state, current_state
         )
+        upload_duration = time.time() - upload_start
         
         # Update sync state
         sync_state["path_to_id"] = updated_mapping
@@ -860,11 +1094,42 @@ def push(local_path: str, hub_path: Optional[str], dry_run: bool, no_confirm: bo
         sync_state["last_push"] = datetime.now().isoformat()
         save_sync_state(local_dir, sync_state)
         
-        console.print(f"\n[green]✓ Successfully pushed {total_changes} changes![/green]")
+        agent_log("Push completed successfully", "success", {
+            "upload_duration": upload_duration,
+            "total_duration": time.time() - start_time,
+            **change_stats
+        })
+        
+        console.print(f"\n[green]✓ Successfully pushed {change_stats['total_changes']} changes![/green]")
         console.print("[dim]CRDT auto-resolution handled any conflicts.[/dim]")
         
+        operation_summary("push", {
+            "result": "success",
+            "duration": time.time() - start_time,
+            "upload_duration": upload_duration,
+            "scan_duration": scan_duration,
+            "errors": 0,
+            **change_stats
+        })
+        
     except Exception as e:
+        error_duration = time.time() - start_time
+        agent_log("Push failed", "error", {
+            "error": str(e),
+            "duration": error_duration,
+            **change_stats
+        })
+        
         console.print(f"[red]Error during push: {e}[/red]")
+        
+        operation_summary("push", {
+            "result": "error",
+            "duration": error_duration,
+            "error": str(e),
+            "errors": 1,
+            **change_stats
+        })
+        
         sys.exit(1)
 
 
