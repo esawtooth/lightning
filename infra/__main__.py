@@ -589,6 +589,7 @@ ui_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://api.", domain)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://api.", domain, "/events")),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
@@ -810,6 +811,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         https_port=port,
         http_port=80 if port == 443 else port,
         enabled_state=cdn.EnabledState.ENABLED,
+        enforce_certificate_name_check=False,
     )
     return og, origin
 
