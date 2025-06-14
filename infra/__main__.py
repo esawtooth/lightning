@@ -586,8 +586,8 @@ ui_cg = aci_group(
     ui_image,
     80,
     [
-        containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://api.", domain)),
-        containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://api.", domain, "/events")),
+        containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
+        containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_password.value),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
@@ -834,7 +834,7 @@ def origin_group(
 
 ui_og, ui_origin = origin_group(
     "ui",
-    "/health",
+    "/",
     ui_cg.ip_address.apply(lambda ip: ip.fqdn),
     80,
     https=False,
@@ -843,7 +843,7 @@ ui_og, ui_origin = origin_group(
 )
 api_og, api_origin = origin_group(
     "api",
-    "/api/health",
+    "/api/events",
     func_app.default_host_name,
     443,
     https=True,
