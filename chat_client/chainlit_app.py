@@ -8,6 +8,7 @@ import requests
 import chainlit as cl
 from fastapi import HTTPException, Depends
 from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 from chainlit.server import app as fastapi_app
 from dashboard.app import app as dashboard_app
@@ -28,6 +29,10 @@ AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
 NOTIFY_TOKEN = os.environ.get("NOTIFY_TOKEN")
+
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if hasattr(fastapi_app, "mount"):
+    fastapi_app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 
@@ -130,8 +135,10 @@ async def start():
     except Exception:
         pass
     
+    logo = "![Vextir Logo](/static/vextir-logo.svg)"
     welcome_message = f"""
-🌟 **Welcome to Vextir Chat, {username}!**
+{logo}
+\n🌟 **Welcome to Vextir Chat, {username}!**
 
 I'm your AI assistant, ready to help you with:
 - Answering questions
