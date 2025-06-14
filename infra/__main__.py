@@ -808,6 +808,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         origin_group_name=og.name,
         origin_name=f"{name}Origin",
         host_name=host,
+        origin_host_header=host,
         https_port=port,
         http_port=80 if port == 443 else port,
         enabled_state=cdn.EnabledState.ENABLED,
