@@ -15,14 +15,14 @@ def test_worker_main_runs_agent(monkeypatch, capsys):
     from agents import AGENT_REGISTRY, Agent
 
     class DummyAgent(Agent):
-        name = "openai-shell"
+        name = "conseil"
 
         def run(self, commands):
             assert commands == "do stuff"
             self.last_usage = {"total_tokens": 100}
             return "ok"
 
-    AGENT_REGISTRY["openai-shell"] = DummyAgent()
+    AGENT_REGISTRY["conseil"] = DummyAgent()
 
     # stub cosmos client
     cosmos_mod = types.ModuleType("cosmos")
