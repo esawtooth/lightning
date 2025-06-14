@@ -13,14 +13,14 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 def start_gateway():
-    """Run the combined gateway on port 443."""
-    print("🚀 Starting Gateway on port 443...")
+    """Run the combined gateway on port 80."""
+    print("🚀 Starting Gateway on port 80...")
     try:
         subprocess.run([
             sys.executable, "-m", "uvicorn",
             "gateway_app:app",
             "--host", "0.0.0.0",
-            "--port", "443"
+            "--port", "80"
         ], check=True)
     except subprocess.CalledProcessError as e:
         print(f"❌ Gateway failed to start: {e}")

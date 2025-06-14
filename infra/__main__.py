@@ -584,11 +584,12 @@ gitea_cg = aci_group(
 ui_cg = aci_group(
     "chatui",
     ui_image,
-    443,
+    80,
     [
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://api.", domain)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://api.", domain, "/events")),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_client_id),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", secure_value=aad_client_secret),
         containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
@@ -782,7 +783,8 @@ fd_ep = cdn.afd_endpoint.AFDEndpoint(
     location="global",
 )
 
-def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int):
+def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int, https: bool = True):
+    protocol = cdn.ProbeProtocol.HTTPS if https else cdn.ProbeProtocol.HTTP
     og = cdn.afd_origin_group.AFDOriginGroup(
         f"{name}-og",
         resource_group_name=rg.name,
@@ -790,7 +792,7 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         origin_group_name=name,
         health_probe_settings=cdn.HealthProbeParametersArgs(
             probe_path=probe_path,
-            probe_protocol=cdn.ProbeProtocol.HTTPS if port == 443 else cdn.ProbeProtocol.HTTP,
+            probe_protocol=protocol,
             probe_request_type=cdn.HealthProbeRequestType.GET,
             probe_interval_in_seconds=30,
         ),
@@ -807,15 +809,15 @@ def origin_group(name: str, probe_path: str, host: pulumi.Input[str], port: int)
         origin_group_name=og.name,
         origin_name=f"{name}Origin",
         host_name=host,
-        https_port=port,
-        http_port=80 if port == 443 else port,
+        http_port=port if not https else None,
+        https_port=port if https else None,
         enabled_state=cdn.EnabledState.ENABLED,
     )
     return og, origin
 
-ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 443)
-api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443)
-voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081)
+ui_og, ui_origin   = origin_group("ui",    "/",           ui_cg.ip_address.apply(lambda ip: ip.fqdn), 80, https=False)
+api_og, api_origin  = origin_group("api",   "/api/health", func_app.default_host_name,                443, https=True)
+voice_og, voice_origin = origin_group("voice", "/",           voice_cg.ip_address.apply(lambda ip: ip.fqdn), 8081, https=False)
 
 
 def afd_domain(label, sub):

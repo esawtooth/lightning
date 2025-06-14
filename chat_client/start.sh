@@ -16,6 +16,6 @@ check_env_var "AAD_CLIENT_ID"
 check_env_var "AAD_TENANT_ID"
 check_env_var "AAD_CLIENT_SECRET"
 
-# Run the gateway on HTTPS port 443
-exec python -m uvicorn gateway_app:app --host 0.0.0.0 --port 443
+# Run the gateway on HTTP port 80
+exec python -m uvicorn gateway_app:app --host 0.0.0.0 --port 80
 
