@@ -147,7 +147,8 @@ create_config() {
   },
   "context_hub": {
     "default_path": "/",
-    "max_query_results": 1000
+    "max_query_results": 1000,
+    "endpoint": "https://hub.vextir.com"
   }
 }
 EOF

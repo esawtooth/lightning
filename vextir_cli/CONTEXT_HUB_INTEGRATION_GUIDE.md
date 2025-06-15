@@ -138,7 +138,7 @@ Context Hub settings are part of the main CLI configuration:
 vextir config get
 
 # Set Context Hub specific settings
-vextir config set context_hub.endpoint https://my-hub.example.com
+vextir config set context_hub.endpoint https://hub.vextir.com
 vextir config set context_hub.default_path /my-workspace
 ```
 

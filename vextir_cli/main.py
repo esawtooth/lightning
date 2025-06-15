@@ -1127,9 +1127,7 @@ def get_hub_config(ctx):
     # Auto-configure Context Hub endpoint if not set
     hub_endpoint = config_obj.get('context_hub.endpoint')
     if not hub_endpoint:
-        # Use the same endpoint as the main Vextir OS but with context hub path
-        main_endpoint = config_obj.get('endpoint', 'https://test-vextir.azurewebsites.net')
-        hub_endpoint = f"{main_endpoint}/api/context-hub"
+        hub_endpoint = 'https://hub.vextir.com'
         config_obj.set('context_hub.endpoint', hub_endpoint)
     
     # Get current user from Azure CLI
