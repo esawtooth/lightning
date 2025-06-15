@@ -551,7 +551,7 @@ def aci_group(
         ),
         image_registry_credentials=registry_creds,
         opts=pulumi.ResourceOptions(
-            replace_on_changes=["containers"],
+            replace_on_changes=["containers", "restart_policy"],
             delete_before_replace=True,
         ),
     )
