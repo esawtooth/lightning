@@ -399,7 +399,8 @@ def generate_markdown_report(
     lines.append("\n---\n")
     lines.append("## Plots\n")
     lines.append(
-        "The directory `plots/` contains a bar chart of the cluster sizes and a t‑SNE scatter plot coloured by cluster.\n"
+        "The directory `plots/` contains a bar chart of the cluster sizes "
+        "and a t‑SNE scatter plot coloured by cluster.\n"
     )
 
     path_md.write_text("\n".join(lines))
