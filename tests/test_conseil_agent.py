@@ -12,6 +12,7 @@ import sys
 import json
 import subprocess
 from pathlib import Path
+import pytest
 
 # Add agents directory to Python path
 sys.path.insert(0, str(Path(__file__).parent / "agents"))
@@ -141,7 +142,7 @@ def test_conseil_agent_integration():
     if not conseil_agent:
         print("❌ Conseil agent not found in registry")
         return False
-    
+
     try:
         # Test that the conseil CLI is accessible
         result = subprocess.run(["conseil", "--help"], capture_output=True, text=True)
@@ -164,6 +165,19 @@ def test_conseil_agent_integration():
         print(f"❌ Conseil agent integration test failed: {e}")
         return False
 
+
+def test_conseil_error_handling(monkeypatch):
+    """Ensure errors from conseil are returned as strings."""
+    conseil_agent = AGENT_REGISTRY.get("conseil")
+    assert conseil_agent is not None
+
+    def fake_run(cmd, capture_output=False, text=False):
+        return subprocess.CompletedProcess(cmd, 1, stdout="out", stderr="boom")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = conseil_agent.run("bad")
+    assert "boom" in result
+
 def main():
     """Run all tests for the conseil agent"""
     print("🧪 Testing Conseil Agent Capabilities")
@@ -174,7 +188,8 @@ def main():
         test_context_hub_access,
         test_web_search_tools,
         test_service_bus_events,
-        test_conseil_agent_integration
+        test_conseil_agent_integration,
+        test_conseil_error_handling,
     ]
     
     results = []
