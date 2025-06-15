@@ -348,6 +348,7 @@ Install the Python dependencies and run unit tests with `pytest`:
 
 ```bash
 pip install -r agents/requirements-worker.txt
+pip install -e vextir_os
 pytest
 ```
 
