@@ -11,8 +11,7 @@ import sys
 from datetime import datetime
 from typing import Dict, Any, List
 
-# Add paths for imports
-sys.path.append('.')
+# Add Azure Function package path for imports
 sys.path.append('./azure-function')
 
 from events import Event, LLMChatEvent, EmailEvent, CalendarEvent, ContextUpdateEvent, WorkerTaskEvent
