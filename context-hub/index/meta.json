@@ -1,0 +1,88 @@
+{
+  "index_settings": {
+    "docstore_compression": "lz4",
+    "docstore_blocksize": 16384
+  },
+  "segments": [
+    {
+      "segment_id": "eed27606-ea3e-4e5a-97ab-66d4aa22df34",
+      "max_doc": 113,
+      "deletes": null
+    },
+    {
+      "segment_id": "ad11ddf1-be36-43d6-bdc6-9dd9d88305e4",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "8ffe83cc-39d8-4005-87f3-46a0ad6d4547",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "066dae97-81c1-4179-9630-08ff27597eb4",
+      "max_doc": 1,
+      "deletes": null
+    },
+    {
+      "segment_id": "d796adeb-e0fc-4cd8-a846-f1d0847688c4",
+      "max_doc": 1,
+      "deletes": null
+    }
+  ],
+  "schema": [
+    {
+      "name": "id",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "basic",
+          "fieldnorms": true,
+          "tokenizer": "raw"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": true,
+        "fast": false
+      }
+    },
+    {
+      "name": "content",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": false,
+        "fast": false
+      }
+    },
+    {
+      "name": "folder",
+      "type": "text",
+      "options": {
+        "indexing": {
+          "record": "position",
+          "fieldnorms": true,
+          "tokenizer": "default"
+        },
+        "stored": false,
+        "fast": false
+      }
+    }
+  ],
+  "opstamp": 234
+}

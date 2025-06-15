@@ -1,0 +1,2 @@
+config:
+  vextir:uiImage: vextiracrdev.azurecr.io/chainlit-client:b5f18f52ac17a187fe48ddef1c3802b1c00d7554 
