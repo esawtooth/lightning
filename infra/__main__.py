@@ -36,6 +36,7 @@ from pulumi_azure_native import (
     privatedns,                   # <‑‑ NEW (correct module)
 )
 import pulumi_azuread as azuread
+import pulumi_docker as docker
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. CONFIG
@@ -353,38 +354,23 @@ acr_creds = containerregistry.list_registry_credentials_output(
     resource_group_name=rg.name, registry_name=acr.name
 )
 
-# When deploying the first time, the context-hub image may not yet exist in ACR.
-# Fall back to a public placeholder so the container group can start.
-_placeholder_hub_image = "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
-
-def _ensure_hub_image(args: tuple[str, str, str]) -> str:
-    login_server, username, password = args
-    image = hub_image_cfg
-    if not image.startswith(login_server):
-        return image
-    repo_tag = image[len(login_server) + 1:]
-    repo, _, tag = repo_tag.partition(":")
-    tag = tag or "latest"
-    url = f"https://{login_server}/v2/{repo}/manifests/{tag}"
-    import requests
-    try:
-        r = requests.get(
-            url,
-            auth=(username, password),
-            headers={"Accept": "application/vnd.docker.distribution.manifest.v2+json"},
-            timeout=5,
-        )
-        if r.status_code == 200:
-            return image
-    except Exception:
-        pass
-    return _placeholder_hub_image
-
-hub_image = pulumi.Output.all(
-    acr.login_server,
-    acr_creds.username,
-    acr_creds.passwords[0].value,
-).apply(_ensure_hub_image)
+# Build the context hub image for AMD64 to avoid architecture issues
+if hub_image_cfg.startswith(f"vextiracr{stack_suffix}.azurecr.io"):
+    hub_image = docker.Image(
+        "context-hub-image",
+        build=docker.DockerBuild(
+            context=str(Path(__file__).parent.parent / "context-hub"),
+            platform="linux/amd64",
+        ),
+        image_name=hub_image_cfg,
+        registry=docker.ImageRegistry(
+            server=acr.login_server,
+            username=acr_creds.username,
+            password=acr_creds.passwords[0].value,
+        ),
+    ).image_name
+else:
+    hub_image = hub_image_cfg
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 9. SERVICE BUS
