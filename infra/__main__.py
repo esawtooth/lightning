@@ -520,28 +520,29 @@ def aci_group(
                     for v in volumes or []
                 ],
                 # Enhanced logging configuration
-                liveness_probe=containerinstance.ContainerProbeArgs(
-                    http_get=containerinstance.ContainerHttpGetArgs(
-                        path="/health" if name == "chatui" else "/",
-                        port=port,
-                        scheme=containerinstance.Scheme.HTTP,
-                    ),
-                    initial_delay_seconds=30,
-                    period_seconds=10,
-                    failure_threshold=3,
-                    timeout_seconds=5,
-                ) if name in ["chatui", "voicews"] else None,
-                readiness_probe=containerinstance.ContainerProbeArgs(
-                    http_get=containerinstance.ContainerHttpGetArgs(
-                        path="/health" if name == "chatui" else "/",
-                        port=port,
-                        scheme=containerinstance.Scheme.HTTP,
-                    ),
-                    initial_delay_seconds=10,
-                    period_seconds=5,
-                    failure_threshold=3,
-                    timeout_seconds=5,
-                ) if name in ["chatui", "voicews"] else None,
+                # Temporarily disable health probes to allow container startup debugging
+                # liveness_probe=containerinstance.ContainerProbeArgs(
+                #     http_get=containerinstance.ContainerHttpGetArgs(
+                #         path="/health" if name == "chatui" else "/",
+                #         port=port,
+                #         scheme=containerinstance.Scheme.HTTP,
+                #     ),
+                #     initial_delay_seconds=30,
+                #     period_seconds=10,
+                #     failure_threshold=3,
+                #     timeout_seconds=5,
+                # ) if name in ["chatui", "voicews"] else None,
+                # readiness_probe=containerinstance.ContainerProbeArgs(
+                #     http_get=containerinstance.ContainerHttpGetArgs(
+                #         path="/health" if name == "chatui" else "/",
+                #         port=port,
+                #         scheme=containerinstance.Scheme.HTTP,
+                #     ),
+                #     initial_delay_seconds=10,
+                #     period_seconds=5,
+                #     failure_threshold=3,
+                #     timeout_seconds=5,
+                # ) if name in ["chatui", "voicews"] else None,
             )
         ],
         volumes=volumes,
@@ -631,7 +632,7 @@ voice_cg = aci_group(
 hub_cg = aci_group(
     "contexthub",
     hub_image,
-    3000,
+    80,  # Context hub actually listens on port 80
     [
         # AAD Authentication configuration
         containerinstance.EnvironmentVariableArgs(name="AZURE_JWKS_URL", value=pulumi.Output.concat("https://login.microsoftonline.com/", aad_tenant_id, "/discovery/v2.0/keys")),
@@ -639,11 +640,13 @@ hub_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         # Optional: Keep JWT_SECRET as fallback
         containerinstance.EnvironmentVariableArgs(name="JWT_SECRET", value=aad_password.value),
+        # Ensure context hub listens on the right port
+        containerinstance.EnvironmentVariableArgs(name="PORT", value="80"),
     ],
     public=True,  # Make it publicly accessible
 )
 # Internal hub URL for communication between services in the same VNet
-hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
+hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:80")
 # External hub URL for public access via Front Door
 hub_url = pulumi.Output.concat("https://hub.", domain)
 
@@ -911,7 +914,7 @@ hub_og, hub_origin = origin_group(
     "hub",
     "/",
     hub_cg.ip_address.apply(lambda ip: ip.fqdn),
-    3000,
+    80,  # Context hub listens on port 80
     https=False,
     host_header=f"hub.{domain}",
     enforce_cert=False,
