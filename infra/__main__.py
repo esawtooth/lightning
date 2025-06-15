@@ -426,7 +426,11 @@ aad_app = azuread.Application(
     "aad-app",
     display_name=f"Vextir-{stack_suffix}",
     web=azuread.ApplicationWebArgs(
-        redirect_uris=[pulumi.Output.concat("https://", domain, "/auth/callback")]
+        redirect_uris=[
+            pulumi.Output.concat("https://", domain, "/auth/callback"),
+            pulumi.Output.concat("https://www.", domain, "/auth/callback"),
+            pulumi.Output.concat("https://hub.", domain, "/auth/callback"),
+        ]
     ),
 )
 
@@ -628,9 +632,20 @@ hub_cg = aci_group(
     "contexthub",
     hub_image,
     3000,
-    [],
+    [
+        # AAD Authentication configuration
+        containerinstance.EnvironmentVariableArgs(name="AZURE_JWKS_URL", value=pulumi.Output.concat("https://login.microsoftonline.com/", aad_tenant_id, "/discovery/v2.0/keys")),
+        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
+        containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
+        # Optional: Keep JWT_SECRET as fallback
+        containerinstance.EnvironmentVariableArgs(name="JWT_SECRET", value=aad_password.value),
+    ],
+    public=True,  # Make it publicly accessible
 )
-hub_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
+# Internal hub URL for communication between services in the same VNet
+hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
+# External hub URL for public access via Front Door
+hub_url = pulumi.Output.concat("https://hub.", domain)
 
 pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
 pulumi.export("contextHubIp", hub_cg.ip_address.apply(lambda ip: ip.ip))
@@ -764,7 +779,7 @@ func_settings = {
     "AAD_CLIENT_SECRET": aad_password.value,
     "AAD_TENANT_ID": aad_tenant_id,
     "NOTIFY_URL": pulumi.Output.concat("https://www.", domain, "/chat/notify"),
-    "HUB_URL": hub_url,
+    "HUB_URL": hub_internal_url,
     "ACS_CONNECTION": comm_keys.primary_connection_string,
     "ACS_SENDER": pulumi.Output.concat("no-reply@", domain),
     "VERIFY_BASE": pulumi.Output.concat("https://www.", domain),
@@ -892,6 +907,15 @@ voice_og, voice_origin = origin_group(
     https=False,
     host_header=f"voice-ws.{domain}",
 )
+hub_og, hub_origin = origin_group(
+    "hub",
+    "/",
+    hub_cg.ip_address.apply(lambda ip: ip.fqdn),
+    3000,
+    https=False,
+    host_header=f"hub.{domain}",
+    enforce_cert=False,
+)
 
 
 def afd_domain(label, sub):
@@ -909,6 +933,7 @@ def afd_domain(label, sub):
 ui_cd   = afd_domain("ui",   "www")
 api_cd  = afd_domain("api",  "api")
 voice_cd= afd_domain("voice","voice-ws")
+hub_cd  = afd_domain("hub",  "hub")
 
 def afd_route(name, pattern, og, origin, cd, fp):
     cdn.route.Route(
@@ -929,6 +954,7 @@ def afd_route(name, pattern, og, origin, cd, fp):
 afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
+afd_route("hub",   "/*",           hub_og, hub_origin,   hub_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
 
 dns_zone = dns.Zone(
     "zone",
@@ -946,7 +972,7 @@ def cname(label):
         ttl=300,
         cname_record=dns.CnameRecordArgs(cname=fd_ep.host_name),
     )
-for lbl in ["www", "api", "voice-ws"]:
+for lbl in ["www", "api", "voice-ws", "hub"]:
     cname(lbl)
 def afd_txt(label, cd):
     dns.RecordSet(
@@ -961,11 +987,13 @@ def afd_txt(label, cd):
 afd_txt("www",      ui_cd)
 afd_txt("api",      api_cd)
 afd_txt("voice-ws", voice_cd)
+afd_txt("hub",      hub_cd)
 
 pulumi.export("frontdoorHost", fd_ep.host_name)
 pulumi.export("uiUrl",        pulumi.Output.concat("https://www.",   domain))
 pulumi.export("apiUrl",       pulumi.Output.concat("https://api.",   domain))
 pulumi.export("voiceWsUrl",   pulumi.Output.concat("https://voice-ws.", domain))
+pulumi.export("hubUrl",       pulumi.Output.concat("https://hub.", domain))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 15. SECURE OUTPUTS
