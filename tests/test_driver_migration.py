@@ -19,7 +19,12 @@ from events import Event, LLMChatEvent, EmailEvent, CalendarEvent, ContextUpdate
 from vextir_os.universal_processor import UniversalEventProcessor
 from vextir_os.registries import get_driver_registry, get_model_registry, get_tool_registry
 from vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver
-from vextir_os.communication_drivers import EmailConnectorDriver, CalendarConnectorDriver, UserMessengerDriver
+from vextir_os.communication_drivers import (
+    EmailConnectorDriver,
+    CalendarConnectorDriver,
+    UserMessengerDriver,
+    VoiceCallDriver,
+)
 from vextir_os.orchestration_drivers import InstructionEngineDriver, TaskMonitorDriver, SchedulerDriver
 
 # Configure logging
@@ -64,7 +69,8 @@ class DriverMigrationTester:
         communication_drivers = [
             (EmailConnectorDriver._vextir_manifest, EmailConnectorDriver),
             (CalendarConnectorDriver._vextir_manifest, CalendarConnectorDriver),
-            (UserMessengerDriver._vextir_manifest, UserMessengerDriver)
+            (UserMessengerDriver._vextir_manifest, UserMessengerDriver),
+            (VoiceCallDriver._vextir_manifest, VoiceCallDriver),
         ]
         
         # Orchestration drivers

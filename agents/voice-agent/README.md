@@ -96,6 +96,7 @@ PUBLIC_URL="<https://your-domain/voice-ws>"
 TWILIO_ACCOUNT_SID="<twilio-account-sid>"
 TWILIO_AUTH_TOKEN="<twilio-auth-token>"
 TWILIO_FROM_NUMBER="<twilio-phone-number>"
+OBJECTIVE=""  # optional goal for outbound calls
 COSMOS_CONNECTION="<connection-string>"
 COSMOS_DATABASE="vextir"
 USER_CONTAINER="users"

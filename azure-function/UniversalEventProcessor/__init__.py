@@ -17,7 +17,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from vextir_os.universal_processor import process_event_message
 from vextir_os.registries import get_driver_registry
 from vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver
-from vextir_os.communication_drivers import EmailConnectorDriver, CalendarConnectorDriver, UserMessengerDriver
+from vextir_os.communication_drivers import (
+    EmailConnectorDriver,
+    CalendarConnectorDriver,
+    UserMessengerDriver,
+    VoiceCallDriver,
+)
 from vextir_os.orchestration_drivers import InstructionEngineDriver, TaskMonitorDriver, SchedulerDriver
 from simple_auth import get_user_id_permissive
 
@@ -37,7 +42,8 @@ async def initialize_drivers():
     communication_drivers = [
         (EmailConnectorDriver._vextir_manifest, EmailConnectorDriver),
         (CalendarConnectorDriver._vextir_manifest, CalendarConnectorDriver),
-        (UserMessengerDriver._vextir_manifest, UserMessengerDriver)
+        (UserMessengerDriver._vextir_manifest, UserMessengerDriver),
+        (VoiceCallDriver._vextir_manifest, VoiceCallDriver),
     ]
     
     # Register orchestration drivers

@@ -6,13 +6,26 @@ import asyncio
 import json
 import logging
 import os
+import uuid
 import requests
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
+from azure.cosmos import CosmosClient, PartitionKey
+from azure.identity import DefaultAzureCredential
+from azure.mgmt.containerinstance import ContainerInstanceManagementClient
+from azure.mgmt.containerinstance.models import (
+    Container,
+    ContainerGroup,
+    ContainerGroupRestartPolicy,
+    EnvironmentVariable,
+    OperatingSystemTypes,
+    ResourceRequests,
+    ResourceRequirements,
+)
 
-from events import Event, EmailEvent, CalendarEvent
+from events import Event, EmailEvent, CalendarEvent, VoiceCallEvent
 from .drivers import Driver, AgentDriver, ToolDriver, IODriver, DriverManifest, DriverType, ResourceSpec, driver
 
 
@@ -564,3 +577,168 @@ class UserMessengerDriver(IODriver):
         # TODO: Integrate with real-time notification system
         logging.info(f"In-app notification placeholder for {user_id}: {title}")
         return True  # Placeholder
+
+
+@driver(
+    "voice_call",
+    DriverType.IO,
+    capabilities=["voice.call"],
+    name="Voice Call Driver",
+    description="Initiate outbound phone calls via Twilio",
+)
+class VoiceCallDriver(IODriver):
+    """Driver that launches a voice agent container for phone calls."""
+
+    def __init__(self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None):
+        super().__init__(manifest, config)
+        self.cosmos_conn = os.environ.get("COSMOS_CONNECTION")
+        self.cosmos_db = os.environ.get("COSMOS_DATABASE", "vextir")
+        self.call_container = os.environ.get("CALL_CONTAINER", "calls")
+        self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
+        self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
+        self.aci_resource_group = os.environ.get("ACI_RESOURCE_GROUP")
+        self.aci_subscription_id = os.environ.get("ACI_SUBSCRIPTION_ID")
+        self.aci_region = os.environ.get("ACI_REGION", "centralindia")
+        self.voice_image = os.environ.get("VOICE_IMAGE", "voice-agent")
+
+        self._cosmos_client = (
+            CosmosClient.from_connection_string(self.cosmos_conn)
+            if self.cosmos_conn
+            else None
+        )
+        if self._cosmos_client:
+            db = self._cosmos_client.create_database_if_not_exists(self.cosmos_db)
+            self._call_container = db.create_container_if_not_exists(
+                id=self.call_container, partition_key=PartitionKey(path="/pk")
+            )
+        else:
+            self._call_container = None
+
+        self._sb_client = (
+            ServiceBusClient.from_connection_string(self.servicebus_conn)
+            if self.servicebus_conn
+            else None
+        )
+
+        self._credential = DefaultAzureCredential()
+        self._aci_client = None
+        if self.aci_resource_group and self.aci_subscription_id:
+            self._aci_client = ContainerInstanceManagementClient(
+                self._credential, self.aci_subscription_id
+            )
+
+    def get_capabilities(self) -> List[str]:
+        return ["voice.call"]
+
+    def get_resource_requirements(self) -> ResourceSpec:
+        return ResourceSpec(memory_mb=1024, timeout_seconds=60)
+
+    async def handle_event(self, event: Event) -> List[Event]:
+        output_events = []
+
+        if event.type != "voice.call":
+            return output_events
+
+        if not hasattr(event, "phone"):
+            try:
+                v_event = VoiceCallEvent.from_dict(event.to_dict())
+            except Exception:
+                logging.error("Invalid voice call event")
+                return output_events
+        else:
+            v_event = event
+
+        call_id = uuid.uuid4().hex
+        entity = {
+            "id": call_id,
+            "pk": v_event.user_id,
+            "phone": v_event.phone,
+            "objective": v_event.objective,
+            "status": "pending",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+        try:
+            if self._call_container:
+                self._call_container.upsert_item(entity)
+        except Exception as e:
+            logging.error("Failed to record call: %s", e)
+
+        result = ""
+        group_name = None
+        try:
+            if not self._aci_client:
+                raise RuntimeError("ACI client not configured")
+            env_list = [
+                EnvironmentVariable(name="OPENAI_API_KEY", value=os.environ.get("OPENAI_API_KEY", "")),
+                EnvironmentVariable(name="SERVICEBUS_CONNECTION", value=self.servicebus_conn or ""),
+                EnvironmentVariable(name="SERVICEBUS_QUEUE", value=self.servicebus_queue or ""),
+                EnvironmentVariable(name="COSMOS_CONNECTION", value=self.cosmos_conn or ""),
+                EnvironmentVariable(name="COSMOS_DATABASE", value=self.cosmos_db),
+                EnvironmentVariable(name="CALL_CONTAINER", value=self.call_container),
+                EnvironmentVariable(name="OUTBOUND_TO", value=v_event.phone),
+                EnvironmentVariable(name="OBJECTIVE", value=v_event.objective or ""),
+                EnvironmentVariable(name="PUBLIC_URL", value=os.environ.get("PUBLIC_URL", "")),
+                EnvironmentVariable(name="TWILIO_ACCOUNT_SID", value=os.environ.get("TWILIO_ACCOUNT_SID", "")),
+                EnvironmentVariable(name="TWILIO_AUTH_TOKEN", value=os.environ.get("TWILIO_AUTH_TOKEN", "")),
+                EnvironmentVariable(name="TWILIO_FROM_NUMBER", value=os.environ.get("TWILIO_FROM_NUMBER", "")),
+            ]
+            container = Container(
+                name="voice",
+                image=self.voice_image,
+                resources=ResourceRequirements(
+                    requests=ResourceRequests(cpu=1.0, memory_in_gb=1.0)
+                ),
+                environment_variables=env_list,
+            )
+            group = ContainerGroup(
+                location=self.aci_region,
+                os_type=OperatingSystemTypes.LINUX,
+                restart_policy=ContainerGroupRestartPolicy.NEVER,
+                containers=[container],
+            )
+            group_name = f"voice-{call_id[:8]}"
+            self._aci_client.container_groups.begin_create_or_update(
+                self.aci_resource_group, group_name, group
+            ).result()
+            entity["container_group"] = group_name
+            entity["status"] = "started"
+            entity["updated_at"] = datetime.utcnow().isoformat()
+            if self._call_container:
+                self._call_container.upsert_item(entity)
+            result = "started"
+        except Exception as e:
+            entity["status"] = "error"
+            entity["updated_at"] = datetime.utcnow().isoformat()
+            try:
+                if self._call_container:
+                    self._call_container.upsert_item(entity)
+            except Exception:
+                pass
+            result = f"error: {e}"
+
+        out_event = Event(
+            timestamp=datetime.utcnow(),
+            source="VoiceCallDriver",
+            type="voice.call.started",
+            user_id=v_event.user_id,
+            metadata={"result": result, "callId": call_id},
+            history=v_event.history + [v_event.to_dict()],
+        )
+
+        if self._sb_client:
+            message = ServiceBusMessage(json.dumps(out_event.to_dict()))
+            message.application_properties = {"topic": out_event.type}
+            with self._sb_client:
+                sender = self._sb_client.get_queue_sender(queue_name=self.servicebus_queue)
+                with sender:
+                    sender.send_messages(message)
+                if self._aci_client and group_name:
+                    try:
+                        self._aci_client.container_groups.begin_delete(
+                            self.aci_resource_group, group_name
+                        )
+                    except Exception:
+                        pass
+
+        output_events.append(out_event)
+        return output_events
