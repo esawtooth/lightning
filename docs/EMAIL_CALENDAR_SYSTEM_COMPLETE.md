@@ -290,6 +290,10 @@ SERVICEBUS_CONNECTION=<servicebus_connection_string>
 OPENAI_API_KEY=<openai_api_key>
 GMAIL_CLIENT_ID=<gmail_oauth_client_id>
 OUTLOOK_CLIENT_ID=<outlook_oauth_client_id>
+GMAIL_OAUTH_TOKEN=<gmail_access_token>
+OUTLOOK_OAUTH_TOKEN=<outlook_access_token>
+ICLOUD_USERNAME=<icloud_email>
+ICLOUD_APP_PASSWORD=<icloud_app_password>
 ```
 
 ### Provider Setup
