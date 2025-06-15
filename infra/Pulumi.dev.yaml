@@ -1,3 +1,14 @@
 config:
   lightning:uiImage: lightningacr.azurecr.io/chainlit-client:latest
   vextir:uiImage: vextiracrdev.azurecr.io/chainlit-client:b5f18f52ac17a187fe48ddef1c3802b1c00d7554
+  vextir:aadClientId:
+    secure: AAABAJnirv8Kz/p4cxttrUNG2wXD6Oi9gXI6u+2J44KkGZpLRcD/jYsnQMPGk7nNHm3iwn/LdBc2xX6Jz9SrW9Yu+O4=
+  vextir:aadClientSecret:
+    secure: AAABAK0CZ45+2rm1SIdqJifnJCQ+u/8oJNH8MYBjaNCFjx4Kxe/V7DC1UBYNDBV+5JbeiC9/FzCtcSkX+RzCF6vAbLS9Ktm0
+  vextir:aadTenantId: 28de532c-1be7-49e6-acc5-931ae8e9ae01
+  vextir:openaiApiKey:
+    secure: AAABANhSNdNJCZTjOTHsXR5QB8MYsXA8UyNMZK1RCTR5hxFRshPl2VcsV7ghlpnWuBdaK7lIWWvJKafVyojjP1mqW5BXgubu1CxIFMLYKGXQdzs=
+  vextir:twilioAccountSid:
+    secure: AAABADd1mY3BQEBEoY0Rzeyq5N+ogECbZ93wRjdHe5R4aNL0PgRvnpP4DLiz3wez2s4oFCJOn43xMV+7z6XtXxii
+  vextir:twilioAuthToken:
+    secure: AAABAL0QbX47EPgs6SP147sV64eb3HlemJar0X64iA1/Pw1ugguTYRRn8lqnyGv17uELxETQAI+zN+2oT6QLjQ==

@@ -632,7 +632,7 @@ voice_cg = aci_group(
 hub_cg = aci_group(
     "contexthub",
     hub_image,
-    80,  # Context hub actually listens on port 80
+    3000,  # Context hub should listen on port 3000 as per Dockerfile
     [
         # AAD Authentication configuration
         containerinstance.EnvironmentVariableArgs(name="AZURE_JWKS_URL", value=pulumi.Output.concat("https://login.microsoftonline.com/", aad_tenant_id, "/discovery/v2.0/keys")),
@@ -640,13 +640,13 @@ hub_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         # Optional: Keep JWT_SECRET as fallback
         containerinstance.EnvironmentVariableArgs(name="JWT_SECRET", value=aad_password.value),
-        # Ensure context hub listens on the right port
-        containerinstance.EnvironmentVariableArgs(name="PORT", value="80"),
+        # Configure context hub port
+        containerinstance.EnvironmentVariableArgs(name="PORT", value="3000"),
     ],
     public=True,  # Make it publicly accessible
 )
 # Internal hub URL for communication between services in the same VNet
-hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:80")
+hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
 # External hub URL for public access via Front Door
 hub_url = pulumi.Output.concat("https://hub.", domain)
 
@@ -914,7 +914,7 @@ hub_og, hub_origin = origin_group(
     "hub",
     "/",
     hub_cg.ip_address.apply(lambda ip: ip.fqdn),
-    80,  # Context hub listens on port 80
+    3000,  # Context hub listens on port 3000
     https=False,
     host_header=f"hub.{domain}",
     enforce_cert=False,
