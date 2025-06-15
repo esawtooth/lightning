@@ -719,11 +719,17 @@ class SchedulerDriver(ToolDriver):
     
     def _calculate_next_trigger(self, cron_expression: str) -> str:
         """Calculate the next trigger time for a cron expression"""
-        # TODO: Implement proper cron parsing
-        # For now, return a placeholder time (1 hour from now)
-        from datetime import timedelta
-        next_time = datetime.utcnow() + timedelta(hours=1)
-        return next_time.isoformat()
+        try:
+            from croniter import croniter
+            base_time = datetime.utcnow()
+            next_time = croniter(cron_expression, base_time).get_next(datetime)
+            return next_time.isoformat()
+        except Exception as e:
+            # Fall back to one hour from now if the expression is invalid
+            logging.error(f"Invalid cron expression '{cron_expression}': {e}")
+            from datetime import timedelta
+            next_time = datetime.utcnow() + timedelta(hours=1)
+            return next_time.isoformat()
 
 
 # Function to register all orchestration drivers
