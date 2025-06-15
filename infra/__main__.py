@@ -547,10 +547,6 @@ def aci_group(
                 workspace_key=workspace_keys.primary_shared_key,
                 workspace_resource_id=workspace.id,
                 log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,  # Enhanced logging
-                metadata={
-                    "container-name": name,
-                    "deployment-id": "fix-container-logging-v1",
-                },
             )
         ),
         image_registry_credentials=registry_creds,
