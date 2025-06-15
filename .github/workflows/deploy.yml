@@ -36,6 +36,9 @@ jobs:
           - image_tag: voice-webapp
             context: ./agents/voice-agent/webapp
             file: ./agents/voice-agent/webapp/Dockerfile
+          - image_tag: context-hub
+            context: ./context-hub
+            file: ./context-hub/Dockerfile
     steps:
       - uses: actions/checkout@v4
       
@@ -118,6 +121,7 @@ jobs:
           pulumi config set workerImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           pulumi config set uiImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"  
           pulumi config set voiceWsImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
+          pulumi config set hubImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           
           echo "configured=true" >> $GITHUB_OUTPUT
         env:
@@ -177,7 +181,8 @@ jobs:
           pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${{ github.sha }}"
           pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }}"
           pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${{ github.sha }}"
-          
+          pulumi config set hubImage "vextiracrdev.azurecr.io/context-hub:${{ github.sha }}"
+
           # Deploy with real images
           pulumi up --yes --skip-preview
         env:

@@ -69,6 +69,7 @@ setup_infrastructure() {
     pulumi config set workerImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
     pulumi config set uiImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
     pulumi config set voiceWsImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
+    pulumi config set hubImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
     pulumi config set domain "vextir.com"
     pulumi refresh --yes
     pulumi up --yes
@@ -82,27 +83,39 @@ build_images() {
     az acr login --name vextiracrdev
 
     docker buildx build \
+        --platform linux/amd64 \
         --file ./Dockerfile.worker \
         --tag vextiracrdev.azurecr.io/worker-task:${GITHUB_SHA} \
         --tag vextiracrdev.azurecr.io/worker-task:latest \
         --push .
 
     docker buildx build \
+        --platform linux/amd64 \
         --file ./chat_client/Dockerfile \
         --tag vextiracrdev.azurecr.io/chainlit-client:${GITHUB_SHA} \
         --tag vextiracrdev.azurecr.io/chainlit-client:latest \
         --push .
 
     docker buildx build \
+        --platform linux/amd64 \
         ./agents/voice-agent/websocket-server \
         --tag vextiracrdev.azurecr.io/voice-ws:${GITHUB_SHA} \
         --tag vextiracrdev.azurecr.io/voice-ws:latest \
         --push
 
     docker buildx build \
+        --platform linux/amd64 \
         ./agents/voice-agent/webapp \
         --tag vextiracrdev.azurecr.io/voice-webapp:${GITHUB_SHA} \
         --tag vextiracrdev.azurecr.io/voice-webapp:latest \
+        --push
+
+    docker buildx build \
+        --platform linux/amd64 \
+        ./context-hub \
+        --file ./context-hub/Dockerfile \
+        --tag vextiracrdev.azurecr.io/context-hub:${GITHUB_SHA} \
+        --tag vextiracrdev.azurecr.io/context-hub:latest \
         --push
 }
 
@@ -119,6 +132,7 @@ deploy_stack() {
     pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${GITHUB_SHA}"
     pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${GITHUB_SHA}"
     pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${GITHUB_SHA}"
+    pulumi config set hubImage "vextiracrdev.azurecr.io/context-hub:${GITHUB_SHA}"
     pulumi config set domain "vextir.com"
     pulumi refresh --yes
     pulumi up --yes

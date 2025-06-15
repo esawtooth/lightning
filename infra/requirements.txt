@@ -5,3 +5,4 @@ pulumi-random>=2.0.0
 azure-identity>=1.8.0
 azure-keyvault-secrets>=4.9.0
 pulumi-azuread>=5.0.0
+pulumi-docker>=3.0.0

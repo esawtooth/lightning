@@ -289,6 +289,8 @@ class ToolRegistry:
 _global_model_registry: Optional[ModelRegistry] = None
 _global_tool_registry: Optional[ToolRegistry] = None
 
+from .drivers import get_driver_registry as _get_driver_registry
+
 
 def get_model_registry() -> ModelRegistry:
     """Get global model registry instance"""
@@ -304,3 +306,8 @@ def get_tool_registry() -> ToolRegistry:
     if _global_tool_registry is None:
         _global_tool_registry = ToolRegistry()
     return _global_tool_registry
+
+
+def get_driver_registry():
+    """Alias for driver registry accessor to maintain backward compatibility."""
+    return _get_driver_registry()
