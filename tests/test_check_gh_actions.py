@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import importlib.util
 
 spec = importlib.util.spec_from_file_location(
-    "check_gh_actions", os.path.join(os.path.dirname(__file__), "..", "check-gh-actions.py")
+    "check_gh_actions",
+    os.path.join(os.path.dirname(__file__), "..", "scripts", "check-gh-actions.py"),
 )
 check_gh_actions = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(check_gh_actions)
