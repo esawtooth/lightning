@@ -66,7 +66,7 @@ class Config:
             "context_hub": {
                 "default_path": "/",
                 "max_query_results": 1000,
-                "endpoint": "http://10.0.1.4:3000"
+                "endpoint": "https://hub.vextir.com"
             }
         }
     

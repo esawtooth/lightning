@@ -176,7 +176,7 @@ The CLI integrates the existing `contexthub-cli.py` providing:
 
 ```bash
 # Set Context Hub endpoint
-vextir config set context_hub.endpoint http://localhost:3000
+vextir config set context_hub.endpoint https://hub.vextir.com
 
 # Configure user for Context Hub
 vextir config set auth.username your_username
