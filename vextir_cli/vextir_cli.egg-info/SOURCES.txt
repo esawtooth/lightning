@@ -1,8 +1,0 @@
-README.md
-setup.py
-vextir_cli.egg-info/PKG-INFO
-vextir_cli.egg-info/SOURCES.txt
-vextir_cli.egg-info/dependency_links.txt
-vextir_cli.egg-info/entry_points.txt
-vextir_cli.egg-info/requires.txt
-vextir_cli.egg-info/top_level.txt
