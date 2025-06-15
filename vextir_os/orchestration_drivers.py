@@ -7,7 +7,8 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
+from croniter import croniter
 from typing import Any, Dict, List, Optional
 
 from azure.cosmos import CosmosClient, PartitionKey
@@ -720,16 +721,10 @@ class SchedulerDriver(ToolDriver):
     def _calculate_next_trigger(self, cron_expression: str) -> str:
         """Calculate the next trigger time for a cron expression"""
         try:
-            from croniter import croniter
-            base_time = datetime.utcnow()
-            next_time = croniter(cron_expression, base_time).get_next(datetime)
-            return next_time.isoformat()
+            return croniter(cron_expression, datetime.utcnow()).get_next(datetime).isoformat()
         except Exception as e:
-            # Fall back to one hour from now if the expression is invalid
-            logging.error(f"Invalid cron expression '{cron_expression}': {e}")
-            from datetime import timedelta
-            next_time = datetime.utcnow() + timedelta(hours=1)
-            return next_time.isoformat()
+            logging.error("Invalid cron expression %s: %s", cron_expression, e)
+            return (datetime.utcnow() + timedelta(hours=1)).isoformat()
 
 
 # Function to register all orchestration drivers

@@ -42,10 +42,17 @@ def load_scheduler(monkeypatch, capture, token_map=None):
         raise Exception('bad')
 
     auth_mod.verify_token = verify_token
+    simple_auth_mod = types.ModuleType('simple_auth')
+
+    def get_user_id_permissive(req):
+        return verify_token(req.headers.get('Authorization'))
+
+    simple_auth_mod.get_user_id_permissive = get_user_id_permissive
 
     monkeypatch.setitem(sys.modules, 'azure', azure_mod)
     monkeypatch.setitem(sys.modules, 'azure.cosmos', cosmos_mod)
     monkeypatch.setitem(sys.modules, 'auth', auth_mod)
+    monkeypatch.setitem(sys.modules, 'simple_auth', simple_auth_mod)
 
     func_mod = types.ModuleType('functions')
     class DummyResponse:
@@ -65,7 +72,7 @@ def load_scheduler(monkeypatch, capture, token_map=None):
     monkeypatch.setitem(sys.modules, 'croniter', cron_mod)
 
     spec = importlib.util.spec_from_file_location(
-        'Scheduler', os.path.join(os.path.dirname(__file__), '..', 'azure-function', 'Scheduler', '__init__.py')
+        'Scheduler', os.path.join(os.path.dirname(__file__), '..', 'azure-function-backup', 'Scheduler', '__init__.py')
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules['Scheduler'] = module
@@ -200,7 +207,7 @@ def load_worker(monkeypatch, schedules, sent):
     monkeypatch.setitem(sys.modules, 'croniter', cron_mod)
 
     spec = importlib.util.spec_from_file_location(
-        'ScheduleWorker', os.path.join(os.path.dirname(__file__), '..', 'azure-function', 'ScheduleWorker', '__init__.py')
+        'ScheduleWorker', os.path.join(os.path.dirname(__file__), '..', 'azure-function-backup', 'ScheduleWorker', '__init__.py')
     )
     module = importlib.util.module_from_spec(spec)
     sys.modules['ScheduleWorker'] = module
