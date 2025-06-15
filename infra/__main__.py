@@ -497,6 +497,7 @@ def aci_group(
         os_type="Linux",
         subnet_ids=subnet_ids,
         ip_address=ip_cfg,
+        restart_policy=containerinstance.ContainerGroupRestartPolicy.ON_FAILURE,  # Better restart policy
         containers=[
             containerinstance.ContainerArgs(
                 name=name,
@@ -514,6 +515,29 @@ def aci_group(
                     )
                     for v in volumes or []
                 ],
+                # Enhanced logging configuration
+                liveness_probe=containerinstance.ContainerProbeArgs(
+                    http_get=containerinstance.ContainerHttpGetArgs(
+                        path="/health" if name == "chatui" else "/",
+                        port=port,
+                        scheme=containerinstance.Scheme.HTTP,
+                    ),
+                    initial_delay_seconds=30,
+                    period_seconds=10,
+                    failure_threshold=3,
+                    timeout_seconds=5,
+                ) if name in ["chatui", "voicews"] else None,
+                readiness_probe=containerinstance.ContainerProbeArgs(
+                    http_get=containerinstance.ContainerHttpGetArgs(
+                        path="/health" if name == "chatui" else "/",
+                        port=port,
+                        scheme=containerinstance.Scheme.HTTP,
+                    ),
+                    initial_delay_seconds=10,
+                    period_seconds=5,
+                    failure_threshold=3,
+                    timeout_seconds=5,
+                ) if name in ["chatui", "voicews"] else None,
             )
         ],
         volumes=volumes,
@@ -522,6 +546,11 @@ def aci_group(
                 workspace_id=workspace.customer_id,
                 workspace_key=workspace_keys.primary_shared_key,
                 workspace_resource_id=workspace.id,
+                log_type=containerinstance.LogAnalyticsLogType.CONTAINER_INSIGHTS,  # Enhanced logging
+                metadata={
+                    "container-name": name,
+                    "deployment-id": "fix-container-logging-v1",
+                },
             )
         ),
         image_registry_credentials=registry_creds,
@@ -768,7 +797,12 @@ ui_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
         containerinstance.EnvironmentVariableArgs(name="CHAINLIT_URL", value=pulumi.Output.concat("https://www.", domain, "/chat")),
         containerinstance.EnvironmentVariableArgs(name="GITEA_URL", value=gitea_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")),
-        containerinstance.EnvironmentVariableArgs(name="DEPLOYMENT_ID", value="fix-aad-secrets-v2"),
+        containerinstance.EnvironmentVariableArgs(name="DEPLOYMENT_ID", value="fix-container-logging-v1"),
+        # Enhanced debugging environment variables
+        containerinstance.EnvironmentVariableArgs(name="PYTHONUNBUFFERED", value="1"),  # Ensure Python output is not buffered
+        containerinstance.EnvironmentVariableArgs(name="PYTHONDONTWRITEBYTECODE", value="1"),  # Don't write .pyc files
+        containerinstance.EnvironmentVariableArgs(name="LOG_LEVEL", value="DEBUG"),  # Enable debug logging
+        containerinstance.EnvironmentVariableArgs(name="UVICORN_LOG_LEVEL", value="debug"),  # Enable uvicorn debug logging
     ],
     public=True,
 )
