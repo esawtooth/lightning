@@ -7,6 +7,10 @@ import json
 import logging
 import os
 import uuid
+import base64
+import smtplib
+from email.mime.text import MIMEText
+from email.message import EmailMessage
 import requests
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -40,6 +44,11 @@ class EmailConnectorDriver(IODriver):
         super().__init__(manifest, config)
         self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
         self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
+
+        self.gmail_token = os.environ.get("GMAIL_OAUTH_TOKEN")
+        self.outlook_token = os.environ.get("OUTLOOK_OAUTH_TOKEN")
+        self.icloud_username = os.environ.get("ICLOUD_USERNAME")
+        self.icloud_app_password = os.environ.get("ICLOUD_APP_PASSWORD")
         
         # Initialize service bus client
         self._sb_client = ServiceBusClient.from_connection_string(self.servicebus_conn) if self.servicebus_conn else None
@@ -122,22 +131,79 @@ class EmailConnectorDriver(IODriver):
     
     async def _send_via_gmail(self, user_id: str, email_data: Dict[str, Any]) -> bool:
         """Send email via Gmail API"""
-        # TODO: Implement Gmail API integration
-        # This would require OAuth token management
-        logging.info(f"Gmail send placeholder for user {user_id}")
-        return True  # Placeholder
+        token = self.gmail_token
+        if not token:
+            logging.error("GMAIL_OAUTH_TOKEN not configured")
+            return False
+
+        def _send() -> bool:
+            msg = MIMEText(email_data.get("body", ""))
+            msg["to"] = email_data.get("to")
+            msg["subject"] = email_data.get("subject", "")
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+            resp = requests.post(
+                "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+                headers=headers,
+                json={"raw": raw},
+            )
+            return resp.status_code in (200, 202)
+
+        return await asyncio.to_thread(_send)
     
     async def _send_via_outlook(self, user_id: str, email_data: Dict[str, Any]) -> bool:
         """Send email via Microsoft Graph API"""
-        # TODO: Implement Microsoft Graph integration
-        logging.info(f"Outlook send placeholder for user {user_id}")
-        return True  # Placeholder
+        token = self.outlook_token
+        if not token:
+            logging.error("OUTLOOK_OAUTH_TOKEN not configured")
+            return False
+
+        def _send() -> bool:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "message": {
+                    "subject": email_data.get("subject", ""),
+                    "body": {"contentType": "HTML", "content": email_data.get("body", "")},
+                    "toRecipients": [
+                        {"emailAddress": {"address": email_data.get("to")}}
+                    ],
+                }
+            }
+            resp = requests.post(
+                "https://graph.microsoft.com/v1.0/me/sendMail",
+                headers=headers,
+                json=body,
+            )
+            return resp.status_code in (200, 202)
+
+        return await asyncio.to_thread(_send)
     
     async def _send_via_icloud(self, user_id: str, email_data: Dict[str, Any]) -> bool:
         """Send email via iCloud SMTP"""
-        # TODO: Implement SMTP integration
-        logging.info(f"iCloud send placeholder for user {user_id}")
-        return True  # Placeholder
+        username = self.icloud_username
+        password = self.icloud_app_password
+        if not username or not password:
+            logging.error("iCloud credentials not configured")
+            return False
+
+        def _send() -> bool:
+            msg = EmailMessage()
+            msg["From"] = username
+            msg["To"] = email_data.get("to")
+            msg["Subject"] = email_data.get("subject", "")
+            msg.set_content(email_data.get("body", ""))
+            with smtplib.SMTP_SSL("smtp.mail.me.com", 587) as smtp:
+                smtp.login(username, password)
+                smtp.sendmail(username, [email_data.get("to")], msg.as_string())
+            return True
+
+        return await asyncio.to_thread(_send)
     
     async def _handle_email_webhook(self, provider: str, user_id: str, webhook_data: Dict[str, Any]) -> Optional[EmailEvent]:
         """Handle incoming email webhook from provider"""
@@ -219,7 +285,12 @@ class CalendarConnectorDriver(IODriver):
         super().__init__(manifest, config)
         self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
         self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
-        
+
+        self.gmail_token = os.environ.get("GMAIL_OAUTH_TOKEN")
+        self.outlook_token = os.environ.get("OUTLOOK_OAUTH_TOKEN")
+        self.icloud_username = os.environ.get("ICLOUD_USERNAME")
+        self.icloud_app_password = os.environ.get("ICLOUD_APP_PASSWORD")
+
         # Initialize service bus client
         self._sb_client = ServiceBusClient.from_connection_string(self.servicebus_conn) if self.servicebus_conn else None
     
@@ -333,21 +404,91 @@ class CalendarConnectorDriver(IODriver):
     
     async def _create_via_google_calendar(self, user_id: str, calendar_data: Dict[str, Any]) -> bool:
         """Create calendar event via Google Calendar API"""
-        # TODO: Implement Google Calendar API integration
-        logging.info(f"Google Calendar create placeholder for user {user_id}")
-        return True  # Placeholder
+        token = self.gmail_token
+        if not token:
+            logging.error("GMAIL_OAUTH_TOKEN not configured")
+            return False
+
+        def _create() -> bool:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "summary": calendar_data.get("title"),
+                "description": calendar_data.get("description"),
+                "start": {"dateTime": calendar_data.get("start_time")},
+                "end": {"dateTime": calendar_data.get("end_time")},
+            }
+            resp = requests.post(
+                "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+                headers=headers,
+                json=body,
+            )
+            return resp.status_code in (200, 201)
+
+        return await asyncio.to_thread(_create)
     
     async def _create_via_outlook_calendar(self, user_id: str, calendar_data: Dict[str, Any]) -> bool:
         """Create calendar event via Microsoft Graph API"""
-        # TODO: Implement Microsoft Graph integration
-        logging.info(f"Outlook Calendar create placeholder for user {user_id}")
-        return True  # Placeholder
+        token = self.outlook_token
+        if not token:
+            logging.error("OUTLOOK_OAUTH_TOKEN not configured")
+            return False
+
+        def _create() -> bool:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "subject": calendar_data.get("title"),
+                "body": {"contentType": "HTML", "content": calendar_data.get("description", "")},
+                "start": {"dateTime": calendar_data.get("start_time")},
+                "end": {"dateTime": calendar_data.get("end_time")},
+            }
+            resp = requests.post(
+                "https://graph.microsoft.com/v1.0/me/events",
+                headers=headers,
+                json=body,
+            )
+            return resp.status_code in (200, 201)
+
+        return await asyncio.to_thread(_create)
     
     async def _create_via_icloud_calendar(self, user_id: str, calendar_data: Dict[str, Any]) -> bool:
         """Create calendar event via iCloud CalDAV"""
-        # TODO: Implement CalDAV integration
-        logging.info(f"iCloud Calendar create placeholder for user {user_id}")
-        return True  # Placeholder
+        username = self.icloud_username
+        password = self.icloud_app_password
+        if not username or not password:
+            logging.error("iCloud credentials not configured")
+            return False
+
+        def _create() -> bool:
+            event_uid = str(uuid.uuid4())
+            ics = (
+                "BEGIN:VCALENDAR\n"
+                "VERSION:2.0\n"
+                "BEGIN:VEVENT\n"
+                f"UID:{event_uid}\n"
+                f"DTSTAMP:{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}\n"
+                f"DTSTART:{calendar_data.get('start_time')}\n"
+                f"DTEND:{calendar_data.get('end_time')}\n"
+                f"SUMMARY:{calendar_data.get('title')}\n"
+                f"DESCRIPTION:{calendar_data.get('description','')}\n"
+                "END:VEVENT\n"
+                "END:VCALENDAR"
+            )
+            headers = {"Content-Type": "text/calendar"}
+            resp = requests.post(
+                "https://caldav.icloud.com/",
+                data=ics,
+                headers=headers,
+                auth=(username, password),
+            )
+            return resp.status_code in (200, 201, 204)
+
+        return await asyncio.to_thread(_create)
     
     async def _handle_calendar_webhook(self, provider: str, user_id: str, webhook_data: Dict[str, Any]) -> Optional[CalendarEvent]:
         """Handle incoming calendar webhook from provider"""
