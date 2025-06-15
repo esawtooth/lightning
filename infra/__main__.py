@@ -454,6 +454,7 @@ def aci_group(
     port: int,
     env: list[containerinstance.EnvironmentVariableArgs],
     volumes=None,
+    cmd: list[str] | None = None,
     cpu: float = 1,
     mem: float = 1.5,
     public: bool = False,
@@ -513,36 +514,40 @@ def aci_group(
                     )
                 ),
                 environment_variables=env,
+                command=cmd,
                 volume_mounts=[
                     containerinstance.VolumeMountArgs(
                         name=v.name, mount_path="/mnt/" + v.name
                     )
                     for v in volumes or []
                 ],
-                # Enhanced logging configuration
-                # Temporarily disable health probes to allow container startup debugging
-                # liveness_probe=containerinstance.ContainerProbeArgs(
-                #     http_get=containerinstance.ContainerHttpGetArgs(
-                #         path="/health" if name == "chatui" else "/",
-                #         port=port,
-                #         scheme=containerinstance.Scheme.HTTP,
-                #     ),
-                #     initial_delay_seconds=30,
-                #     period_seconds=10,
-                #     failure_threshold=3,
-                #     timeout_seconds=5,
-                # ) if name in ["chatui", "voicews"] else None,
-                # readiness_probe=containerinstance.ContainerProbeArgs(
-                #     http_get=containerinstance.ContainerHttpGetArgs(
-                #         path="/health" if name == "chatui" else "/",
-                #         port=port,
-                #         scheme=containerinstance.Scheme.HTTP,
-                #     ),
-                #     initial_delay_seconds=10,
-                #     period_seconds=5,
-                #     failure_threshold=3,
-                #     timeout_seconds=5,
-                # ) if name in ["chatui", "voicews"] else None,
+                # Health probes ensure the container is restarted when unresponsive
+                liveness_probe=containerinstance.ContainerProbeArgs(
+                    http_get=containerinstance.ContainerHttpGetArgs(
+                        path="/health" if name in ["chatui", "contexthub"] else "/",
+                        port=port,
+                        scheme=containerinstance.Scheme.HTTP,
+                    ),
+                    initial_delay_seconds=30,
+                    period_seconds=10,
+                    failure_threshold=3,
+                    timeout_seconds=5,
+                )
+                if name in ["chatui", "voicews", "contexthub"]
+                else None,
+                readiness_probe=containerinstance.ContainerProbeArgs(
+                    http_get=containerinstance.ContainerHttpGetArgs(
+                        path="/health" if name in ["chatui", "contexthub"] else "/",
+                        port=port,
+                        scheme=containerinstance.Scheme.HTTP,
+                    ),
+                    initial_delay_seconds=10,
+                    period_seconds=5,
+                    failure_threshold=3,
+                    timeout_seconds=5,
+                )
+                if name in ["chatui", "voicews", "contexthub"]
+                else None,
             )
         ],
         volumes=volumes,
@@ -643,6 +648,7 @@ hub_cg = aci_group(
         # Configure context hub port
         containerinstance.EnvironmentVariableArgs(name="PORT", value="3000"),
     ],
+    cmd=["context-hub"],
     public=True,  # Make it publicly accessible
 )
 # Internal hub URL for communication between services in the same VNet
@@ -912,7 +918,7 @@ voice_og, voice_origin = origin_group(
 )
 hub_og, hub_origin = origin_group(
     "hub",
-    "/",
+    "/health",
     hub_cg.ip_address.apply(lambda ip: ip.fqdn),
     3000,  # Context hub listens on port 3000
     https=False,
