@@ -1,0 +1,2 @@
+[console_scripts]
+vextir = vextir_cli.main:cli
