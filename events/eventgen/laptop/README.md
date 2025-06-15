@@ -9,3 +9,10 @@ Possible data sources include:
 - Network status
 
 Scripts should format the data as events so they can be queued to the backend.
+
+The `linux` directory now includes `system_status.py` which emits battery, CPU,
+memory and network events. Run it with:
+
+```bash
+python linux/system_status.py
+```

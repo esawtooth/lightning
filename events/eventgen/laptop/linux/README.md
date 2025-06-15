@@ -1,9 +1,19 @@
 # Linux
 
-This directory will hold tools for collecting laptop information on Linux distributions, e.g.:
+Utilities here gather laptop information on Linux distributions. Metrics are
+formatted as `Event` objects so they can be queued to the backend.
 
-- Battery level from `/sys/class/power_supply`.
-- Current network status via `nmcli` or `ip`.
-- CPU load and memory consumption from `/proc`.
+`system_status.py` collects several basic statistics using standard system
+interfaces:
 
-Collected metrics should be packaged as `Event` objects for dispatching.
+- **laptop.battery** – percentage and charging status from
+  `/sys/class/power_supply` when available.
+- **laptop.cpu** – load average from `os.getloadavg()`.
+- **laptop.memory** – total and available memory parsed from `/proc/meminfo`.
+- **laptop.network** – hostname and IP address.
+
+Run the script directly to print each event as a JSON object:
+
+```bash
+python system_status.py
+```
