@@ -264,18 +264,6 @@ python test_driver_migration.py
 
 This will execute comprehensive tests of all migrated drivers and provide a detailed report of the migration status.
 
-## Backup and Recovery
-
-All removed Azure Functions have been safely backed up to `azure-function-backup/` directory. If any function needs to be restored:
-
-```bash
-# List available backups
-ls azure-function-backup/
-
-# Restore a specific function (example)
-cp -r azure-function-backup/ChatResponder azure-function/
-```
-
 ## System Benefits After Cleanup
 
 ### 1. **Dramatically Reduced Complexity**
