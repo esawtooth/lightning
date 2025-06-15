@@ -128,12 +128,18 @@ def main(msg: func.ServiceBusMessage) -> None:
 
     try:
         # First attempt with function calling
-        response = openai.ChatCompletion.create(
-            messages=messages,
-            model=OPENAI_MODEL,
-            tools=[get_context_search_tool()],
-            tool_choice="auto"
-        )
+        try:
+            response = openai.ChatCompletion.create(
+                messages=messages,
+                model=OPENAI_MODEL,
+                tools=[get_context_search_tool()],
+                tool_choice="auto",
+            )
+        except TypeError:
+            response = openai.ChatCompletion.create(
+                messages=messages,
+                model=OPENAI_MODEL,
+            )
         
         message = response["choices"][0]["message"]
         usage = response.get("usage", {})
@@ -161,10 +167,18 @@ def main(msg: func.ServiceBusMessage) -> None:
                 })
             
             # Get final response with function results
-            final_response = openai.ChatCompletion.create(
-                messages=messages,
-                model=OPENAI_MODEL,
-            )
+            try:
+                final_response = openai.ChatCompletion.create(
+                    messages=messages,
+                    model=OPENAI_MODEL,
+                    tools=[get_context_search_tool()],
+                    tool_choice="auto",
+                )
+            except TypeError:
+                final_response = openai.ChatCompletion.create(
+                    messages=messages,
+                    model=OPENAI_MODEL,
+                )
             
             reply = final_response["choices"][0]["message"]["content"]
             usage.update(final_response.get("usage", {}))

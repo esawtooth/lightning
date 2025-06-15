@@ -88,9 +88,9 @@ build_images() {
         --push .
 
     docker buildx build \
-        --file ./chat_client/Dockerfile \
-        --tag vextiracrdev.azurecr.io/chainlit-client:${GITHUB_SHA} \
-        --tag vextiracrdev.azurecr.io/chainlit-client:latest \
+        --file ./ui/integrated_app/Dockerfile \
+        --tag vextiracrdev.azurecr.io/integrated-app:${GITHUB_SHA} \
+        --tag vextiracrdev.azurecr.io/integrated-app:latest \
         --push .
 
     docker buildx build \
@@ -117,7 +117,7 @@ deploy_stack() {
     pulumi config set twilioAccountSid "$TWILIO_ACCOUNT_SID" --secret
     pulumi config set twilioAuthToken "$TWILIO_AUTH_TOKEN" --secret
     pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${GITHUB_SHA}"
-    pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${GITHUB_SHA}"
+    pulumi config set uiImage "vextiracrdev.azurecr.io/integrated-app:${GITHUB_SHA}"
     pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${GITHUB_SHA}"
     pulumi config set domain "vextir.com"
     pulumi refresh --yes

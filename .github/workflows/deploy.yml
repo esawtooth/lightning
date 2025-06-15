@@ -27,9 +27,9 @@ jobs:
           - image_tag: worker-task
             context: .
             file: ./agents/Dockerfile.worker
-          - image_tag: chainlit-client
+          - image_tag: integrated-app
             context: .
-            file: ./ui/chat_client/Dockerfile
+            file: ./ui/integrated_app/Dockerfile
           - image_tag: voice-ws
             context: ./agents/voice-agent/websocket-server
             file: ./agents/voice-agent/websocket-server/Dockerfile
@@ -175,7 +175,7 @@ jobs:
           
           # Update to real images
           pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${{ github.sha }}"
-          pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }}"
+          pulumi config set uiImage "vextiracrdev.azurecr.io/integrated-app:${{ github.sha }}"
           pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${{ github.sha }}"
           
           # Deploy with real images

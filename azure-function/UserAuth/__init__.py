@@ -428,16 +428,18 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         except ValueError:
             data = {}
         return _approve_user(data)
+
+    # GET /auth/verify
+    if action == "verify" and req.method == "GET":
+        token = req.params.get("token") if hasattr(req, "params") else None
+        return _verify(token)
     
-    # Legacy register endpoint (now redirects to request)
+    # Legacy register endpoint - still create user and send verification email
     if action == "register" and req.method == "POST":
-        return func.HttpResponse(
-            json.dumps({
-                "message": "Registration has moved to AAD authentication. Please sign in with Microsoft.",
-                "redirect": "/login"
-            }),
-            status_code=302,
-            mimetype="application/json"
-        )
+        try:
+            data = req.get_json()
+        except ValueError:
+            data = {}
+        return _register(data)
     
     return func.HttpResponse("not found", status_code=404)

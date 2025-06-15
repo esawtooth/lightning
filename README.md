@@ -144,7 +144,7 @@ cd infra
 pip install -r requirements.txt
 pulumi config set openaiApiKey <key> --secret
 pulumi config set jwtSigningKey <secret> --secret
-pulumi config set uiImage vextiracr.azurecr.io/chainlit-client:<tag>
+pulumi config set uiImage vextiracr.azurecr.io/integrated-app:<tag>
 pulumi config set workerImage vextiracr.azurecr.io/worker-task:<tag>
 pulumi config set domain vextir.com
 pulumi up
