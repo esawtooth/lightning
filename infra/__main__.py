@@ -59,8 +59,6 @@ aad_tenant_id     = cfg.require("aadTenantId")
 twilio_account_sid= cfg.require_secret("twilioAccountSid")
 twilio_auth_token = cfg.require_secret("twilioAuthToken")
 
-postgres_user     = cfg.get("postgresUser") or "gitea"
-postgres_db       = cfg.get("postgresDb")   or "gitea"
 
 dns_suffix = cfg.get("dnsSuffix") or RandomString(
     "dns-suffix",
@@ -129,23 +127,6 @@ authorization.RoleAssignment(
 )
 
 
-postgres_password_res = RandomPassword("pg", length=16, special=True)
-pg_secret = keyvault.Secret(
-    "postgres-password-secret",
-    resource_group_name=rg.name,
-    vault_name=vault.name,
-    secret_name="postgresPassword",
-    properties=keyvault.SecretPropertiesArgs(value=postgres_password_res.result),
-    opts=pulumi.ResourceOptions(
-        retain_on_delete=True,
-        delete_before_replace=False,
-    ),
-)
-
-#
-# For ACI env‑vars we need a plain value (using RandomPassword output directly);
-# Key Vault still keeps the secret for humans, but the container env uses this:
-postgres_password = postgres_password_res.result
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. NETWORKING
@@ -315,29 +296,6 @@ func_sa = storage.StorageAccount(
     sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
     location=rg.location,
 )
-repo_sa = storage.StorageAccount(
-    "repossa",
-    resource_group_name=rg.name,
-    kind=storage.Kind.STORAGE_V2,
-    sku=storage.SkuArgs(name=storage.SkuName.STANDARD_LRS),
-    location=rg.location,
-)
-
-gitea_share = storage.FileShare(
-    "gitea-share",
-    account_name=repo_sa.name,
-    resource_group_name=rg.name,
-    share_name="gitea",
-)
-pg_share = storage.FileShare(
-    "pg-share",
-    account_name=repo_sa.name,
-    resource_group_name=rg.name,
-    share_name="postgres",
-)
-repo_key = storage.list_storage_account_keys_output(
-    resource_group_name=rg.name, account_name=repo_sa.name
-).keys[0].value
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. ACR
@@ -554,55 +512,6 @@ def aci_group(
         ),
     )
 
-postgres_cg = aci_group(
-    "postgres",
-    "postgres:15-alpine",
-    5432,
-    [
-        containerinstance.EnvironmentVariableArgs(name="POSTGRES_USER", value=postgres_user),
-        containerinstance.EnvironmentVariableArgs(name="POSTGRES_PASSWORD", value=postgres_password),
-        containerinstance.EnvironmentVariableArgs(name="POSTGRES_DB", value=postgres_db),
-    ],
-    volumes=[
-        containerinstance.VolumeArgs(
-            name="pgdata",
-            azure_file=containerinstance.AzureFileVolumeArgs(
-                share_name=pg_share.name,
-                storage_account_name=repo_sa.name,
-                storage_account_key=repo_key,
-            ),
-        )
-    ],
-)
-
-gitea_cg = aci_group(
-    "gitea",
-    "gitea/gitea:1.21-rootless",
-    3000,
-    [
-        containerinstance.EnvironmentVariableArgs(name="GITEA__database__DB_TYPE", value="postgres"),
-        containerinstance.EnvironmentVariableArgs(
-            name="GITEA__database__HOST",
-            value=postgres_cg.ip_address.apply(lambda ip: f"{ip.ip}:5432"),
-        ),
-        containerinstance.EnvironmentVariableArgs(name="GITEA__database__NAME", value=postgres_db),
-        containerinstance.EnvironmentVariableArgs(name="GITEA__database__USER", value=postgres_user),
-        containerinstance.EnvironmentVariableArgs(name="GITEA__database__PASSWD", value=postgres_password),
-        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
-        containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_password.value),
-        containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
-    ],
-    volumes=[
-        containerinstance.VolumeArgs(
-            name="giteadata",
-            azure_file=containerinstance.AzureFileVolumeArgs(
-                share_name=gitea_share.name,
-                storage_account_name=repo_sa.name,
-                storage_account_key=repo_key,
-            ),
-        ),
-    ],
-)
 
 # UI container moved after function app definition
 
@@ -806,7 +715,6 @@ ui_cg = aci_group(
         containerinstance.EnvironmentVariableArgs(name="SESSION_SECRET", value=aad_password.value),
         containerinstance.EnvironmentVariableArgs(name="APPINSIGHTS_INSTRUMENTATIONKEY", value=app_insights.instrumentation_key),
         containerinstance.EnvironmentVariableArgs(name="CHAINLIT_URL", value=pulumi.Output.concat("https://www.", domain, "/chat")),
-        containerinstance.EnvironmentVariableArgs(name="GITEA_URL", value=gitea_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")),
         containerinstance.EnvironmentVariableArgs(name="DEPLOYMENT_ID", value="fix-container-logging-v1"),
         # Enhanced debugging environment variables
         containerinstance.EnvironmentVariableArgs(name="PYTHONUNBUFFERED", value="1"),  # Ensure Python output is not buffered

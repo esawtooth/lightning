@@ -41,7 +41,6 @@ SESSION_SECRET=your-session-secret
 CHAINLIT_URL=https://localhost/chat  # For custom gateway URL
 EVENT_API_URL=https://your-function-app.azurewebsites.net/api/events
 AUTH_TOKEN=your-api-auth-token
-GITEA_URL=https://your-gitea-instance
 ```
 
 ## Local Development
@@ -120,7 +119,6 @@ chat_client/
 - `POST /chat/notify` - External message notifications
 - `GET /chat/health` - Health check
 - `GET /chat/dashboard` - Analytics dashboard
-- `GET /repo` - Redirect to the user's Gitea repository
 
 ## Security Features
 
