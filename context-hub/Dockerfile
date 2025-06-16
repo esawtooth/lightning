@@ -1,6 +1,6 @@
 FROM --platform=linux/amd64 rust:1.76-slim AS build
 WORKDIR /app
-COPY context-hub/ ./
+COPY . ./
 RUN rustup target add x86_64-unknown-linux-musl \
     && cargo build --release --target x86_64-unknown-linux-musl
 
