@@ -96,7 +96,7 @@ async def root(request: Request):
 @app.get("/login")
 async def login(request: Request):
     """Redirect user to Azure login."""
-    redirect_uri = request.url_for("auth_callback")
+    redirect_uri = _resolve_callback_url(request)
     auth_url = auth_app.get_authorization_request_url(SCOPES, redirect_uri=redirect_uri)
     return RedirectResponse(auth_url)
 
@@ -108,7 +108,7 @@ async def auth_callback(request: Request):
     if not code:
         raise HTTPException(status_code=400, detail="Missing code")
     
-    redirect_uri = request.url_for("auth_callback")
+    redirect_uri = _resolve_callback_url(request)
     result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
     token = result.get("access_token")
     if not token:
@@ -171,6 +171,18 @@ def _resolve_ui_url(request: Request) -> str:
     scheme = forwarded or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.hostname
     return f"{scheme}://{host}/app"
+
+
+def _resolve_callback_url(request: Request) -> str:
+    """Return external URL for the auth callback endpoint."""
+    url = request.url_for("auth_callback")
+    forwarded = request.headers.get("x-forwarded-proto")
+    if forwarded:
+        url = url.replace(scheme=forwarded)
+    host = request.headers.get("x-forwarded-host")
+    if host:
+        url = url.replace(netloc=host)
+    return str(url)
 
 
 @app.get("/chat")
