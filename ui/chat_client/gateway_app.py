@@ -3,7 +3,7 @@ from starlette.responses import RedirectResponse
 
 from auth_app import app as auth_app
 import sys, os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'integrated_app'))
+sys.path.append(os.path.join(os.path.dirname(__file__), 'integrated_app'))
 from app import app as integrated_ui_app
 
 app = FastAPI(title="Vextir Chat Gateway")
