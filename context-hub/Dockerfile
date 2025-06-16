@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 rust:1.76-slim AS build
+FROM --platform=linux/amd64 rust:1.78-slim AS build
 WORKDIR /app
 COPY . ./
 RUN rustup target add x86_64-unknown-linux-musl \
