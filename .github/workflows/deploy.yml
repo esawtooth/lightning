@@ -38,8 +38,25 @@ jobs:
       - name: Run flake8
         run: flake8 agents
 
+  check-acr:
+    runs-on: ubuntu-latest
+    outputs:
+      acr_exists: ${{ steps.detect.outputs.acr_exists }}
+    steps:
+      - name: Log in to Azure
+        run: |
+          az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+      - id: detect
+        run: |
+          if az acr show --name vextiracrdev >/dev/null 2>&1; then
+            echo "acr_exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "acr_exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Build Docker images in parallel - no dependency on infrastructure
   build-images:
+    needs: [check-acr, deploy-baseline]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -84,9 +101,11 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-  # Deploy infrastructure - can start immediately, just needs to wait for images at the end
-  deploy-infrastructure:
+  # Deploy placeholder infrastructure if ACR does not exist
+  deploy-baseline:
+    needs: check-acr
     runs-on: ubuntu-latest
+    if: needs.check-acr.outputs.acr_exists == 'false'
     outputs:
       pulumi-configured: ${{ steps.setup.outputs.configured }}
     steps:
@@ -159,7 +178,7 @@ jobs:
   # Final deployment with actual images
   deploy-with-images:
     runs-on: ubuntu-latest
-    needs: [build-images, deploy-infrastructure]
+    needs: [build-images, deploy-baseline]
     steps:
       - uses: actions/checkout@v4
       
