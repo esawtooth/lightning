@@ -40,7 +40,8 @@ auth_app = msal.ConfidentialClientApplication(
     client_credential=AAD_CLIENT_SECRET,
 )
 
-SCOPES = ["User.Read"]
+# Include openid so we get an id_token for verification
+SCOPES = ["User.Read", "openid", "profile"]
 
 app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -110,7 +111,10 @@ async def auth_callback(request: Request):
     
     redirect_uri = _resolve_callback_url(request)
     result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
-    token = result.get("access_token")
+    # Use the ID token for authentication. This token has our client ID as
+    # the audience and can be validated locally. If it's missing, fall back to
+    # the access token for backwards compatibility.
+    token = result.get("id_token") or result.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Authentication failed")
     
