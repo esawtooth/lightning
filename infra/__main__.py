@@ -358,12 +358,12 @@ acr_creds = containerregistry.list_registry_credentials_output(
 if hub_image_cfg.startswith(f"vextiracr{stack_suffix}.azurecr.io"):
     hub_image = docker.Image(
         "context-hub-image",
-        build=docker.DockerBuild(
+        build=docker.DockerBuildArgs(
             context=str(Path(__file__).parent.parent / "context-hub"),
             platform="linux/amd64",
         ),
         image_name=hub_image_cfg,
-        registry=docker.ImageRegistry(
+        registry=docker.RegistryArgs(
             server=acr.login_server,
             username=acr_creds.username,
             password=acr_creds.passwords[0].value,
