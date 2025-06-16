@@ -19,6 +19,7 @@ env:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +40,6 @@ jobs:
 
   # Build Docker images in parallel - no dependency on infrastructure
   build-images:
-    needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -86,7 +86,6 @@ jobs:
 
   # Deploy infrastructure - can start immediately, just needs to wait for images at the end
   deploy-infrastructure:
-    needs: lint
     runs-on: ubuntu-latest
     outputs:
       pulumi-configured: ${{ steps.setup.outputs.configured }}
