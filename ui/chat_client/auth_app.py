@@ -85,14 +85,9 @@ async def root(request: Request):
             user_id = verify_token(token)
             user_status = await check_user_approval(user_id)
             if user_status.get("approved"):
-                return RedirectResponse(url="/chat")
+                return RedirectResponse(url="/app")
             else:
-                # User authenticated but not approved
-                return templates.TemplateResponse("login.html", {
-                    "request": request, 
-                    "show_pending": True,
-                    "user_status": user_status.get("status", "pending")
-                })
+                return RedirectResponse(url="/waitlist")
         except Exception:
             pass
     return templates.TemplateResponse("login.html", {"request": request})
@@ -132,8 +127,8 @@ async def auth_callback(request: Request):
         user_status = await check_user_approval(user_id)
         
         if user_status.get("approved"):
-            # User is approved, set auth cookie and redirect to chat
-            resp = RedirectResponse(url="/chat")
+            # User is approved, set auth cookie and redirect to integrated UI
+            resp = RedirectResponse(url="/app")
             resp.set_cookie(
                 key="auth_token",
                 value=token,
@@ -148,8 +143,8 @@ async def auth_callback(request: Request):
             if user_status.get("status") == "not_found" and user_email:
                 await request_access(user_id, user_email, user_name)
             
-            # Redirect to pending page
-            return RedirectResponse(url="/?status=pending")
+            # Redirect to waitlist page
+            return RedirectResponse(url="/waitlist")
             
     except Exception as e:
         logging.error(f"Auth callback error: {e}")
@@ -164,11 +159,18 @@ async def logout(request: Request):
     return resp
 
 
-def _resolve_chainlit_url(request: Request) -> str:
+@app.get("/waitlist", response_class=HTMLResponse)
+async def waitlist_page(request: Request):
+    """Inform user that their access request is pending."""
+    return templates.TemplateResponse("waitlist.html", {"request": request})
+
+
+def _resolve_ui_url(request: Request) -> str:
+    """Return external URL for the integrated UI."""
     forwarded = request.headers.get("x-forwarded-proto")
     scheme = forwarded or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.hostname
-    return f"{scheme}://{host}/chat"
+    return f"{scheme}://{host}/app"
 
 
 @app.get("/chat")
@@ -180,10 +182,10 @@ async def chat_redirect(request: Request):
         user_id = verify_token(token)
         user_status = await check_user_approval(user_id)
         if not user_status.get("approved"):
-            return RedirectResponse(url="/?status=pending")
+            return RedirectResponse(url="/waitlist")
     except Exception:
         return RedirectResponse(url="/login")
-    return RedirectResponse(_resolve_chainlit_url(request))
+    return RedirectResponse(_resolve_ui_url(request))
 
 
 @app.post("/request-access")
