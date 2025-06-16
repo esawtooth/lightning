@@ -30,6 +30,7 @@ AAD_CLIENT_SECRET = (
 )
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "change-me")
 AUTH_API_URL = os.environ.get("AUTH_API_URL", "/api")
+AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 
 if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):
     logging.warning("AAD configuration incomplete")
@@ -96,7 +97,10 @@ async def root(request: Request):
 
 @app.get("/login")
 async def login(request: Request):
-    """Redirect user to Azure login."""
+    """Redirect user to Azure login or handle callback."""
+    if "code" in request.query_params:
+        return await auth_callback(request)
+
     redirect_uri = _resolve_callback_url(request)
     auth_url = auth_app.get_authorization_request_url(SCOPES, redirect_uri=redirect_uri)
     return RedirectResponse(auth_url)
@@ -171,6 +175,9 @@ async def waitlist_page(request: Request):
 
 def _resolve_ui_url(request: Request) -> str:
     """Return external URL for the integrated UI."""
+    if AUTH_GATEWAY_URL:
+        base = AUTH_GATEWAY_URL.rstrip("/")
+        return f"{base}/app"
     forwarded = request.headers.get("x-forwarded-proto")
     scheme = forwarded or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.hostname
@@ -179,6 +186,9 @@ def _resolve_ui_url(request: Request) -> str:
 
 def _resolve_callback_url(request: Request) -> str:
     """Return external URL for the auth callback endpoint."""
+    if AUTH_GATEWAY_URL:
+        base = AUTH_GATEWAY_URL.rstrip("/")
+        return f"{base}/callback"
     url = request.url_for("auth_callback")
     forwarded = request.headers.get("x-forwarded-proto")
     if forwarded:
