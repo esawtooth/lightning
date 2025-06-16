@@ -21,33 +21,34 @@ class VextirClientError(Exception):
 
 class VextirClient:
     """HTTP client for Vextir OS API"""
-    
+
     def __init__(self, config: Config):
         self.config = config
         self.session: Optional[ClientSession] = None
         self._user_id: Optional[str] = None
-    
+
     async def _get_session(self) -> ClientSession:
         """Get or create HTTP session"""
         if self.session is None or self.session.closed:
             timeout = ClientTimeout(total=30)
             self.session = ClientSession(
                 timeout=timeout,
-                headers=self.config.get_auth_headers()
+                headers=self.config.get_auth_headers(),
+                trust_env=True,
             )
         return self.session
-    
+
     async def close(self):
         """Close HTTP session"""
         if self.session and not self.session.closed:
             await self.session.close()
-    
+
     async def _request(self, method: str, path: str, *, hub: bool = False, **kwargs) -> Dict[str, Any]:
         """Make HTTP request to Vextir API"""
         session = await self._get_session()
         base = self.config.get_context_hub_endpoint() if hub else self.config.get_endpoint()
         url = f"{base}{path}"
-        
+
         try:
             async with session.request(method, url, **kwargs) as response:
                 if response.status == 401:
@@ -59,15 +60,15 @@ class VextirClient:
                 elif response.status >= 400:
                     error_text = await response.text()
                     raise VextirClientError(f"API error {response.status}: {error_text}")
-                
+
                 if response.content_type == 'application/json':
                     return await response.json()
                 else:
                     return {"data": await response.text()}
-                    
+
         except aiohttp.ClientError as e:
             raise VextirClientError(f"Network error: {e}")
-    
+
     async def get_current_user_id(self) -> str:
         """Get current user ID"""
         if self._user_id is None:
@@ -84,14 +85,14 @@ class VextirClient:
             except (subprocess.CalledProcessError, FileNotFoundError):
                 # Fallback to a generated ID
                 self._user_id = f"cli-user-{uuid.uuid4().hex[:8]}"
-        
+
         return self._user_id
-    
+
     # Event Management
     async def emit_event(self, event_data: Dict[str, Any]) -> Dict[str, Any]:
         """Emit an event to the event bus"""
         return await self._request('POST', '/api/PutEvent', json=event_data)
-    
+
     async def get_events(self, limit: int = 50, filters: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Get recent events"""
         params = {'limit': limit}
@@ -106,7 +107,7 @@ class VextirClient:
         except VextirClientError:
             # Fallback to empty list if the API is unavailable
             return []
-    
+
     async def stream_events(self, filters: Optional[Dict[str, Any]] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """Stream events in real-time"""
         params = filters or {}
@@ -130,7 +131,7 @@ class VextirClient:
                 for event in events:
                     yield event
                 await asyncio.sleep(5)
-    
+
     # Driver Management
     async def get_drivers(self) -> List[Dict[str, Any]]:
         """Get list of registered drivers"""
@@ -152,7 +153,7 @@ class VextirClient:
                     'last_activity': datetime.utcnow().isoformat()
                 }
             ]
-    
+
     async def get_driver_status(self, driver_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed driver status"""
         try:
@@ -163,7 +164,7 @@ class VextirClient:
                 if driver['id'] == driver_id:
                     return driver
             return None
-    
+
     async def start_driver(self, driver_id: str, config: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Start a driver"""
         try:
@@ -171,14 +172,14 @@ class VextirClient:
             return await self._request('POST', f'/api/drivers/{driver_id}/start', json=payload)
         except VextirClientError:
             return {'status': 'running', 'driver_id': driver_id}
-    
+
     async def stop_driver(self, driver_id: str) -> Dict[str, Any]:
         """Stop a driver"""
         try:
             return await self._request('POST', f'/api/drivers/{driver_id}/stop')
         except VextirClientError:
             return {'status': 'stopped', 'driver_id': driver_id}
-    
+
     # Model Management
     async def get_models(self) -> List[Dict[str, Any]]:
         """Get list of available models"""
@@ -200,7 +201,7 @@ class VextirClient:
                     'enabled': True
                 }
             ]
-    
+
     async def get_model_info(self, model_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed model information"""
         try:
@@ -211,7 +212,7 @@ class VextirClient:
                 if model['id'] == model_id:
                     return model
             return None
-    
+
     # Tool Management
     async def get_tools(self) -> List[Dict[str, Any]]:
         """Get list of available tools"""
@@ -231,7 +232,7 @@ class VextirClient:
                     'enabled': True
                 }
             ]
-    
+
     async def get_tool_info(self, tool_id: str) -> Optional[Dict[str, Any]]:
         """Get detailed tool information"""
         try:
@@ -242,7 +243,7 @@ class VextirClient:
                 if tool['id'] == tool_id:
                     return tool
             return None
-    
+
     # Context Hub Operations
     async def context_read(self, doc_id: str) -> Dict[str, Any]:
         """Read a document from the Context Hub"""
@@ -255,7 +256,7 @@ class VextirClient:
                 'metadata': {'last_updated': datetime.utcnow().isoformat()},
                 'permissions': ['read', 'write']
             }
-    
+
     async def context_write(self, path: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Write a new document to the Context Hub"""
         payload = {
@@ -272,7 +273,7 @@ class VextirClient:
                 'status': 'success',
                 'timestamp': datetime.utcnow().isoformat()
             }
-    
+
     async def context_query(self, query: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Query context hub with SQL"""
         params = {'q': query, 'limit': limit}
@@ -281,7 +282,7 @@ class VextirClient:
             return result.get('results', []) if isinstance(result, dict) else result
         except VextirClientError:
             return []
-    
+
     # Instruction Management
     async def get_instructions(self) -> List[Dict[str, Any]]:
         """Get list of user instructions"""
@@ -292,7 +293,7 @@ class VextirClient:
             return result.get('instructions', [])
         except VextirClientError:
             return []
-    
+
     async def create_instruction(self, instruction_data: Dict[str, Any]) -> Dict[str, Any]:
         """Create a new instruction"""
         try:
@@ -304,7 +305,7 @@ class VextirClient:
                 'status': 'created',
                 'timestamp': datetime.utcnow().isoformat()
             }
-    
+
     async def execute_instruction(self, instruction_id: str) -> Dict[str, Any]:
         """Execute an instruction"""
         try:
@@ -316,7 +317,7 @@ class VextirClient:
                 'status': 'started',
                 'timestamp': datetime.utcnow().isoformat()
             }
-    
+
     # System Management
     async def get_system_status(self) -> Dict[str, Any]:
         """Get system status and health"""
@@ -328,14 +329,14 @@ class VextirClient:
                 'uptime': 'unknown',
                 'version': 'unknown'
             }
-    
+
     async def get_system_metrics(self) -> Dict[str, Any]:
         """Get detailed system metrics"""
         try:
             return await self._request('GET', '/api/system/metrics')
         except VextirClientError:
             return {}
-    
+
     # Authentication Methods
     async def register_user(self, username: str, email: str, password: str) -> Dict[str, Any]:
         """Register a new user account"""
@@ -345,7 +346,7 @@ class VextirClient:
             'password': password
         }
         return await self._request('POST', '/api/auth/register', json=user_data)
-    
+
     async def login(self, username: str, password: str) -> Dict[str, Any]:
         """Login to Vextir OS"""
         login_data = {
@@ -353,14 +354,14 @@ class VextirClient:
             'password': password
         }
         result = await self._request('POST', '/api/auth/login', json=login_data)
-        
+
         # Store token in config for future requests
         if 'token' in result:
             self.config.set('auth.token', result['token'])
             self.config.set('auth.username', username)
-        
+
         return result
-    
+
     async def logout(self) -> Dict[str, Any]:
         """Logout from Vextir OS"""
         try:
@@ -368,22 +369,27 @@ class VextirClient:
         except VextirClientError:
             # Even if logout fails on server, clear local auth
             result = {'status': 'logged_out'}
-        
+
         # Clear local auth data
         self.config.delete('auth.token')
         self.config.delete('auth.username')
-        
+
         return result
-    
+
     async def get_current_user(self) -> Dict[str, Any]:
         """Get current user information"""
         return await self._request('GET', '/api/auth/me')
-    
+
     async def init_user_context_store(self, username: str) -> Dict[str, Any]:
         """Initialize user's Context Hub store"""
-        store_data = {
-            'username': username,
-            'store_type': 'personal',
-            'auto_create_folders': True
-        }
-        return await self._request('POST', '/init', json=store_data, hub=True)
+        # Older versions of the API expected a POST to /init which no longer
+        # exists. The current service lazily creates the user's store when the
+        # root folder is requested, so we simply fetch `/root` to trigger the
+        # creation and return the resulting store ID for convenience.
+
+        result = await self._request('GET', '/root', hub=True)
+
+        if isinstance(result, dict) and 'id' in result:
+            return {'store_id': result['id']}
+
+        return result
