@@ -1,5 +1,10 @@
 FROM python:3.11-slim
 
+# Install bash since the startup script relies on bash-specific features
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Copy the chat client code and dependencies
@@ -10,7 +15,8 @@ COPY ui/chat_client/static/ ./static/
 COPY ui/chat_client/start.sh ./start.sh
 COPY ui/chat_client/gateway_app.py ./gateway_app.py
 COPY events/ ./events/
-COPY ui/dashboard/ ./dashboard/
+# Preserve package structure so `ui.dashboard` imports work
+COPY ui/dashboard/ ./ui/dashboard/
 COPY common/ ./common/
 COPY .chainlit/ ./.chainlit/
 
