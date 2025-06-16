@@ -3,8 +3,6 @@
 from typing import Dict, List
 import subprocess
 import sys
-from . import echo_agent  # noqa: F401  # register built-in agents
-from . import conseil_agent  # noqa: F401
 
 
 class Agent:
@@ -38,3 +36,7 @@ def register(agent_cls: type) -> type:
         raise TypeError("agent_cls must inherit from Agent")
     AGENT_REGISTRY[instance.name] = instance
     return agent_cls
+
+
+from . import echo_agent  # noqa: F401  # register built-in agents
+from . import conseil_agent  # noqa: F401
