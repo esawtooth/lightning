@@ -800,11 +800,15 @@ ui_og, ui_origin = origin_group(
 )
 api_og, api_origin = origin_group(
     "api",
-    "/api/events",
+    "/api/health",
     func_app.default_host_name,
     443,
     https=True,
-    host_header=f"api.{domain}",
+    # Use the function app's default hostname for the host header so
+    # requests succeed even if the custom domain is not bound yet. Azure
+    # provides a managed certificate for *.azurewebsites.net so the
+    # Front Door to Function App connection is valid over HTTPS.
+    host_header=func_app.default_host_name,
 )
 voice_og, voice_origin = origin_group(
     "voice",
@@ -859,7 +863,14 @@ def afd_route(name, pattern, og, origin, cd, fp):
         opts=pulumi.ResourceOptions(depends_on=[og, origin]),
     )
 afd_route("ui",    "/*",           ui_og, ui_origin,   ui_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
-afd_route("api",   "/api/*",       api_og, api_origin,  api_cd,  cdn.ForwardingProtocol.HTTP_ONLY)
+afd_route(
+    "api",
+    "/api/*",
+    api_og,
+    api_origin,
+    api_cd,
+    cdn.ForwardingProtocol.HTTPS_ONLY,
+)
 afd_route("voice", "/voice-ws/*",  voice_og, voice_origin, voice_cd, cdn.ForwardingProtocol.HTTP_ONLY)
 afd_route("hub",   "/*",           hub_og, hub_origin,   hub_cd,   cdn.ForwardingProtocol.HTTP_ONLY)
 
@@ -881,6 +892,16 @@ def cname(label):
     )
 for lbl in ["www", "api", "voice-ws", "hub"]:
     cname(lbl)
+
+api_asuid = dns.RecordSet(
+    "api-asuid",
+    resource_group_name=rg.name,
+    zone_name=dns_zone.name,
+    relative_record_set_name="asuid.api",
+    record_type="TXT",
+    ttl=3600,
+    txt_records=[dns.TxtRecordArgs(value=[func_app.custom_domain_verification_id])],
+)
 def afd_txt(label, cd):
     dns.RecordSet(
         f"{label}-afd-txt",
@@ -895,6 +916,20 @@ afd_txt("www",      ui_cd)
 afd_txt("api",      api_cd)
 afd_txt("voice-ws", voice_cd)
 afd_txt("hub",      hub_cd)
+
+web.WebAppHostNameBinding(
+    "api-hostname",
+    resource_group_name=rg.name,
+    name=func_app.name,
+    site_name=func_app.name,
+    host_name=pulumi.Output.concat("api.", domain),
+    azure_resource_name=func_app.name,
+    azure_resource_type=web.AzureResourceType.WEBSITE,
+    custom_host_name_dns_record_type=web.CustomHostNameDnsRecordType.C_NAME,
+    host_name_type=web.HostNameType.VERIFIED,
+    ssl_state=web.SslState.DISABLED,
+    opts=pulumi.ResourceOptions(depends_on=[api_asuid]),
+)
 
 pulumi.export("frontdoorHost", fd_ep.host_name)
 pulumi.export("uiUrl",        pulumi.Output.concat("https://www.",   domain))
