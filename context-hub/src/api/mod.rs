@@ -1191,12 +1191,13 @@ mod tests {
         assert_eq!(resp.status(), StatusCode::OK);
         let body = body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
         let arr: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
-        assert_eq!(arr.len(), 1); // index guide present
+        assert_eq!(arr.len(), 2); // index guide and file present
         let types: Vec<_> = arr
             .iter()
             .map(|v| v["doc_type"].as_str().unwrap())
             .collect();
         assert!(types.contains(&"IndexGuide"));
+        assert!(types.contains(&"Text"));
     }
 
     #[tokio::test]
