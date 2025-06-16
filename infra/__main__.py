@@ -444,6 +444,8 @@ def aci_group(
     cpu: float = 1,
     mem: float = 1.5,
     public: bool = False,
+    liveness_delay: int = 30,
+    readiness_delay: int = 10,
 ):
     ip_cfg, subnet_ids = (
         # PUBLIC ✔ – no VNet attachment
@@ -514,7 +516,7 @@ def aci_group(
                         port=port,
                         scheme=containerinstance.Scheme.HTTP,
                     ),
-                    initial_delay_seconds=30,
+                    initial_delay_seconds=liveness_delay,
                     period_seconds=10,
                     failure_threshold=3,
                     timeout_seconds=5,
@@ -527,7 +529,7 @@ def aci_group(
                         port=port,
                         scheme=containerinstance.Scheme.HTTP,
                     ),
-                    initial_delay_seconds=10,
+                    initial_delay_seconds=readiness_delay,
                     period_seconds=5,
                     failure_threshold=3,
                     timeout_seconds=5,
@@ -636,6 +638,8 @@ hub_cg = aci_group(
     ],
     cmd=["context-hub"],
     public=True,  # Make it publicly accessible
+    liveness_delay=120,
+    readiness_delay=60,
 )
 # Internal hub URL for communication between services in the same VNet
 hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
