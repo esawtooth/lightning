@@ -108,15 +108,36 @@ async def login(request: Request):
     return RedirectResponse(auth_url)
 
 
+@app.get("/auth/login")
+async def auth_login(request: Request):
+    """Alias for /login route to handle frontend requests to /auth/login."""
+    logging.info(f"Auth login request from {request.client.host if request.client else 'unknown'}")
+    return await login(request)
+
+
 @app.get("/callback")
 async def auth_callback(request: Request):
     """Process the authentication response from Azure AD."""
+    logging.info(f"Auth callback received from {request.client.host if request.client else 'unknown'}")
+    
     code = request.query_params.get("code")
     if not code:
+        error = request.query_params.get("error")
+        error_description = request.query_params.get("error_description")
+        logging.error(f"Auth callback missing code. Error: {error}, Description: {error_description}")
         raise HTTPException(status_code=400, detail="Missing code")
     
     redirect_uri = _resolve_callback_url(request)
-    result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
+    logging.info(f"Using redirect URI: {redirect_uri}")
+    
+    try:
+        result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
+        if "error" in result:
+            logging.error(f"MSAL token acquisition failed: {result.get('error_description', result.get('error'))}")
+            raise HTTPException(status_code=401, detail="Token acquisition failed")
+    except Exception as e:
+        logging.error(f"Exception during token acquisition: {e}")
+        raise HTTPException(status_code=500, detail="Authentication service error")
     # Use the ID token for authentication. This token has our client ID as
     # the audience and can be validated locally. If it's missing, fall back to
     # the access token for backwards compatibility.
@@ -234,6 +255,12 @@ async def manual_request_access(request: Request):
         return RedirectResponse("/?message=access_requested", status_code=303)
     else:
         return RedirectResponse("/?error=request_failed", status_code=303)
+
+
+@app.post("/auth/request-access")
+async def auth_request_access(request: Request):
+    """Alias for /request-access route to handle frontend requests to /auth/request-access."""
+    return await manual_request_access(request)
 
 
 @app.get("/health")
