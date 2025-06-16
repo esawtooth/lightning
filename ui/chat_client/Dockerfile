@@ -14,6 +14,7 @@ COPY ui/chat_client/templates/ ./templates/
 COPY ui/chat_client/static/ ./static/
 COPY ui/chat_client/start.sh ./start.sh
 COPY ui/chat_client/gateway_app.py ./gateway_app.py
+COPY ui/integrated_app/ ./integrated_app/
 COPY events/ ./events/
 # Preserve package structure so `ui.dashboard` imports work
 COPY ui/dashboard/ ./ui/dashboard/
