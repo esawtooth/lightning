@@ -1,7 +1,11 @@
 FROM --platform=linux/amd64 rust:1.87-slim AS build
 WORKDIR /app
 COPY . ./
-RUN rustup target add x86_64-unknown-linux-musl \
+RUN apt-get update && apt-get install -y \
+        cmake \
+        pkg-config \
+        musl-tools \
+    && rustup target add x86_64-unknown-linux-musl \
     && cargo build --release --target x86_64-unknown-linux-musl
 
 FROM --platform=linux/amd64 debian:bookworm-slim
