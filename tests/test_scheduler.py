@@ -50,6 +50,7 @@ def load_scheduler_driver(monkeypatch, capture, schedules=None):
     return SchedulerDriver(SchedulerDriver._vextir_manifest)
 
 
+
 def test_schedule_creation(monkeypatch):
     os.environ["COSMOS_CONNECTION"] = "c"
     os.environ["SCHEDULE_CONTAINER"] = "t"
@@ -115,7 +116,6 @@ def test_trigger_publishes_event(monkeypatch):
         user_id="system",
         metadata={},
     )
-
     results = asyncio.run(driver.handle_event(trigger_event))
     assert results[0].type == "t"
     assert capture["updated"][0]["pk"] == "u1"
