@@ -4,3 +4,4 @@ per-file-ignores =
     agents/conseil/codex-cli/examples/prompt-analyzer/template/cluster_prompts.py: E203,F841
     agents/conseil/scripts/readme_toc.py: E203,E741
     agents/conseil_agent.py: E302
+    agents/__init__.py: E402
