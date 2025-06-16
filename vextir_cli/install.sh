@@ -130,7 +130,7 @@ create_config() {
     if [ ! -f "$CONFIG_FILE" ]; then
         cat > "$CONFIG_FILE" << EOF
 {
-  "endpoint": "https://your-vextir-deployment.azurewebsites.net",
+  "endpoint": "https://api.vextir.com",
   "auth": {
     "method": "azure_cli",
     "tenant_id": null,
@@ -189,7 +189,7 @@ print_next_steps() {
     echo
     echo "Next steps:"
     echo "1. Configure your Vextir OS endpoint:"
-    echo "   vextir config set endpoint https://your-vextir-deployment.azurewebsites.net"
+    echo "   vextir config set endpoint https://api.vextir.com"
     echo
     echo "2. If using Azure CLI authentication (recommended):"
     echo "   az login"

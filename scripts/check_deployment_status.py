@@ -18,7 +18,7 @@ def check_endpoint(url, expected_status=200, timeout=5):
 def check_deployment_status():
     """Check the status of key endpoints."""
     endpoints = [
-        ("Azure Function Health", "https://func20015b83.azurewebsites.net/api/health", 200),
+        ("API Health", "https://api.vextir.com/api/health", 200),
         ("Azure Function Events", "https://api.vextir.com/api/events", 405),  # POST endpoint, GET should return 405
         ("UI Website", "https://www.vextir.com", 200),
         ("Voice WebSocket", "https://voice-ws.vextir.com", 200),

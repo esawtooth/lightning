@@ -49,7 +49,7 @@ chmod +x install.sh
 
 1. **Configure the endpoint**:
    ```bash
-   vextir config set endpoint https://your-vextir-deployment.azurewebsites.net
+   vextir config set endpoint https://api.vextir.com
    ```
 
 2. **Set up authentication** (using Azure CLI):
@@ -270,7 +270,7 @@ vextir driver list --format json | jq '.[] | {id: .id, status: .status}'
 vextir --config ~/.vextir/prod-config.json system status
 
 # Override endpoint for single command
-vextir --endpoint https://prod.vextir.com system status
+vextir --endpoint https://api.vextir.com system status
 ```
 
 ## Troubleshooting

@@ -47,12 +47,12 @@ class Config:
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
         return {
-            "endpoint": "https://func20015b83.azurewebsites.net",
+            "endpoint": "https://api.vextir.com",
             "auth": {
                 "method": "azure_cli",
                 "tenant_id": None,
                 "client_id": "26583e36-a836-478f-a4af-7b6c6d355043",
-                "scope": "https://graph.microsoft.com/.default"
+                "scope": "api://api.vextir.com/.default"
             },
             "output": {
                 "format": "table",
@@ -154,17 +154,30 @@ class Config:
         if not endpoint:
             raise ValueError("No endpoint configured. Use 'vextir config set endpoint <url>' to configure.")
         return endpoint.rstrip('/')
+
+    def get_context_hub_endpoint(self) -> str:
+        """Get Context Hub API endpoint"""
+        endpoint = self.get('context_hub.endpoint')
+        if not endpoint:
+            raise ValueError(
+                "No Context Hub endpoint configured. Use 'vextir config set context_hub.endpoint <url>' to configure."
+            )
+        return endpoint.rstrip('/')
     
     def get_auth_headers(self) -> Dict[str, str]:
         """Get authentication headers"""
         auth_method = self.get('auth.method', 'azure_cli')
         
         if auth_method == 'azure_cli':
-            # Use Azure CLI token
+            # Use Azure CLI token with optional scope
             try:
                 import subprocess
+                cmd = ['az', 'account', 'get-access-token', '--query', 'accessToken', '-o', 'tsv']
+                scope = self.get('auth.scope')
+                if scope:
+                    cmd.extend(['--scope', scope])
                 result = subprocess.run(
-                    ['az', 'account', 'get-access-token', '--query', 'accessToken', '-o', 'tsv'],
+                    cmd,
                     capture_output=True,
                     text=True,
                     check=True

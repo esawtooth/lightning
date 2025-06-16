@@ -35,7 +35,7 @@
   - `azure-function/Health/__init__.py`
   - `azure-function/Health/function.json`
 - **Purpose**: Simple endpoint to verify Azure Functions deployment
-- **URL**: `https://func20015b83.azurewebsites.net/api/health`
+- **URL**: `https://api.vextir.com/api/health`
 
 ### 4. Created Deployment Monitoring Script
 - **File**: `scripts/check_deployment_status.py`

@@ -42,10 +42,11 @@ class VextirClient:
         if self.session and not self.session.closed:
             await self.session.close()
     
-    async def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
+    async def _request(self, method: str, path: str, *, hub: bool = False, **kwargs) -> Dict[str, Any]:
         """Make HTTP request to Vextir API"""
         session = await self._get_session()
-        url = f"{self.config.get_endpoint()}{path}"
+        base = self.config.get_context_hub_endpoint() if hub else self.config.get_endpoint()
+        url = f"{base}{path}"
         
         try:
             async with session.request(method, url, **kwargs) as response:
@@ -243,20 +244,20 @@ class VextirClient:
             return None
     
     # Context Hub Operations
-    async def context_read(self, path: str) -> Dict[str, Any]:
-        """Read from context hub"""
+    async def context_read(self, doc_id: str) -> Dict[str, Any]:
+        """Read a document from the Context Hub"""
         try:
-            return await self._request('GET', f'/api/context/docs/{path.lstrip("/")}')
+            return await self._request('GET', f'/docs/{doc_id}', hub=True)
         except VextirClientError:
             return {
-                'path': path,
-                'content': f'Content at {path}',
+                'path': doc_id,
+                'content': f'Content at {doc_id}',
                 'metadata': {'last_updated': datetime.utcnow().isoformat()},
                 'permissions': ['read', 'write']
             }
     
     async def context_write(self, path: str, content: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-        """Write to context hub"""
+        """Write a new document to the Context Hub"""
         payload = {
             'name': path.split('/')[-1] or 'Untitled',
             'content': content,
@@ -264,7 +265,7 @@ class VextirClient:
             'metadata': metadata or {}
         }
         try:
-            return await self._request('POST', '/api/context/documents', json=payload)
+            return await self._request('POST', '/docs', json=payload, hub=True)
         except VextirClientError:
             return {
                 'path': path,
@@ -276,7 +277,7 @@ class VextirClient:
         """Query context hub with SQL"""
         params = {'q': query, 'limit': limit}
         try:
-            result = await self._request('GET', '/api/context/search', params=params)
+            result = await self._request('GET', '/search', params=params, hub=True)
             return result.get('results', []) if isinstance(result, dict) else result
         except VextirClientError:
             return []
@@ -385,4 +386,4 @@ class VextirClient:
             'store_type': 'personal',
             'auto_create_folders': True
         }
-        return await self._request('POST', '/api/context-hub/init', json=store_data)
+        return await self._request('POST', '/init', json=store_data, hub=True)
