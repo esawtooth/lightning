@@ -13,6 +13,10 @@ from starlette.middleware.sessions import SessionMiddleware
 import msal
 from common.jwt_utils import verify_token
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 AAD_CLIENT_ID = (
     os.environ.get("AAD_CLIENT_ID")
     or os.environ.get("ARM_CLIENT_ID")
@@ -33,14 +37,26 @@ AUTH_API_URL = os.environ.get("AUTH_API_URL", "/api")
 # Optional override for external URL of this gateway
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 
-if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):
-    logging.warning("AAD configuration incomplete")
+# Debug logging for environment variables
+logger.info(f"AAD_CLIENT_ID configured: {bool(AAD_CLIENT_ID)}")
+logger.info(f"AAD_TENANT_ID configured: {bool(AAD_TENANT_ID)}")
+logger.info(f"AAD_CLIENT_SECRET configured: {bool(AAD_CLIENT_SECRET)}")
 
-auth_app = msal.ConfidentialClientApplication(
-    AAD_CLIENT_ID,
-    authority=f"https://login.microsoftonline.com/{AAD_TENANT_ID}",
-    client_credential=AAD_CLIENT_SECRET,
-)
+if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):
+    logger.error("AAD configuration incomplete - this will cause authentication failures!")
+    logger.error(f"Missing: AAD_CLIENT_ID={bool(AAD_CLIENT_ID)}, AAD_TENANT_ID={bool(AAD_TENANT_ID)}, AAD_CLIENT_SECRET={bool(AAD_CLIENT_SECRET)}")
+
+try:
+    auth_app = msal.ConfidentialClientApplication(
+        AAD_CLIENT_ID,
+        authority=f"https://login.microsoftonline.com/{AAD_TENANT_ID}",
+        client_credential=AAD_CLIENT_SECRET,
+    )
+    logger.info("MSAL ConfidentialClientApplication created successfully")
+except Exception as e:
+    logger.error(f"Failed to create MSAL application: {e}")
+    # Create a dummy auth_app to prevent import errors
+    auth_app = None
 
 # Include openid so we get an id_token for verification
 SCOPES = ["User.Read", "openid", "profile"]
@@ -99,45 +115,64 @@ async def root(request: Request):
 @app.get("/login")
 async def login(request: Request):
     """Redirect user to Azure login or handle callback for legacy redirect."""
+    # Check if MSAL is properly configured
+    if auth_app is None:
+        logger.error("MSAL not configured - cannot perform authentication")
+        return RedirectResponse("/?error=service_unavailable", status_code=303)
+    
     # If Azure AD redirected here with a code parameter, treat it as a callback
     if "code" in request.query_params:
         return await auth_callback(request)
 
-    redirect_uri = _resolve_callback_url(request)
-    auth_url = auth_app.get_authorization_request_url(SCOPES, redirect_uri=redirect_uri)
-    return RedirectResponse(auth_url)
+    try:
+        redirect_uri = _resolve_callback_url(request)
+        logger.info(f"Resolved callback URI: {redirect_uri}")
+        auth_url = auth_app.get_authorization_request_url(SCOPES, redirect_uri=redirect_uri)
+        logger.info(f"Generated auth URL: {auth_url}")
+        return RedirectResponse(auth_url)
+    except Exception as e:
+        logger.error(f"Failed to get authorization URL: {e}")
+        logger.error(f"Request URL: {request.url}")
+        logger.error(f"Request headers: {dict(request.headers)}")
+        return RedirectResponse("/?error=auth_failed", status_code=303)
 
 
 @app.get("/auth/login")
 async def auth_login(request: Request):
     """Alias for /login route to handle frontend requests to /auth/login."""
-    logging.info(f"Auth login request from {request.client.host if request.client else 'unknown'}")
+    logger.info(f"Auth login request from {request.client.host if request.client else 'unknown'}")
     return await login(request)
 
 
 @app.get("/callback")
 async def auth_callback(request: Request):
     """Process the authentication response from Azure AD."""
-    logging.info(f"Auth callback received from {request.client.host if request.client else 'unknown'}")
+    logger.info(f"Auth callback received from {request.client.host if request.client else 'unknown'}")
+    
+    # Check if MSAL is properly configured
+    if auth_app is None:
+        logger.error("MSAL not configured - cannot process authentication callback")
+        return RedirectResponse("/?error=service_unavailable", status_code=303)
     
     code = request.query_params.get("code")
     if not code:
         error = request.query_params.get("error")
         error_description = request.query_params.get("error_description")
-        logging.error(f"Auth callback missing code. Error: {error}, Description: {error_description}")
-        raise HTTPException(status_code=400, detail="Missing code")
-    
-    redirect_uri = _resolve_callback_url(request)
-    logging.info(f"Using redirect URI: {redirect_uri}")
+        logger.error(f"Auth callback missing code. Error: {error}, Description: {error_description}")
+        return RedirectResponse("/?error=auth_failed", status_code=303)
     
     try:
+        redirect_uri = _resolve_callback_url(request)
+        logger.info(f"Using redirect URI: {redirect_uri}")
+        
         result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
         if "error" in result:
-            logging.error(f"MSAL token acquisition failed: {result.get('error_description', result.get('error'))}")
-            raise HTTPException(status_code=401, detail="Token acquisition failed")
+            logger.error(f"MSAL token acquisition failed: {result.get('error_description', result.get('error'))}")
+            return RedirectResponse("/?error=auth_failed", status_code=303)
     except Exception as e:
-        logging.error(f"Exception during token acquisition: {e}")
-        raise HTTPException(status_code=500, detail="Authentication service error")
+        logger.error(f"Exception during token acquisition: {e}")
+        logger.error(f"Request URL: {request.url}")
+        return RedirectResponse("/?error=service_unavailable", status_code=303)
     # Use the ID token for authentication. This token has our client ID as
     # the audience and can be validated locally. If it's missing, fall back to
     # the access token for backwards compatibility.
@@ -178,8 +213,8 @@ async def auth_callback(request: Request):
             return RedirectResponse(url="/waitlist")
             
     except Exception as e:
-        logging.error(f"Auth callback error: {e}")
-        raise HTTPException(status_code=401, detail="Invalid token")
+        logger.error(f"Auth callback error: {e}")
+        return RedirectResponse("/?error=auth_failed", status_code=303)
 
 
 @app.get("/logout")
@@ -211,15 +246,23 @@ def _resolve_callback_url(request: Request) -> str:
     """Return external URL for the auth callback endpoint."""
     if AUTH_GATEWAY_URL:
         base = AUTH_GATEWAY_URL.rstrip("/")
-        return f"{base}/callback"
-    url = request.url_for("auth_callback")
+        return f"{base}/auth/callback"
+    
+    # When mounted under /auth, we need to build the callback URL manually
+    # because request.url_for() doesn't account for the mounting path
     forwarded = request.headers.get("x-forwarded-proto")
-    if forwarded:
-        url = url.replace(scheme=forwarded)
-    host = request.headers.get("x-forwarded-host")
-    if host:
-        url = url.replace(netloc=host)
-    return str(url)
+    scheme = forwarded or request.url.scheme
+    host = request.headers.get("x-forwarded-host") or request.url.hostname
+    port = request.url.port
+    
+    # Build the base URL
+    if port and port not in (80, 443):
+        base_url = f"{scheme}://{host}:{port}"
+    else:
+        base_url = f"{scheme}://{host}"
+    
+    # Add the callback path - since we're mounted at /auth, callback is at /auth/callback
+    return f"{base_url}/auth/callback"
 
 
 @app.get("/chat")
@@ -266,3 +309,36 @@ async def auth_request_access(request: Request):
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/auth/status")
+async def auth_status():
+    """Diagnostic endpoint to check authentication configuration."""
+    return {
+        "msal_configured": auth_app is not None,
+        "aad_client_id_set": bool(AAD_CLIENT_ID),
+        "aad_tenant_id_set": bool(AAD_TENANT_ID),
+        "aad_client_secret_set": bool(AAD_CLIENT_SECRET),
+        "auth_api_url": AUTH_API_URL,
+        "auth_gateway_url": AUTH_GATEWAY_URL
+    }
+
+
+@app.get("/auth/test-callback-url")
+async def test_callback_url(request: Request):
+    """Test endpoint to verify callback URL resolution."""
+    try:
+        callback_url = _resolve_callback_url(request)
+        return {
+            "callback_url": callback_url,
+            "request_url": str(request.url),
+            "headers": dict(request.headers),
+            "success": True
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "request_url": str(request.url),
+            "headers": dict(request.headers),
+            "success": False
+        }
