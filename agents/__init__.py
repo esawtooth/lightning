@@ -38,5 +38,3 @@ def register(agent_cls: type) -> type:
         raise TypeError("agent_cls must inherit from Agent")
     AGENT_REGISTRY[instance.name] = instance
     return agent_cls
-
-
