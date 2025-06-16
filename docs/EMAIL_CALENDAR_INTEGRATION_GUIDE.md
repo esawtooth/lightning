@@ -254,6 +254,10 @@ SERVICEBUS_QUEUE=<queue_name>
 HUB_URL=<context_hub_url>
 OPENAI_API_KEY=<openai_api_key>
 INSTRUCTION_CONTAINER=instructions
+GMAIL_OAUTH_TOKEN=<gmail_access_token>
+OUTLOOK_OAUTH_TOKEN=<outlook_access_token>
+ICLOUD_USERNAME=<icloud_email>
+ICLOUD_APP_PASSWORD=<icloud_app_password>
 ```
 
 ### 3. Webhook Registration

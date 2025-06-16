@@ -14,8 +14,14 @@ class ConseilAgent(Agent):
             cmd = ["conseil", commands]
         else:
             cmd = ["conseil"] + list(commands)
-        result = subprocess.run(cmd, capture_output=True, text=True)
-        if result.stderr:
-            # stderr is forwarded to the user to mimic CLI behaviour
-            print(result.stderr)
-        return result.stdout
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.stderr:
+                # stderr is forwarded to the user to mimic CLI behaviour
+                print(result.stderr)
+            result.check_returncode()
+            return result.stdout
+        except subprocess.CalledProcessError as exc:
+            # surface the error message in the returned string instead of
+            # raising the exception further
+            return exc.stderr or exc.output or str(exc)

@@ -52,7 +52,6 @@ All test files are now consolidated in the `tests/` directory:
 - Plus all existing test files for various components
 
 ### Utilities (`tests/utilities/`)
-- `cleanup_redundant_functions.py` - Function cleanup utility
 - `get_url.py` - URL retrieval utility
 - `web_search.py` - Web search utility
 

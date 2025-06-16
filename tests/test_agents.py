@@ -19,7 +19,7 @@ def test_conseil_agent(monkeypatch):
 
     def stub_run(cmd, capture_output=False, text=False):
         captured["cmd"] = cmd
-        return types.SimpleNamespace(stdout="done\n", stderr="")
+        return subprocess.CompletedProcess(cmd, 0, stdout="done\n", stderr="")
 
     monkeypatch.setattr(subprocess, "run", stub_run)
 

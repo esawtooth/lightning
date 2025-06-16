@@ -181,6 +181,10 @@ GMAIL_CLIENT_ID=your_gmail_client_id
 GMAIL_CLIENT_SECRET=your_gmail_client_secret
 OUTLOOK_CLIENT_ID=your_outlook_client_id
 OUTLOOK_CLIENT_SECRET=your_outlook_client_secret
+GMAIL_OAUTH_TOKEN=your_gmail_access_token
+OUTLOOK_OAUTH_TOKEN=your_outlook_access_token
+ICLOUD_USERNAME=your_icloud_email
+ICLOUD_APP_PASSWORD=your_icloud_app_password
 
 # Service Bus
 SERVICE_BUS_CONNECTION_STRING=your_service_bus_connection
