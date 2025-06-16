@@ -60,6 +60,7 @@ export JWT_SIGNING_KEY="your-jwt-signing-key"
 
 # Required for Chat Client
 export AUTH_API_URL="https://your-function-app.azurewebsites.net/api"
+export AUTH_GATEWAY_URL="https://your-domain.com"
 export CHAINLIT_URL="https://localhost/chat"  # In Docker: https://gateway/chat
 ```
 
@@ -82,6 +83,7 @@ chmod +x start.sh
 docker build -t vextir-chat .
 docker run -p 443:443 \
   -e AUTH_API_URL="https://your-function-app.azurewebsites.net/api" \
+  -e AUTH_GATEWAY_URL="https://your-domain.com" \
   -e JWT_SIGNING_KEY="your-jwt-signing-key" \
   vextir-chat
 ```
@@ -286,7 +288,7 @@ curl -X POST "https://your-function-app.azurewebsites.net/api/register" \
 docker logs container-name
 
 # Check environment variables
-env | grep -E "(AUTH_API_URL|JWT_SIGNING_KEY|COSMOS_)"
+env | grep -E "(AUTH_GATEWAY_URL|AUTH_API_URL|JWT_SIGNING_KEY|COSMOS_)"
 ```
 
 This completes the comprehensive authentication and authorization enhancement for Vextir Chat. The system now provides secure, admin-controlled access with a professional user interface and robust backend infrastructure.
