@@ -32,9 +32,9 @@ The Vextir Chat UI container has been enhanced with a comprehensive authenticati
 - **Admin Panel**: User management interface
 - **API Endpoints**: RESTful admin APIs
 
-### 3. Protected Chat App (`/chat_client/chainlit_app.py`)
-- **Auth Middleware**: Protects chat access
-- **User Context**: Includes user info in conversations
+### 3. Integrated Dashboard (`/integrated_app/app.py`)
+- **Auth Middleware**: Protects all routes
+- **User Context**: Passed to the dashboard and chat views
 - **Health Checks**: Service monitoring
 
 ### 4. Professional UI Templates
@@ -210,7 +210,7 @@ python test_auth_flow.py
 │       └── function.json        # Function configuration
 ├── chat_client/
 │   ├── auth_app.py              # Authentication gateway
-│   ├── chainlit_app.py          # Protected chat app
+│   ├── gateway_app.py           # Mounts auth and integrated UI
 │   ├── start.sh                 # Multi-service startup
 │   ├── Dockerfile               # Container definition
 │   ├── requirements.txt         # Dependencies
@@ -218,6 +218,9 @@ python test_auth_flow.py
 │       ├── login.html           # Login interface
 │       ├── register.html        # Registration interface
 │       └── admin.html           # Admin panel
+├── integrated_app/
+│   ├── app.py                   # Integrated dashboard
+│   └── templates/               # UI pages
 ├── create_admin_user.py         # Admin user creation tool
 ├── test_auth_flow.py            # Comprehensive testing
 └── test_local_auth.py           # Local development testing
