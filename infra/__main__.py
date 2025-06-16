@@ -374,6 +374,10 @@ aad_app = azuread.Application(
             pulumi.Output.concat("https://", domain, "/auth/callback"),
             pulumi.Output.concat("https://www.", domain, "/auth/callback"),
             pulumi.Output.concat("https://hub.", domain, "/auth/callback"),
+            # Support legacy redirect to /auth/login
+            pulumi.Output.concat("https://", domain, "/auth/login"),
+            pulumi.Output.concat("https://www.", domain, "/auth/login"),
+            pulumi.Output.concat("https://hub.", domain, "/auth/login"),
         ]
     ),
 )
@@ -709,6 +713,7 @@ ui_cg = aci_group(
     [
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
+        containerinstance.EnvironmentVariableArgs(name="AUTH_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api")),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_ID", value=aad_app.client_id),
         containerinstance.EnvironmentVariableArgs(name="AAD_CLIENT_SECRET", value=aad_password.value),
         containerinstance.EnvironmentVariableArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
