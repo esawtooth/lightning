@@ -1,14 +1,16 @@
-FROM --platform=linux/amd64 rust:1.87-slim AS build
+FROM rust:1.87-slim AS build
 WORKDIR /app
 COPY . ./
 RUN apt-get update && apt-get install -y \
+        build-essential \
         cmake \
         pkg-config \
+        perl \
         musl-tools \
     && rustup target add x86_64-unknown-linux-musl \
     && cargo build --release --target x86_64-unknown-linux-musl
 
-FROM --platform=linux/amd64 debian:bookworm-slim
+FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
