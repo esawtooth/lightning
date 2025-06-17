@@ -1,29 +1,23 @@
-import uuid
-import datetime
-import json
-import logging
+import uuid, datetime, json, logging
 from typing import Dict, Any
 
 try:
     from azure.cosmos import CosmosClient, PartitionKey
-
     COSMOS = True
-except ImportError:  # pragma: no cover - optional dependency
+except ImportError:
     COSMOS = False
 
 logger = logging.getLogger(__name__)
 
-
 class PlanStore:
-    """Persist plan templates in Cosmos or in-memory fallback."""
-
-    def __init__(self, endpoint: str = "", key: str = "", db_name: str = "lightning"):
+    """Persist plan templates in Cosmos or in‑memory fallback."""
+    def __init__(self, endpoint: str = "", key: str = "", db_name="lightning"):
         if COSMOS:
             self.client = CosmosClient(endpoint, key)
             self.db = self.client.create_database_if_not_exists(db_name)
             self.container = self.db.create_container_if_not_exists(
-                id="plans", partition_key=PartitionKey(path="/pk")
-            )
+                id="plans",
+                partition_key=PartitionKey(path="/pk"))
         else:
             self.mem: Dict[str, Dict[str, Any]] = {}
 
@@ -34,8 +28,7 @@ class PlanStore:
             pk=user_id,
             created_at=str(datetime.datetime.utcnow()),
             plan=plan,
-            status="template",
-        )
+            status="template")
         if COSMOS:
             self.container.upsert_item(plan_record)
         else:

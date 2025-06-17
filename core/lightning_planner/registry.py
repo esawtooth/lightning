@@ -1,3 +1,4 @@
+# lightning_planner/registry.py
 from pathlib import Path
 import json
 from typing import Dict, Any
@@ -6,8 +7,7 @@ _REGISTRY_PATH = Path(__file__).with_suffix('.tools.json')
 
 
 class ToolRegistry:
-    """Lazy singleton exposing primitive capabilities."""
-
+    """Lazy singleton exposing primitive capabilities declared in .tools.json"""
     _tools: Dict[str, Any] | None = None
 
     @classmethod
@@ -20,10 +20,18 @@ class ToolRegistry:
 
     @classmethod
     def subset(cls, query: str) -> Dict[str, Any]:
-        """Very naive semantic search; replace with vector search later."""
         q = query.lower()
         return {
             name: meta
             for name, meta in cls.load().items()
-            if q in name.lower() or q in meta.get('description', '').lower()
+            if q in name.lower() or q in meta.get("description", "").lower()
         }
+
+
+# ---------------------------------------------------------------------------
+# External-event inventory recognised by the validator / scheduler
+# ---------------------------------------------------------------------------
+EventRegistry: Dict[str, Dict[str, str]] = {
+    "event.monday_0900": {"kind": "time.cron", "schedule": "0 9 * * MON"},
+    # add more as you wire them up
+}
