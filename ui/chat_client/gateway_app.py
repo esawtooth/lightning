@@ -44,6 +44,12 @@ async def legacy_chat():
     return RedirectResponse(url="/app")
 
 
+@app.get("/waitlist", include_in_schema=False)
+async def waitlist_root():
+    """Redirect to the authentication waitlist page."""
+    return RedirectResponse(url="/auth/waitlist")
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
