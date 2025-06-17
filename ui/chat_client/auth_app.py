@@ -13,6 +13,9 @@ from starlette.middleware.sessions import SessionMiddleware
 import msal
 from common.jwt_utils import verify_token
 
+# Hard-coded admin emails that bypass the waitlist
+ADMIN_EMAILS = {"mail@rohitja.in"}
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,6 +105,9 @@ async def root(request: Request):
     """Login page or redirect if already authenticated."""
     token = request.cookies.get("auth_token")
     if token:
+        # If the session indicates waitlist bypass, skip status check
+        if request.session.get("skip_waitlist"):
+            return RedirectResponse(url="/app")
         try:
             user_id = verify_token(token)
             user_status = await check_user_approval(user_id)
@@ -191,8 +197,13 @@ async def auth_callback(request: Request):
         user_email = id_claims.get("email") or id_claims.get("preferred_username")
         user_name = id_claims.get("name")
         
-        # Check if user is approved
-        user_status = await check_user_approval(user_id)
+        # Admin users bypass the waitlist check
+        if user_email and user_email.lower() in ADMIN_EMAILS:
+            request.session["skip_waitlist"] = True
+            user_status = {"approved": True}
+        else:
+            # Check if user is approved
+            user_status = await check_user_approval(user_id)
         
         if user_status.get("approved"):
             # User is approved, set auth cookie and redirect to integrated UI
