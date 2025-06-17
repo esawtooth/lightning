@@ -221,6 +221,20 @@
             line-height: 1.5;
             margin-bottom: 1rem;
         }
+
+        /* Responsive layout for mobile screens */
+        @media (max-width: 768px) {
+            .main-wrapper {
+                flex-direction: column;
+            }
+            .login-container {
+                order: 1;
+            }
+            .carousel-container {
+                order: 2;
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
