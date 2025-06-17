@@ -58,8 +58,10 @@ except Exception as e:
     # Create a dummy auth_app to prevent import errors
     auth_app = None
 
-# Include openid so we get an id_token for verification
-SCOPES = ["User.Read", "openid", "profile"]
+# MSAL automatically adds "openid" and "profile" when needed. Explicitly
+# requesting these reserved scopes results in a runtime error, so we only
+# request the Microsoft Graph scope here.
+SCOPES = ["User.Read"]
 
 app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -106,7 +108,7 @@ async def root(request: Request):
             if user_status.get("approved"):
                 return RedirectResponse(url="/app")
             else:
-                return RedirectResponse(url="/waitlist")
+                return RedirectResponse(url=request.url_for("waitlist_page"))
         except Exception:
             pass
     return templates.TemplateResponse("login.html", {"request": request})
@@ -210,7 +212,7 @@ async def auth_callback(request: Request):
                 await request_access(user_id, user_email, user_name)
             
             # Redirect to waitlist page
-            return RedirectResponse(url="/waitlist")
+            return RedirectResponse(url=request.url_for("waitlist_page"))
             
     except Exception as e:
         logger.error(f"Auth callback error: {e}")
@@ -274,7 +276,7 @@ async def chat_redirect(request: Request):
         user_id = verify_token(token)
         user_status = await check_user_approval(user_id)
         if not user_status.get("approved"):
-            return RedirectResponse(url="/waitlist")
+            return RedirectResponse(url=request.url_for("waitlist_page"))
     except Exception:
         return RedirectResponse(url="/login")
     return RedirectResponse(_resolve_ui_url(request))
