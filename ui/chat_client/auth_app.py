@@ -58,8 +58,10 @@ except Exception as e:
     # Create a dummy auth_app to prevent import errors
     auth_app = None
 
-# Include openid so we get an id_token for verification
-SCOPES = ["User.Read", "openid", "profile"]
+# MSAL automatically adds "openid" and "profile" when needed. Explicitly
+# requesting these reserved scopes results in a runtime error, so we only
+# request the Microsoft Graph scope here.
+SCOPES = ["User.Read"]
 
 app = FastAPI(title="Vextir Chat Authentication")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)

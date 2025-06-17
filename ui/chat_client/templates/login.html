@@ -276,11 +276,11 @@
                         <p>Your account is authenticated, but access is pending.</p>
                         <p>We'll notify you when services become available.</p>
                     </div>
-                    <a href="/logout" class="btn btn-secondary">Sign Out</a>
+                    <a href="{{ request.url_for('logout') }}" class="btn btn-secondary">Sign Out</a>
                 </div>
             {% else %}
                 <div id="main-auth">
-                    <a href="/auth/login" class="btn microsoft-btn">
+                    <a href="{{ request.url_for('login') }}" class="btn microsoft-btn">
                         Sign in with Microsoft
                     </a>
                     
@@ -295,7 +295,7 @@
                         Submit your information and we'll review your access request.
                     </p>
                     
-                    <form action="/auth/request-access" method="post">
+                    <form action="{{ request.url_for('auth_request_access') }}" method="post">
                         <div class="form-group">
                             <label for="req_name">Name</label>
                             <input type="text" id="req_name" name="name" required>
