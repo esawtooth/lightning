@@ -3,6 +3,7 @@
 import os
 import logging
 from typing import Optional
+import jwt
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -37,14 +38,21 @@ AUTH_API_URL = os.environ.get("AUTH_API_URL", "/api")
 # Optional override for external URL of this gateway
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 
+# Emails that should bypass the waitlist and receive admin access
+ADMIN_EMAILS = {"mail@rohitja.in"}
+
 # Debug logging for environment variables
 logger.info(f"AAD_CLIENT_ID configured: {bool(AAD_CLIENT_ID)}")
 logger.info(f"AAD_TENANT_ID configured: {bool(AAD_TENANT_ID)}")
 logger.info(f"AAD_CLIENT_SECRET configured: {bool(AAD_CLIENT_SECRET)}")
 
 if not (AAD_CLIENT_ID and AAD_TENANT_ID and AAD_CLIENT_SECRET):
-    logger.error("AAD configuration incomplete - this will cause authentication failures!")
-    logger.error(f"Missing: AAD_CLIENT_ID={bool(AAD_CLIENT_ID)}, AAD_TENANT_ID={bool(AAD_TENANT_ID)}, AAD_CLIENT_SECRET={bool(AAD_CLIENT_SECRET)}")
+    logger.error(
+        "AAD configuration incomplete - this will cause authentication failures!"
+    )
+    logger.error(
+        f"Missing: AAD_CLIENT_ID={bool(AAD_CLIENT_ID)}, AAD_TENANT_ID={bool(AAD_TENANT_ID)}, AAD_CLIENT_SECRET={bool(AAD_CLIENT_SECRET)}"
+    )
 
 try:
     auth_app = msal.ConfidentialClientApplication(
@@ -104,6 +112,12 @@ async def root(request: Request):
     if token:
         try:
             user_id = verify_token(token)
+            claims = jwt.decode(token, options={"verify_signature": False})
+            user_email = claims.get("email") or claims.get("preferred_username")
+
+            if user_email and user_email.lower() in ADMIN_EMAILS:
+                return RedirectResponse(url="/app")
+
             user_status = await check_user_approval(user_id)
             if user_status.get("approved"):
                 return RedirectResponse(url="/app")
@@ -121,7 +135,7 @@ async def login(request: Request):
     if auth_app is None:
         logger.error("MSAL not configured - cannot perform authentication")
         return RedirectResponse("/?error=service_unavailable", status_code=303)
-    
+
     # If Azure AD redirected here with a code parameter, treat it as a callback
     if "code" in request.query_params:
         return await auth_callback(request)
@@ -129,7 +143,9 @@ async def login(request: Request):
     try:
         redirect_uri = _resolve_callback_url(request)
         logger.info(f"Resolved callback URI: {redirect_uri}")
-        auth_url = auth_app.get_authorization_request_url(SCOPES, redirect_uri=redirect_uri)
+        auth_url = auth_app.get_authorization_request_url(
+            SCOPES, redirect_uri=redirect_uri
+        )
         logger.info(f"Generated auth URL: {auth_url}")
         return RedirectResponse(auth_url)
     except Exception as e:
@@ -142,34 +158,44 @@ async def login(request: Request):
 @app.get("/auth/login")
 async def auth_login(request: Request):
     """Alias for /login route to handle frontend requests to /auth/login."""
-    logger.info(f"Auth login request from {request.client.host if request.client else 'unknown'}")
+    logger.info(
+        f"Auth login request from {request.client.host if request.client else 'unknown'}"
+    )
     return await login(request)
 
 
 @app.get("/callback")
 async def auth_callback(request: Request):
     """Process the authentication response from Azure AD."""
-    logger.info(f"Auth callback received from {request.client.host if request.client else 'unknown'}")
-    
+    logger.info(
+        f"Auth callback received from {request.client.host if request.client else 'unknown'}"
+    )
+
     # Check if MSAL is properly configured
     if auth_app is None:
         logger.error("MSAL not configured - cannot process authentication callback")
         return RedirectResponse("/?error=service_unavailable", status_code=303)
-    
+
     code = request.query_params.get("code")
     if not code:
         error = request.query_params.get("error")
         error_description = request.query_params.get("error_description")
-        logger.error(f"Auth callback missing code. Error: {error}, Description: {error_description}")
+        logger.error(
+            f"Auth callback missing code. Error: {error}, Description: {error_description}"
+        )
         return RedirectResponse("/?error=auth_failed", status_code=303)
-    
+
     try:
         redirect_uri = _resolve_callback_url(request)
         logger.info(f"Using redirect URI: {redirect_uri}")
-        
-        result = auth_app.acquire_token_by_authorization_code(code, scopes=SCOPES, redirect_uri=redirect_uri)
+
+        result = auth_app.acquire_token_by_authorization_code(
+            code, scopes=SCOPES, redirect_uri=redirect_uri
+        )
         if "error" in result:
-            logger.error(f"MSAL token acquisition failed: {result.get('error_description', result.get('error'))}")
+            logger.error(
+                f"MSAL token acquisition failed: {result.get('error_description', result.get('error'))}"
+            )
             return RedirectResponse("/?error=auth_failed", status_code=303)
     except Exception as e:
         logger.error(f"Exception during token acquisition: {e}")
@@ -181,19 +207,32 @@ async def auth_callback(request: Request):
     token = result.get("id_token") or result.get("access_token")
     if not token:
         raise HTTPException(status_code=401, detail="Authentication failed")
-    
+
     try:
         user_id = verify_token(token)
         request.session["user_id"] = user_id
-        
+
         # Get user info from AAD token for registration
         id_claims = result.get("id_token_claims", {})
         user_email = id_claims.get("email") or id_claims.get("preferred_username")
         user_name = id_claims.get("name")
-        
+
+        # Check for admin override
+        if user_email and user_email.lower() in ADMIN_EMAILS:
+            resp = RedirectResponse(url="/app")
+            resp.set_cookie(
+                key="auth_token",
+                value=token,
+                max_age=3600,
+                httponly=True,
+                secure=request.url.scheme == "https",
+                samesite="lax",
+            )
+            return resp
+
         # Check if user is approved
         user_status = await check_user_approval(user_id)
-        
+
         if user_status.get("approved"):
             # User is approved, set auth cookie and redirect to integrated UI
             resp = RedirectResponse(url="/app")
@@ -210,10 +249,10 @@ async def auth_callback(request: Request):
             # User not approved, automatically request access if new user
             if user_status.get("status") == "not_found" and user_email:
                 await request_access(user_id, user_email, user_name)
-            
+
             # Redirect to waitlist page
             return RedirectResponse(url=request.url_for("waitlist_page"))
-            
+
     except Exception as e:
         logger.error(f"Auth callback error: {e}")
         return RedirectResponse("/?error=auth_failed", status_code=303)
@@ -249,20 +288,20 @@ def _resolve_callback_url(request: Request) -> str:
     if AUTH_GATEWAY_URL:
         base = AUTH_GATEWAY_URL.rstrip("/")
         return f"{base}/auth/callback"
-    
+
     # When mounted under /auth, we need to build the callback URL manually
     # because request.url_for() doesn't account for the mounting path
     forwarded = request.headers.get("x-forwarded-proto")
     scheme = forwarded or request.url.scheme
     host = request.headers.get("x-forwarded-host") or request.url.hostname
     port = request.url.port
-    
+
     # Build the base URL
     if port and port not in (80, 443):
         base_url = f"{scheme}://{host}:{port}"
     else:
         base_url = f"{scheme}://{host}"
-    
+
     # Add the callback path - since we're mounted at /auth, callback is at /auth/callback
     return f"{base_url}/auth/callback"
 
@@ -288,14 +327,14 @@ async def manual_request_access(request: Request):
     form = await request.form()
     email = form.get("email")
     name = form.get("name")
-    
+
     if not email:
         return RedirectResponse("/?error=email_required", status_code=303)
-    
+
     # For manual requests, we don't have an AAD user ID yet
     # Store the request with email as identifier
     success = await request_access(email, email, name)
-    
+
     if success:
         return RedirectResponse("/?message=access_requested", status_code=303)
     else:
@@ -322,7 +361,7 @@ async def auth_status():
         "aad_tenant_id_set": bool(AAD_TENANT_ID),
         "aad_client_secret_set": bool(AAD_CLIENT_SECRET),
         "auth_api_url": AUTH_API_URL,
-        "auth_gateway_url": AUTH_GATEWAY_URL
+        "auth_gateway_url": AUTH_GATEWAY_URL,
     }
 
 
@@ -335,12 +374,12 @@ async def test_callback_url(request: Request):
             "callback_url": callback_url,
             "request_url": str(request.url),
             "headers": dict(request.headers),
-            "success": True
+            "success": True,
         }
     except Exception as e:
         return {
             "error": str(e),
             "request_url": str(request.url),
             "headers": dict(request.headers),
-            "success": False
+            "success": False,
         }
