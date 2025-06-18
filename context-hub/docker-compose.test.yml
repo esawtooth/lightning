@@ -1,0 +1,218 @@
+version: '3.8'
+
+services:
+  # etcd cluster for coordination
+  etcd1:
+    image: quay.io/coreos/etcd:v3.5.9
+    environment:
+      - ETCD_NAME=etcd1
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd1:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd1:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-1
+    networks:
+      - context-hub-test
+
+  etcd2:
+    image: quay.io/coreos/etcd:v3.5.9
+    environment:
+      - ETCD_NAME=etcd2
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd2:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd2:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-1
+    networks:
+      - context-hub-test
+
+  etcd3:
+    image: quay.io/coreos/etcd:v3.5.9
+    environment:
+      - ETCD_NAME=etcd3
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd3:2380
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd3:2379
+      - ETCD_INITIAL_CLUSTER=etcd1=http://etcd1:2380,etcd2=http://etcd2:2380,etcd3=http://etcd3:2380
+      - ETCD_INITIAL_CLUSTER_STATE=new
+      - ETCD_INITIAL_CLUSTER_TOKEN=etcd-cluster-1
+    networks:
+      - context-hub-test
+
+  # PostgreSQL with Citus extension
+  postgres:
+    image: citusdata/citus:12.1
+    environment:
+      - POSTGRES_USER=contexthub
+      - POSTGRES_PASSWORD=testpass
+      - POSTGRES_DB=contexthub
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./migrations:/docker-entrypoint-initdb.d
+    networks:
+      - context-hub-test
+
+  # Redis cluster
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass testpass
+    ports:
+      - "6379:6379"
+    networks:
+      - context-hub-test
+
+  # MinIO for S3-compatible storage
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    networks:
+      - context-hub-test
+
+  # Create MinIO bucket
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 5;
+      mc alias set myminio http://minio:9000 minioadmin minioadmin;
+      mc mb myminio/context-hub || true;
+      mc anonymous set public myminio/context-hub;
+      exit 0;
+      "
+    networks:
+      - context-hub-test
+
+  # Build context-hub image
+  context-hub-build:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    image: context-hub:test
+    command: echo "Build complete"
+
+  # Shard 0
+  shard0:
+    image: context-hub:test
+    depends_on:
+      - context-hub-build
+      - etcd1
+      - etcd2
+      - etcd3
+      - postgres
+      - redis
+      - minio-init
+    environment:
+      - ETCD_ENDPOINTS=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      - DATABASE_URL=postgres://contexthub:testpass@postgres:5432/contexthub
+      - REDIS_URL=redis://:testpass@redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=context-hub
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - MASTER_KEY=dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=
+      - RUST_LOG=info
+    command: ["./context-hub", "shard", "--shard-id", "0", "--addr", "0.0.0.0:8080"]
+    ports:
+      - "8080:8080"
+    networks:
+      - context-hub-test
+
+  # Shard 1
+  shard1:
+    image: context-hub:test
+    depends_on:
+      - context-hub-build
+      - etcd1
+      - etcd2
+      - etcd3
+      - postgres
+      - redis
+      - minio-init
+    environment:
+      - ETCD_ENDPOINTS=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      - DATABASE_URL=postgres://contexthub:testpass@postgres:5432/contexthub
+      - REDIS_URL=redis://:testpass@redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=context-hub
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - MASTER_KEY=dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=
+      - RUST_LOG=info
+    command: ["./context-hub", "shard", "--shard-id", "1", "--addr", "0.0.0.0:8080"]
+    ports:
+      - "8081:8080"
+    networks:
+      - context-hub-test
+
+  # Shard 2
+  shard2:
+    image: context-hub:test
+    depends_on:
+      - context-hub-build
+      - etcd1
+      - etcd2
+      - etcd3
+      - postgres
+      - redis
+      - minio-init
+    environment:
+      - ETCD_ENDPOINTS=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      - DATABASE_URL=postgres://contexthub:testpass@postgres:5432/contexthub
+      - REDIS_URL=redis://:testpass@redis:6379
+      - S3_ENDPOINT=http://minio:9000
+      - S3_BUCKET=context-hub
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - MASTER_KEY=dGVzdGtleXRlc3RrZXl0ZXN0a2V5dGVzdGtleXRlc3Q=
+      - RUST_LOG=info
+    command: ["./context-hub", "shard", "--shard-id", "2", "--addr", "0.0.0.0:8080"]
+    ports:
+      - "8082:8080"
+    networks:
+      - context-hub-test
+
+  # Integration test runner
+  test-runner:
+    image: context-hub:test
+    depends_on:
+      - shard0
+      - shard1
+      - shard2
+    environment:
+      - ETCD_ENDPOINTS=http://etcd1:2379,http://etcd2:2379,http://etcd3:2379
+      - DATABASE_URL=postgres://contexthub:testpass@postgres:5432/contexthub
+      - REDIS_URL=redis://:testpass@redis:6379
+      - RUST_LOG=debug
+      - RUST_BACKTRACE=1
+    command: >
+      sh -c "
+      echo 'Waiting for services to be ready...';
+      sleep 10;
+      echo 'Running integration tests...';
+      cargo test --test integration_test -- --nocapture;
+      "
+    networks:
+      - context-hub-test
+
+networks:
+  context-hub-test:
+    driver: bridge
+
+volumes:
+  minio-data:

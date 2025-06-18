@@ -1,0 +1,65 @@
+{
+  "agent.conseil": {
+    "inputs": {
+      "objective": "string",
+      "additional_context": "string"
+    },
+    "produces": [
+      "event.agent.conseil.start"
+    ],
+    "description": "Requests the Conseil agent to start working on an objective. The agent has access to bash in an internet connected container, and the users context-hub data."
+  },
+  "agent.vex": {
+    "inputs": {
+      "objective": "string",
+      "phone_number": "string",
+      "additional_context": "string"
+    },
+    "produces": [
+      "event.agent.vex.start"
+    ],
+    "description": "Requests the vex agent to make a phone call and achieve an objective. The agent has access to users context-hub data."
+  },
+  "llm.summarize": {
+    "inputs": {
+      "text": "string",
+      "style": "string"
+    },
+    "produces": [
+      "event.summary_ready"
+    ],
+    "description": "Call GPT\u20114 Turbo to summarise text"
+  },
+  "cron.configure": {
+    "inputs": {
+      "plan_id": "string",
+      "cron_expression": "string",
+      "description": "string"
+    },
+    "produces": [
+      "event.cron.configured"
+    ],
+    "description": "Configure a cron job that will emit events for the specified plan at scheduled intervals"
+  },
+  "event.schedule.create": {
+    "inputs": {
+      "title": "string",
+      "cron": "string",
+      "start_time": "datetime",
+      "end_time": "datetime"
+    },
+    "produces": [
+      "event.scheduled_event"
+    ],
+    "description": "Produces events associated with a cron job"
+  },
+  "event.timer.start": {
+    "inputs": {
+      "duration": "integer"
+    },
+    "produces": [
+      "event.timed_event"
+    ],
+    "description": "Produces an event after a specified duration"
+  }
+}

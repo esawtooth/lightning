@@ -8,16 +8,27 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 loro = "1"
-uuid = { version = "1", features = ["v4"] }
+uuid = { version = "1", features = ["v4", "serde"] }
 anyhow = "1"
 git2 = { version = "0.18", features = ["vendored-openssl"] }
-chrono = { version = "0.4", default-features = false, features = ["clock"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "serde"] }
 tantivy = { version = "0.19", default-features = false, features = ["lz4-compression", "mmap"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
 jsonwebtoken = "9"
 async-trait = "0.1"
 reqwest = { version = "0.11", features = ["json", "rustls-tls"] }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
+# sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json", "migrate"] } # Requires DATABASE_URL at compile time
+# etcd-client = "0.14" # Requires protoc
+argon2 = "0.5"
+ring = "0.17"
+rand = "0.8"
+parking_lot = "0.12"
+crc32fast = "1.4"
+bytes = "1"
+base64 = "0.22"
+aws-sdk-s3 = "1.5"
 
 [dev-dependencies]
 tempfile = "3"

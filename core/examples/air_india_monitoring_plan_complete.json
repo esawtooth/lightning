@@ -1,0 +1,98 @@
+{
+  "plan_name": "air_india_incident_monitoring",
+  "description": "Daily monitoring system for Air India jet crash incident news with automated reporting and email notifications",
+  "graph_type": "acyclic",
+  "events": [
+    {
+      "name": "event.manual.trigger",
+      "kind": "manual",
+      "description": "Manual trigger to start the monitoring workflow"
+    },
+    {
+      "name": "event.cron.air_india_daily",
+      "description": "Daily cron event at 5pm for Air India incident monitoring"
+    },
+    {
+      "name": "event.search.complete",
+      "description": "Web search for Air India news has been completed"
+    },
+    {
+      "name": "event.context.updated",
+      "description": "Context hub report has been updated with new findings"
+    },
+    {
+      "name": "event.email.sent",
+      "description": "Email notification has been sent to user"
+    },
+    {
+      "name": "event.cron.configured",
+      "description": "Cron job has been configured for daily monitoring"
+    },
+    {
+      "name": "event.workflow.complete",
+      "description": "Monitoring workflow has completed successfully"
+    }
+  ],
+  "steps": [
+    {
+      "name": "setup_daily_monitoring",
+      "description": "Configure daily cron job for 5pm monitoring",
+      "action": "cron.configure",
+      "args": {
+        "plan_id": "air_india_incident_monitoring",
+        "cron_expression": "0 17 * * *",
+        "description": "Daily Air India jet crash incident monitoring at 5pm"
+      },
+      "on": ["event.manual.trigger"],
+      "emits": ["event.cron.configured", "event.cron.air_india_daily"]
+    },
+    {
+      "name": "search_air_india_news",
+      "description": "Search for latest news on Air India jet crash incident",
+      "action": "web.search",
+      "args": {
+        "query": "Air India jet crash incident latest news updates investigation",
+        "max_results": "20",
+        "source_filter": "news,official"
+      },
+      "on": ["event.cron.air_india_daily"],
+      "emits": ["event.search.complete"]
+    },
+    {
+      "name": "update_context_report",
+      "description": "Update context hub report with new findings",
+      "action": "agent.conseil",
+      "args": {
+        "objective": "Update the context hub report on the Air India jet crash incident with the latest search results. Create a comprehensive report if it doesn't exist. Include all new information, analysis, and maintain a chronological record of developments.",
+        "additional_context": "Use the web search results to update the existing context hub report or create a new one. Ensure the report is well-structured, includes source links, and highlights any significant new developments."
+      },
+      "on": ["event.search.complete"],
+      "emits": ["event.context.updated"]
+    },
+    {
+      "name": "send_email_notification",
+      "description": "Send email notification about new developments",
+      "action": "email.send",
+      "args": {
+        "to": "user@example.com",
+        "subject": "Air India Jet Crash Incident - Daily Update",
+        "body": "Daily monitoring update for Air India jet crash incident. New information has been found and added to the context hub report. Please review the updated report for any critical developments. Link to full report: [context_hub_link]",
+        "attachments": ""
+      },
+      "on": ["event.context.updated"],
+      "emits": ["event.email.sent"]
+    },
+    {
+      "name": "monitoring_complete",
+      "description": "Mark monitoring workflow as complete",
+      "action": "llm.general_prompt",
+      "args": {
+        "system_prompt": "You are a workflow completion tracker.",
+        "user_prompt": "Log that the Air India monitoring workflow has completed successfully.",
+        "model": "gpt-4o-mini"
+      },
+      "on": ["event.cron.configured", "event.email.sent"],
+      "emits": ["event.workflow.complete"]
+    }
+  ]
+}

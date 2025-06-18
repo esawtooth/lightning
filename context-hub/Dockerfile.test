@@ -1,0 +1,52 @@
+# Build stage
+FROM rust:1.75 as builder
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    libssl-dev \
+    pkg-config \
+    protobuf-compiler \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory
+WORKDIR /app
+
+# Copy manifests
+COPY Cargo.toml Cargo.lock ./
+COPY context-hub-core/Cargo.toml ./context-hub-core/
+
+# Build dependencies (for caching)
+RUN mkdir src && echo "fn main() {}" > src/main.rs
+RUN mkdir context-hub-core/src && echo "" > context-hub-core/src/lib.rs
+RUN cargo build --release
+RUN rm -rf src context-hub-core/src
+
+# Copy source code
+COPY . .
+
+# Build application
+RUN cargo build --release --bin context-hub
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy binary from builder
+COPY --from=builder /app/target/release/context-hub /usr/local/bin/context-hub
+
+# Create data directory
+RUN mkdir -p /data
+
+# Set working directory
+WORKDIR /data
+
+# Expose port
+EXPOSE 8080
+
+# Run the binary
+CMD ["context-hub"]

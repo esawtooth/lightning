@@ -1,105 +1,150 @@
 """
-Universal Event Processor - Core Vextir OS event processing function
-Enhanced to work with all migrated drivers
+Universal Event Processor - Azure Functions Adapter
+
+This adapter bridges Azure Functions with the Lightning Core serverless abstraction,
+allowing the same event processing logic to run both locally and in Azure.
 """
 
 import json
 import logging
 import os
-import sys
 from datetime import datetime
 
 import azure.functions as func
 
-# Add the parent directory to the path to import vextir_os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from vextir_os.universal_processor import process_event_message
-from vextir_os.registries import get_driver_registry
-from vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver
-from vextir_os.communication_drivers import (
-    EmailConnectorDriver,
-    CalendarConnectorDriver,
-    UserMessengerDriver,
-    VoiceCallDriver,
-)
-from vextir_os.orchestration_drivers import InstructionEngineDriver, TaskMonitorDriver, SchedulerDriver
-from simple_auth import get_user_id_permissive
+# Import the abstracted event processor
+try:
+    from lightning_core.vextir_os.serverless_processor import universal_event_processor_handler
+    from lightning_core.abstractions.serverless import FunctionContext, TriggerType
+except ImportError:
+    # Fallback for current deployment structure
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from vextir_os.serverless_processor import universal_event_processor_handler
+    from vextir_os.serverless import FunctionContext, TriggerType
 
 
-async def initialize_drivers():
-    """Initialize all drivers for the system"""
-    registry = get_driver_registry()
-    
-    # Register core drivers
-    core_drivers = [
-        (ContextHubDriver._vextir_manifest, ContextHubDriver),
-        (ChatAgentDriver._vextir_manifest, ChatAgentDriver),
-        (AuthenticationDriver._vextir_manifest, AuthenticationDriver)
-    ]
-    
-    # Register communication drivers
-    communication_drivers = [
-        (EmailConnectorDriver._vextir_manifest, EmailConnectorDriver),
-        (CalendarConnectorDriver._vextir_manifest, CalendarConnectorDriver),
-        (UserMessengerDriver._vextir_manifest, UserMessengerDriver),
-        (VoiceCallDriver._vextir_manifest, VoiceCallDriver),
-    ]
-    
-    # Register orchestration drivers
-    orchestration_drivers = [
-        (InstructionEngineDriver._vextir_manifest, InstructionEngineDriver),
-        (TaskMonitorDriver._vextir_manifest, TaskMonitorDriver),
-        (SchedulerDriver._vextir_manifest, SchedulerDriver)
-    ]
-    
-    all_drivers = core_drivers + communication_drivers + orchestration_drivers
-    
-    for manifest, driver_class in all_drivers:
-        try:
-            await registry.register_driver(manifest, driver_class)
-            logging.info(f"Registered driver: {manifest.id}")
-        except Exception as e:
-            logging.error(f"Failed to register driver {manifest.id}: {e}")
-    
-    logging.info(f"Initialized {len(all_drivers)} drivers")
-
-
-# Global flag to track initialization
-_drivers_initialized = False
+# Configure logging
+logging.basicConfig(level=os.getenv("LOGGING_LEVEL", "INFO"))
+logger = logging.getLogger(__name__)
 
 
 async def main(msg: func.ServiceBusMessage) -> None:
-    """Main handler for universal event processing"""
+    """
+    Azure Functions adapter for universal event processor.
     
-    global _drivers_initialized
+    This function receives Service Bus messages and processes them through
+    the Lightning Core universal event processor using the serverless abstraction.
+    """
+    invocation_start = datetime.utcnow()
     
     try:
-        # Initialize drivers on first run
-        if not _drivers_initialized:
-            await initialize_drivers()
-            _drivers_initialized = True
-        
         # Parse message body
         body = msg.get_body().decode("utf-8")
         event_data = json.loads(body)
         
-        logging.info(f"Processing event: {event_data.get('type', 'unknown')} for user {event_data.get('userID', 'unknown')}")
+        # Create function context from Azure Functions message
+        context = FunctionContext(
+            function_name="UniversalEventProcessor",
+            invocation_id=msg.message_id or f"azure-{invocation_start.timestamp()}",
+            trigger_type=TriggerType.QUEUE,
+            trigger_data=event_data,
+            environment=dict(os.environ),
+            metadata={
+                "azure_message_id": msg.message_id,
+                "azure_enqueued_time": msg.enqueued_time_utc.isoformat() if msg.enqueued_time_utc else None,
+                "azure_delivery_count": msg.delivery_count,
+                "azure_session_id": msg.session_id,
+                "azure_correlation_id": msg.correlation_id,
+                "source": "azure_service_bus"
+            }
+        )
         
-        # Process through universal processor with all drivers available
-        result = await process_event_message(event_data)
+        # Log invocation details
+        logger.info(f"Azure Function invoked - ID: {context.invocation_id}")
+        logger.info(f"Processing event type: {event_data.get('type', 'unknown')}")
+        logger.info(f"User ID: {event_data.get('userID', 'unknown')}")
         
-        if result["status"] == "success":
-            logging.info(f"Successfully processed event, generated {result['output_count']} output events")
+        # Process through unified handler
+        response = await universal_event_processor_handler(context)
+        
+        # Log response
+        if response.is_error:
+            logger.error(f"Processing failed - Status: {response.status_code}")
+            logger.error(f"Error: {response.error_message or response.body}")
             
-            # Log which drivers handled the event
-            if "driver_results" in result:
-                for driver_id, driver_result in result["driver_results"].items():
-                    if driver_result.get("handled", False):
-                        logging.info(f"Driver {driver_id} handled event and generated {len(driver_result.get('output_events', []))} output events")
+            # For Azure Functions, we need to raise an exception to trigger retry/dead-letter
+            error_msg = response.error_message or "Event processing failed"
+            raise Exception(error_msg)
         else:
-            logging.error(f"Failed to process event: {result.get('error', 'unknown error')}")
+            logger.info(f"Processing succeeded - Status: {response.status_code}")
             
-    except Exception as e:
-        logging.error(f"Error in universal event processor: {e}")
+            # Log output events if available
+            if isinstance(response.body, dict):
+                output_count = response.body.get("output_count", 0)
+                if output_count > 0:
+                    logger.info(f"Generated {output_count} output events")
+        
+        # Calculate processing time
+        processing_time = (datetime.utcnow() - invocation_start).total_seconds()
+        logger.info(f"Processing completed in {processing_time:.2f} seconds")
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse message body: {e}")
+        logger.error(f"Raw message: {body[:500]}...")  # Log first 500 chars
         raise
+    except Exception as e:
+        logger.error(f"Error in Azure Function adapter: {e}", exc_info=True)
+        raise
+
+
+# Alternative HTTP trigger for testing/debugging
+async def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
+    """
+    HTTP trigger endpoint for testing the event processor.
+    
+    This allows invoking the processor via HTTP for debugging purposes.
+    """
+    try:
+        # Get request body
+        req_body = req.get_json()
+        
+        # Create function context
+        context = FunctionContext(
+            function_name="UniversalEventProcessor-HTTP",
+            invocation_id=f"http-{datetime.utcnow().timestamp()}",
+            trigger_type=TriggerType.HTTP,
+            trigger_data=req_body,
+            environment=dict(os.environ),
+            metadata={
+                "http_method": req.method,
+                "http_url": req.url,
+                "http_headers": dict(req.headers),
+                "source": "http_trigger"
+            }
+        )
+        
+        # Process event
+        response = await universal_event_processor_handler(context)
+        
+        # Return HTTP response
+        return func.HttpResponse(
+            body=json.dumps(response.body),
+            status_code=response.status_code,
+            headers=response.headers,
+            mimetype="application/json"
+        )
+        
+    except ValueError:
+        return func.HttpResponse(
+            body=json.dumps({"error": "Invalid JSON in request body"}),
+            status_code=400,
+            mimetype="application/json"
+        )
+    except Exception as e:
+        logger.error(f"Error in HTTP trigger: {e}", exc_info=True)
+        return func.HttpResponse(
+            body=json.dumps({"error": str(e)}),
+            status_code=500,
+            mimetype="application/json"
+        )

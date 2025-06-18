@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lightning OS - Local Development</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f0f2f5;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 { margin: 0; font-size: 2em; }
+        .header p { margin: 5px 0 0 0; opacity: 0.9; }
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .status-bar {
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status { display: flex; gap: 20px; }
+        .status-item { display: flex; align-items: center; gap: 5px; }
+        .status-light {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #10b981;
+        }
+        .status-light.error { background: #ef4444; }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .panel {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        .panel h2 {
+            margin: 0 0 15px 0;
+            color: #1f2937;
+            font-size: 1.3em;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border: 1px solid #d1d5db;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+        }
+        button:hover { background: #5a67d8; }
+        .items-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #e5e7eb;
+            border-radius: 6px;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        .item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+            border-left: 3px solid #667eea;
+        }
+        .item-header {
+            font-weight: 600;
+            color: #1f2937;
+            margin-bottom: 4px;
+        }
+        .item-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+        .demo-info {
+            background: #fef3c7;
+            border: 1px solid #fbbf24;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .demo-info h3 {
+            margin: 0 0 10px 0;
+            color: #92400e;
+        }
+        .demo-info p {
+            margin: 0;
+            color: #78350f;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>⚡ Lightning OS</h1>
+        <p>Local Development Environment - Docker Compose</p>
+    </div>
+    
+    <div class="container">
+        <div class="status-bar">
+            <div class="status">
+                <div class="status-item">
+                    <div class="status-light" id="api-status"></div>
+                    <span>API: <strong id="api-status-text">Checking...</strong></span>
+                </div>
+                <div class="status-item">
+                    <div class="status-light" id="db-status"></div>
+                    <span>Database: <strong id="db-status-text">Checking...</strong></span>
+                </div>
+                <div class="status-item">
+                    <div class="status-light" id="redis-status"></div>
+                    <span>Redis: <strong id="redis-status-text">Checking...</strong></span>
+                </div>
+            </div>
+            <div>
+                <button onclick="location.reload()">🔄 Refresh</button>
+            </div>
+        </div>
+        
+        <div class="demo-info">
+            <h3>🎯 Running Locally with Docker Compose</h3>
+            <p>This is the Lightning OS running entirely on your local machine using Docker Compose. 
+            The same code can be deployed to Azure by changing configuration only!</p>
+        </div>
+        
+        <div class="grid">
+            <div class="panel">
+                <h2>📤 Submit Event</h2>
+                <input type="text" id="event-type" placeholder="Event Type" value="user.action">
+                <input type="text" id="user-id" placeholder="User ID" value="demo-user">
+                <textarea id="event-data" rows="3" placeholder="Event Data (JSON)">{"action": "test", "timestamp": "now"}</textarea>
+                <button onclick="submitEvent()">Submit Event</button>
+                
+                <h3>Recent Events</h3>
+                <div id="events-list" class="items-list">
+                    <div style="color: #9ca3af; text-align: center;">Loading...</div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <h2>📋 Create Task</h2>
+                <input type="text" id="task-title" placeholder="Task Title">
+                <textarea id="task-description" rows="3" placeholder="Task Description"></textarea>
+                <select id="task-priority">
+                    <option value="low">Low Priority</option>
+                    <option value="medium" selected>Medium Priority</option>
+                    <option value="high">High Priority</option>
+                </select>
+                <button onclick="createTask()">Create Task</button>
+                
+                <h3>Tasks</h3>
+                <div id="tasks-list" class="items-list">
+                    <div style="color: #9ca3af; text-align: center;">Loading...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="panel" style="margin-top: 20px;">
+            <h2>🏗️ Architecture</h2>
+            <p>Currently running:</p>
+            <ul>
+                <li><strong>API:</strong> FastAPI on port 8000</li>
+                <li><strong>Database:</strong> PostgreSQL on port 5432</li>
+                <li><strong>Event Bus:</strong> Redis on port 6379</li>
+                <li><strong>Web UI:</strong> Nginx on port 8080</li>
+            </ul>
+            <button onclick="checkAbstraction()">View Abstraction Demo</button>
+            <div id="abstraction-demo" style="margin-top: 15px;"></div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:8000';
+        
+        async function checkHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                
+                document.getElementById('api-status').className = 'status-light';
+                document.getElementById('api-status-text').textContent = 'Connected';
+                
+                document.getElementById('db-status').className = 
+                    data.services.postgres === 'connected' ? 'status-light' : 'status-light error';
+                document.getElementById('db-status-text').textContent = 
+                    data.services.postgres === 'connected' ? 'Connected' : 'Disconnected';
+                
+                document.getElementById('redis-status').className = 
+                    data.services.redis === 'connected' ? 'status-light' : 'status-light error';
+                document.getElementById('redis-status-text').textContent = 
+                    data.services.redis === 'connected' ? 'Connected' : 'Disconnected';
+            } catch (error) {
+                document.getElementById('api-status').className = 'status-light error';
+                document.getElementById('api-status-text').textContent = 'Offline';
+            }
+        }
+        
+        async function submitEvent() {
+            try {
+                const response = await fetch(`${API_URL}/api/events`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        type: document.getElementById('event-type').value,
+                        userID: document.getElementById('user-id').value,
+                        data: JSON.parse(document.getElementById('event-data').value || '{}')
+                    })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('event-type').value = '';
+                    document.getElementById('event-data').value = '{}';
+                    loadEvents();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function createTask() {
+            try {
+                const response = await fetch(`${API_URL}/api/tasks`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        title: document.getElementById('task-title').value,
+                        description: document.getElementById('task-description').value,
+                        priority: document.getElementById('task-priority').value
+                    })
+                });
+                
+                if (response.ok) {
+                    document.getElementById('task-title').value = '';
+                    document.getElementById('task-description').value = '';
+                    loadTasks();
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        async function loadEvents() {
+            try {
+                const response = await fetch(`${API_URL}/api/events`);
+                const data = await response.json();
+                const list = document.getElementById('events-list');
+                
+                if (data.events.length === 0) {
+                    list.innerHTML = '<div style="color: #9ca3af; text-align: center;">No events yet</div>';
+                } else {
+                    list.innerHTML = data.events.map(event => `
+                        <div class="item">
+                            <div class="item-header">${event.type}</div>
+                            <div class="item-meta">User: ${event.userID} | ${new Date(event.timestamp).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading events:', error);
+            }
+        }
+        
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_URL}/api/tasks`);
+                const data = await response.json();
+                const list = document.getElementById('tasks-list');
+                
+                if (data.tasks.length === 0) {
+                    list.innerHTML = '<div style="color: #9ca3af; text-align: center;">No tasks yet</div>';
+                } else {
+                    list.innerHTML = data.tasks.map(task => `
+                        <div class="item">
+                            <div class="item-header">${task.title}</div>
+                            <div class="item-meta">Priority: ${task.priority} | Status: ${task.status}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+            }
+        }
+        
+        async function checkAbstraction() {
+            try {
+                const response = await fetch(`${API_URL}/api/demo/abstraction`);
+                const data = await response.json();
+                
+                document.getElementById('abstraction-demo').innerHTML = `
+                    <div style="background: #f3f4f6; padding: 15px; border-radius: 6px;">
+                        <h4>Abstraction Layer Demo</h4>
+                        <p>${data.message}</p>
+                        <p><strong>Current Mode:</strong> ${data.current_mode}</p>
+                        <p><strong>Storage:</strong> ${data.storage_backend}</p>
+                        <p><strong>Events:</strong> ${data.event_backend}</p>
+                        <pre style="background: white; padding: 10px; border-radius: 4px; overflow-x: auto;">
+${JSON.stringify(data.explanation, null, 2)}</pre>
+                    </div>
+                `;
+            } catch (error) {
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        // Initial load
+        checkHealth();
+        loadEvents();
+        loadTasks();
+        
+        // Auto-refresh
+        setInterval(() => {
+            checkHealth();
+            loadEvents();
+            loadTasks();
+        }, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "plan_name": "daily_email_summary",
+  "graph_type": "acyclic",
+  "events": [
+    {
+      "name": "event.email.check",
+      "kind": "time.interval",
+      "schedule": "PT1H",
+      "description": "Check for new emails every hour"
+    },
+    {
+      "name": "event.summary_ready"
+    },
+    {
+      "name": "event.notification_sent"
+    }
+  ],
+  "steps": [
+    {
+      "name": "summarize_emails",
+      "action": "llm.summarize",
+      "args": {
+        "text": "Recent email content",
+        "style": "brief"
+      },
+      "on": ["event.email.check"],
+      "emits": ["event.summary_ready"]
+    },
+    {
+      "name": "send_teams_notification",
+      "action": "chat.sendTeamsMessage",
+      "args": {
+        "channel_id": "general",
+        "content": "Daily email summary is ready"
+      },
+      "on": ["event.summary_ready"],
+      "emits": ["event.notification_sent"]
+    }
+  ]
+}

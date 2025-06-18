@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import TopBar from "@/components/top-bar";
 import ChecklistAndConfig from "@/components/checklist-and-config";
 import SessionConfigurationPanel from "@/components/session-configuration-panel";
+import AgentControlPanel from "@/components/agent-control-panel";
 import Transcript from "@/components/transcript";
 import FunctionCallsPanel from "@/components/function-calls-panel";
 import { Item } from "@/components/types";
@@ -53,7 +54,7 @@ const CallInterface = () => {
       <TopBar />
       <div className="flex-grow p-4 h-full overflow-hidden flex flex-col">
         <div className="grid grid-cols-12 gap-4 h-full">
-          {/* Left Column */}
+          {/* Left Column: Session Config */}
           <div className="col-span-3 flex flex-col h-full overflow-hidden">
             <SessionConfigurationPanel
               callStatus={callStatus}
@@ -72,8 +73,18 @@ const CallInterface = () => {
             />
           </div>
 
-          {/* Middle Column: Transcript */}
-          <div className="col-span-6 flex flex-col gap-4 h-full overflow-hidden">
+          {/* Second Column: Agent Control */}
+          <div className="col-span-3 flex flex-col h-full overflow-hidden">
+            <AgentControlPanel 
+              ws={ws}
+              onHooksUpdate={(hooks) => {
+                console.log("Agent hooks updated:", hooks);
+              }}
+            />
+          </div>
+
+          {/* Third Column: Transcript */}
+          <div className="col-span-4 flex flex-col gap-4 h-full overflow-hidden">
             <PhoneNumberChecklist
               selectedPhoneNumber={selectedPhoneNumber}
               allConfigsReady={allConfigsReady}
@@ -83,7 +94,7 @@ const CallInterface = () => {
           </div>
 
           {/* Right Column: Function Calls */}
-          <div className="col-span-3 flex flex-col h-full overflow-hidden">
+          <div className="col-span-2 flex flex-col h-full overflow-hidden">
             <FunctionCallsPanel items={items} ws={ws} />
           </div>
         </div>

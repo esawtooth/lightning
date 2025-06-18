@@ -1,0 +1,59 @@
+{
+  "plan_name": "air_india_incident_monitoring",
+  "description": "Daily monitoring system for Air India jet crash incident news with automated reporting and Teams notifications",
+  "graph_type": "acyclic",
+  "events": [
+    {
+      "name": "event.manual.trigger",
+      "kind": "manual",
+      "description": "Manual trigger to start the monitoring workflow"
+    },
+    {
+      "name": "event.news_search_complete",
+      "description": "News search has been completed"
+    },
+    {
+      "name": "event.report_updated",
+      "description": "Context hub report has been updated"
+    },
+    {
+      "name": "event.notification_sent",
+      "description": "Teams notification has been sent"
+    }
+  ],
+  "steps": [
+    {
+      "name": "search_air_india_news",
+      "description": "Search for latest news on Air India jet crash incident",
+      "action": "agent.conseil",
+      "args": {
+        "objective": "Search for the latest news and updates on the Air India jet crash incident. Focus on new developments, investigation updates, official statements, and any breaking news related to the Air India jet crash. Prioritize credible news sources and official reports.",
+        "additional_context": "This is a daily monitoring task to track ongoing developments in the Air India jet crash incident. Please provide comprehensive coverage of any new information."
+      },
+      "on": ["event.manual.trigger"],
+      "emits": ["event.news_search_complete"]
+    },
+    {
+      "name": "update_context_report",
+      "description": "Update or create context hub report with new findings",
+      "action": "agent.conseil",
+      "args": {
+        "objective": "Update the context hub report on the Air India jet crash incident with the latest findings. Create a comprehensive report if it doesn't exist. Include all new information, analysis, and maintain a chronological record of developments.",
+        "additional_context": "Use the news search results to update the existing context hub report or create a new one. Ensure the report is well-structured and includes links to sources where possible."
+      },
+      "on": ["event.news_search_complete"],
+      "emits": ["event.report_updated"]
+    },
+    {
+      "name": "send_teams_notification",
+      "description": "Send Teams notification about new developments",
+      "action": "chat.sendTeamsMessage",
+      "args": {
+        "channel_id": "general",
+        "content": "🚨 Air India Jet Crash Incident Update\n\nNew information has been found and added to the context hub report. The monitoring system has completed its daily check and updated our knowledge base with the latest developments.\n\n📊 Report Status: Updated\n🔗 Access the full report in the context hub\n⏰ Last Updated: Daily monitoring cycle\n\nPlease review the updated information for any critical developments."
+      },
+      "on": ["event.report_updated"],
+      "emits": ["event.notification_sent"]
+    }
+  ]
+}

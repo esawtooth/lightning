@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (replaces Cosmos DB)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: lightning
+      POSTGRES_PASSWORD: lightning123
+      POSTGRES_DB: lightning_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lightning"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for event bus and caching)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Simple API Server (FastAPI)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      REDIS_URL: redis://redis:6379
+      LIGHTNING_MODE: local
+      PORT: 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./demo_app:/app
+
+  # Simple Web UI
+  web:
+    image: nginx:alpine
+    ports:
+      - "8080:80"
+    volumes:
+      - ./web:/usr/share/nginx/html
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:

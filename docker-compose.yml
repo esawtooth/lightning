@@ -1,0 +1,270 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database (replaces Cosmos DB)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: lightning
+      POSTGRES_PASSWORD: lightning123
+      POSTGRES_DB: lightning_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lightning"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (for event bus and caching)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # RabbitMQ (alternative message queue)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: lightning
+      RABBITMQ_DEFAULT_PASS: lightning123
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Context Hub (Rust-based storage service)
+  context-hub:
+    build:
+      context: ./context-hub
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      JWT_SECRET: local-development-secret-key-change-in-production
+      PORT: 3000
+      RUST_LOG: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Lightning Core API (FastAPI backend)
+  lightning-api:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: local
+      LIGHTNING_STORAGE_PROVIDER: local
+      LIGHTNING_STORAGE_PATH: /app/data
+      LIGHTNING_EVENT_BUS_PROVIDER: redis
+      LIGHTNING_CONTAINER_RUNTIME: docker
+      LIGHTNING_SERVERLESS_PROVIDER: local
+      
+      # Database
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      
+      # Redis
+      REDIS_URL: redis://redis:6379
+      
+      # Context Hub
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Authentication
+      JWT_SECRET: local-development-secret-key-change-in-production
+      AUTH_ENABLED: "false"  # Disable for local development
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: INFO
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./core:/app
+      - lightning_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock  # For Docker container management
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      context-hub:
+        condition: service_healthy
+    command: |
+      sh -c "
+        pip install -e .[local] &&
+        uvicorn lightning_core.api.main:app --host 0.0.0.0 --port 8000 --reload
+      "
+
+  # Event Processor (replaces Azure Functions)
+  event-processor:
+    build:
+      context: ./core
+      dockerfile: Dockerfile.processor
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: local
+      LIGHTNING_STORAGE_PROVIDER: local
+      LIGHTNING_EVENT_BUS_PROVIDER: redis
+      
+      # Services
+      REDIS_URL: redis://redis:6379
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: INFO
+    volumes:
+      - ./core:/app
+      - lightning_data:/app/data
+    depends_on:
+      - lightning-api
+      - redis
+    command: |
+      sh -c "
+        pip install -e .[local] &&
+        python -m lightning_core.vextir_os.local_event_processor
+      "
+
+  # Chat Client UI
+  chat-client:
+    build:
+      context: ./ui/chat_client
+      dockerfile: Dockerfile
+    environment:
+      # Backend APIs
+      API_BASE: http://lightning-api:8000
+      EVENT_API_URL: http://lightning-api:8000/api/events
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Authentication (simplified for local)
+      AUTH_ENABLED: "false"
+      JWT_SECRET: local-development-secret-key-change-in-production
+      
+      # Chainlit Configuration
+      CHAINLIT_HOST: 0.0.0.0
+      CHAINLIT_PORT: 8501
+    ports:
+      - "8501:8501"
+    depends_on:
+      - lightning-api
+      - context-hub
+    volumes:
+      - ./ui/chat_client:/app
+
+  # Dashboard UI
+  dashboard:
+    build:
+      context: ./ui/dashboard
+      dockerfile: Dockerfile
+    environment:
+      # Backend APIs
+      API_BASE: http://lightning-api:8000
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Dashboard Configuration
+      DASHBOARD_HOST: 0.0.0.0
+      DASHBOARD_PORT: 8502
+    ports:
+      - "8502:8502"
+    depends_on:
+      - lightning-api
+      - context-hub
+    volumes:
+      - ./ui/dashboard:/app
+
+  # Integrated App UI (main UI)
+  integrated-app:
+    build:
+      context: ./ui/integrated_app
+      dockerfile: Dockerfile
+    environment:
+      # Backend APIs
+      API_BASE: http://lightning-api:8000
+      EVENT_API_URL: http://lightning-api:8000/api/events
+      CONTEXT_HUB_URL: http://context-hub:3000
+      CHAT_CLIENT_URL: http://chat-client:8501
+      DASHBOARD_URL: http://dashboard:8502
+      
+      # App Configuration
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - lightning-api
+      - context-hub
+      - chat-client
+      - dashboard
+    volumes:
+      - ./ui/integrated_app:/app
+
+  # Local Agent Runner (for testing agents)
+  agent-runner:
+    build:
+      context: ./agents
+      dockerfile: Dockerfile.local
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: local
+      API_BASE: http://lightning-api:8000
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Agent Configuration
+      AGENT_TYPE: ${AGENT_TYPE:-conseil}
+    volumes:
+      - ./agents:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - lightning-api
+    profiles:
+      - agents
+
+  # Development Tools Container
+  dev-tools:
+    image: busybox
+    volumes:
+      - ./scripts:/scripts
+      - lightning_data:/data
+    command: tail -f /dev/null
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+  rabbitmq_data:
+  lightning_data:
+
+networks:
+  default:
+    name: lightning-network
