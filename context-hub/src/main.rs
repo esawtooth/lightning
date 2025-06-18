@@ -42,10 +42,10 @@ async fn main() -> anyhow::Result<()> {
     let indexer = Arc::new(indexer::LiveIndex::new(search.clone(), store.clone()));
     let events = events::EventBus::new();
     let verifier: Arc<dyn auth::TokenVerifier> = if let Ok(url) = std::env::var("AZURE_JWKS_URL") {
-        Arc::new(auth::AzureEntraIdVerifier::new(url))
+        Arc::new(auth::legacy::AzureEntraIdVerifier::new(url))
     } else {
         let secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
-        Arc::new(auth::Hs256Verifier::new(secret))
+        Arc::new(auth::legacy::Hs256Verifier::new(secret))
     };
     let snapshot_retention = std::env::var("SNAPSHOT_RETENTION")
         .ok()

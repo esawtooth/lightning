@@ -4,23 +4,26 @@ Non-interactive demonstration of the flexible Conseil agent system
 """
 
 import time
-from pathlib import Path
+
 
 def print_section(title):
     """Print a section header"""
     print(f"\n\n{'='*70}")
     print(f"  {title}")
-    print('='*70)
+    print('=' * 70)
+
 
 def simulate_command(command, delay=0.5):
     """Simulate entering a command"""
     print(f"\n$ {command}")
     time.sleep(delay)
 
+
 def simulate_user_input(prompt):
     """Simulate user input"""
     print(f"\n> {prompt}")
     time.sleep(0.3)
+
 
 def simulate_response(response, delay=0.1):
     """Simulate agent response with typing effect"""
@@ -28,6 +31,7 @@ def simulate_response(response, delay=0.1):
     for line in response.split('\n'):
         print(line)
         time.sleep(delay)
+
 
 # Start demo
 print("""
@@ -49,7 +53,7 @@ coding:
   Common files: *.py, *.js, *.ts, *.java, *.cpp, *.go
 
 legal:
-  Title: Legal Document Assistant  
+  Title: Legal Document Assistant
   Description: Legal document specialist for contracts and agreements...
   Common files: *.md, contracts/*.md, legal/*.md
 
@@ -94,13 +98,13 @@ simulate_response("""Analyzing the Independent Contractor Agreement...
 ### 1. **Intellectual Property Rights** (Section 6)
    ❌ Current: "All work product shall be owned by Contractor"
    ✅ Should be: "All work product shall be owned by Company" (work-for-hire)
-   
+
 ### 2. **Missing Essential Clauses**:
    - **Indemnification**: No protection against contractor liabilities
    - **Insurance**: No professional liability coverage requirement
    - **Non-Solicitation**: No restriction on poaching employees/clients
    - **Dispute Resolution**: No arbitration clause to avoid litigation
-   
+
 ### 3. **Weak Termination Terms** (Section 4)
    - No notice period (recommend 30 days)
    - No return of property clause
@@ -122,7 +126,7 @@ simulate_command("conseil --role personal --no-sandbox --approval auto")
 
 print("""
 🤖 Starting Conseil as: Personal Assistant
-   Sandbox: Disabled ⚠️ 
+   Sandbox: Disabled ⚠️
    Approval: auto
    Model: gpt-4
 ------------------------------------------------------------
@@ -140,7 +144,7 @@ simulate_response("""Creating optimized schedule for Monday...
 **10:00-10:30** ➤ Team standup 👥 [Fixed]
 **10:30-12:00** ➤ Deep work: Project proposal 📝 [High Priority]
 
-### 🌞 Afternoon Block (12:00 PM - 5:00 PM)  
+### 🌞 Afternoon Block (12:00 PM - 5:00 PM)
 **12:00-1:00** ➤ Lunch break 🍽️
 **1:00-2:00** ➤ Review pull requests 💻 [High Priority]
 **2:00-3:00** ➤ Meeting with Sarah 🤝 [Rescheduled]
@@ -155,14 +159,14 @@ simulate_response("""Creating optimized schedule for Monday...
 ✅ Auto-approved: Created tasks-monday-optimized.md
 ✅ Auto-approved: Created calendar-sync.ics for calendar import""")
 
-# Finance Assistant Demo  
+# Finance Assistant Demo
 print_section("4. FINANCE ASSISTANT ANALYZING EXPENSES")
 simulate_command("conseil --role finance --no-sandbox")
 
 print("""
 🤖 Starting Conseil as: Financial Assistant
    Sandbox: Disabled ⚠️
-   Approval: manual  
+   Approval: manual
    Model: gpt-4
 ------------------------------------------------------------
 """)
@@ -177,7 +181,7 @@ simulate_response("""Analyzing January 2024 financial data...
 ## 📊 Spending Breakdown
 ```
 Office      ████████████████████ 60.6% ($3,687)
-Marketing   ████                 12.3% ($750)  
+Marketing   ████                 12.3% ($750)
 Travel      ███                   8.1% ($495)
 Software    ██                    4.0% ($243)
 Other       ████                 14.0% ($628)
@@ -186,22 +190,22 @@ Other       ████                 14.0% ($628)
 ## 🎯 Cost-Saving Opportunities
 
 ### 1. Immediate Savings (Save $89/month)
-• **Software Consolidation**: 
+• **Software Consolidation**:
   - Merge Adobe + design tools → Canva Pro ($12.99)
   - Annual vs monthly: Save 20% on all subscriptions
-  
+
 ### 2. Strategic Optimizations (Save $500+/month)
 • **Office Space**: Rent is 57% of budget
-  - Option A: Negotiate 10% reduction 
+  - Option A: Negotiate 10% reduction
   - Option B: Hybrid model (3 days/week coworking)
-  
-• **Marketing Efficiency**: 
+
+• **Marketing Efficiency**:
   - Current CAC from ads: ~$125
   - Shift 30% budget to content marketing
-  
+
 ### 3. Quick Wins
 ✓ Set up virtual cards with spending limits
-✓ Automate expense categorization  
+✓ Automate expense categorization
 ✓ Implement approval workflow for >$100
 
 💡 Projected February savings: $589 (9.7% reduction)""")
@@ -229,7 +233,7 @@ simulate_user_input("Create an onboarding checklist for a new software engineer 
 simulate_response("""Creating comprehensive onboarding checklist...
 
 ## 🎉 New Employee Onboarding Checklist
-**Employee**: [New Software Engineer]  
+**Employee**: [New Software Engineer]
 **Start Date**: Monday, [Date]
 **Buddy**: [Assign Technical Mentor]
 
@@ -244,7 +248,7 @@ simulate_response("""Creating comprehensive onboarding checklist...
 ### 🌅 Day 1: Welcome & Setup
 **Morning (9:00 AM - 12:00 PM)**
 - [ ] Office tour and introductions
-- [ ] IT setup: Laptop, monitors, accessories  
+- [ ] IT setup: Laptop, monitors, accessories
 - [ ] Security: Badge, 2FA, password manager
 - [ ] HR paperwork and benefits enrollment
 - [ ] Team welcome lunch
@@ -256,7 +260,7 @@ simulate_response("""Creating comprehensive onboarding checklist...
 - [ ] Assign first "good first issue"
 
 ### 📚 Week 1: Foundation
-- [ ] Product overview and architecture  
+- [ ] Product overview and architecture
 - [ ] Meet with cross-functional partners
 - [ ] Complete security training
 - [ ] Shadow team ceremonies
@@ -270,7 +274,7 @@ print("""
 The Flexible Conseil Agent System enables:
 
 ✅ Multiple professional roles beyond coding
-✅ Configurable sandboxing for trusted operations  
+✅ Configurable sandboxing for trusted operations
 ✅ Role-specific prompts and guidelines
 ✅ Seamless integration with Lightning workflows
 ✅ Custom roles for specialized needs
@@ -280,11 +284,11 @@ file editing and automation capabilities.
 
 Try it yourself:
   conseil --role legal --no-sandbox
-  conseil --role personal --approval auto  
+  conseil --role personal --approval auto
   conseil --role finance
   conseil --role custom --description "Your role here"
 """)
 
-print("\n" + "="*70)
+print("\n" + "=" * 70)
 print("Thank you for watching the Flexible Conseil Agent demonstration!")
-print("="*70 + "\n")
+print("=" * 70 + "\n")

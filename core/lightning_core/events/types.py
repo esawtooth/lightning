@@ -8,14 +8,16 @@ from typing import Literal
 
 class EventCategory(Enum):
     """Event categories for classification"""
-    INPUT = "input"      # From external world (user input, sensors, APIs)
+
+    INPUT = "input"  # From external world (user input, sensors, APIs)
     INTERNAL = "internal"  # System communication between components
-    OUTPUT = "output"    # To external world (UI updates, notifications)
+    OUTPUT = "output"  # To external world (UI updates, notifications)
     EXTERNAL = "external"  # External scheduled/triggered events (for planner)
 
 
 class ScheduleType(Enum):
     """Types of event scheduling"""
+
     CRON = "time.cron"
     INTERVAL = "time.interval"
     WEBHOOK = "webhook"
@@ -25,7 +27,7 @@ class ScheduleType(Enum):
 # Type aliases for compatibility
 EventType = Literal[
     "event.email",
-    "event.calendar", 
+    "event.calendar",
     "event.message",
     "event.worker.task",
     "event.context.update",
@@ -33,7 +35,7 @@ EventType = Literal[
     "event.notification",
     "event.system.start",
     "event.system.stop",
-    "event.user.action"
+    "event.user.action",
 ]
 
 ExternalEventType = Literal["time.cron", "time.interval", "webhook", "manual"]

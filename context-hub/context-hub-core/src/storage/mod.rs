@@ -1,5 +1,6 @@
 pub mod crdt;
-// pub mod distributed; // Requires sqlx
+#[cfg(feature = "distributed")]
+pub mod distributed;
 
 // #[cfg(test)]
 // mod tests; // Requires distributed module

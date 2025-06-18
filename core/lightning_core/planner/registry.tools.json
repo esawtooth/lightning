@@ -61,5 +61,25 @@
       "event.timed_event"
     ],
     "description": "Produces an event after a specified duration"
+  },
+  "chat.sendTeamsMessage": {
+    "inputs": {
+      "channel_id": "string",
+      "content": "string"
+    },
+    "produces": [
+      "event.teams_message_sent"
+    ],
+    "description": "Send a message to a Microsoft Teams channel"
+  },
+  "llm.general_prompt": {
+    "inputs": {
+      "prompt": "string",
+      "context": "string"
+    },
+    "produces": [
+      "event.llm_response"
+    ],
+    "description": "Send a general prompt to LLM for processing"
   }
 }

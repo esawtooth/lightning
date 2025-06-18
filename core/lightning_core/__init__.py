@@ -9,12 +9,12 @@ Example usage:
 
     # Planning
     from lightning_core.planner import create_verified_plan, PlanModel
-    
+
     plan = create_verified_plan("Send daily email summaries")
-    
+
     # Event System
     from lightning_core.vextir_os import EventBus, Event
-    
+
     bus = EventBus()
     await bus.emit(Event(type="user.message", data={"text": "Hello"}))
 """
@@ -26,28 +26,26 @@ __email__ = "team@lightning.ai"
 # Import main components for easy access
 from lightning_core.planner import (
     PlanModel,
-    create_verified_plan,
-    validate_plan,
+    PlanStore,
     PlanValidationError,
     ToolRegistry,
-    PlanStore,
+    create_verified_plan,
+    validate_plan,
 )
-
 from lightning_core.vextir_os import (
-    EventBus,
-    Event,
     Driver,
     DriverRegistry,
-    get_event_bus,
+    Event,
+    EventBus,
     emit_event,
+    get_event_bus,
 )
 
 __all__ = [
     # Version info
     "__version__",
-    "__author__", 
+    "__author__",
     "__email__",
-    
     # Planner components
     "PlanModel",
     "create_verified_plan",
@@ -55,7 +53,6 @@ __all__ = [
     "PlanValidationError",
     "ToolRegistry",
     "PlanStore",
-    
     # Vextir OS components
     "EventBus",
     "Event",

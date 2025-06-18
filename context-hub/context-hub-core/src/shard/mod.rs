@@ -140,7 +140,7 @@ impl ShardRouter for ConsistentHashRouter {
         }
     }
     
-    async fn route_shared(&self, doc_id: Uuid, users: &[String]) -> Result<Vec<ShardId>> {
+    async fn route_shared(&self, _doc_id: Uuid, users: &[String]) -> Result<Vec<ShardId>> {
         let mut shards = Vec::new();
         
         for user in users {
@@ -234,7 +234,7 @@ struct ConnectionPool {
     connections: Vec<ShardConnection>,
 }
 
-struct ShardConnection {
+pub struct ShardConnection {
     // Would contain actual gRPC/HTTP client
 }
 
@@ -245,7 +245,7 @@ impl ShardConnectionPool {
         }
     }
     
-    pub async fn get_connection(&self, shard: ShardId) -> Result<Arc<ShardConnection>> {
+    pub async fn get_connection(&self, _shard: ShardId) -> Result<Arc<ShardConnection>> {
         // Implementation would get or create connection
         todo!()
     }

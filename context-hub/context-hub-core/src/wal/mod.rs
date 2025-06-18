@@ -153,7 +153,7 @@ impl WriteAheadLog {
     }
     
     /// Compact old segments by removing entries for deleted documents
-    pub async fn compact(&self, active_docs: &[Uuid]) -> Result<()> {
+    pub async fn compact(&self, _active_docs: &[Uuid]) -> Result<()> {
         // Implementation would rewrite segments excluding deleted docs
         Ok(())
     }

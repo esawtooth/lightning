@@ -4,329 +4,326 @@ Simulation of the flexible Conseil agent system
 Shows how different roles would process tasks
 """
 
-import os
 import time
-from datetime import datetime
-from pathlib import Path
+
 
 class ConseilSimulator:
     """Simulates the flexible Conseil agent behavior"""
-    
+
     def __init__(self, role, no_sandbox=False, approval="manual"):
         self.role = role
         self.no_sandbox = no_sandbox
         self.approval = approval
-        
+
     def show_startup(self):
         """Show agent startup message"""
         print(f"\n🤖 Starting Conseil as: {self.role.title()} Assistant")
         print(f"   Sandbox: {'Disabled ⚠️' if self.no_sandbox else 'Enabled'}")
-        print(f"   Approval: {self.approval}")
-        print(f"   Model: gpt-4")
+        print("   Model: gpt-4")
         print("-" * 60)
-        
+
     def process_command(self, command):
         """Simulate processing a command"""
         print(f"\n> {command}")
         time.sleep(0.5)  # Simulate thinking
-        
+
     def show_response(self, response):
         """Show agent response"""
         print(f"\n{response}")
-        
+
 
 def demo_cli_help():
     """Show CLI help"""
     print("🚀 Flexible Conseil Agent System Demo")
     print("=" * 60)
-    
+
     print("\n📋 Available Commands:")
     print("  conseil --help                    Show help")
     print("  conseil --list-roles              List available roles")
     print("  conseil --role <role>             Use specific role")
     print("  conseil --no-sandbox              Disable sandboxing")
     print("  conseil --approval <policy>       Set approval policy")
-    
+
     print("\n📚 Available Roles:")
-    roles = [
-        ("coding", "Expert coding assistant", "*.py, *.js, *.ts"),
-        ("legal", "Legal document assistant", "*.md, contracts/*.md"),
-        ("personal", "Personal assistant", "*.md, todos/*.md"),
-        ("finance", "Financial assistant", "*.csv, *.md, finance/*.md"),
-        ("research", "Research assistant", "*.md, research/*.md"),
-        ("custom", "Custom role (user-defined)", "all files")
-    ]
-    
-    for role, desc, files in roles:
-        print(f"\n  {role}:")
-        print(f"    Description: {desc}")
-        print(f"    Common files: {files}")
+    print("  coding     - Expert coding assistant")
+    print("  legal      - Legal document specialist")
+    print("  personal   - Personal task organizer")
+    print("  finance    - Financial analyst")
+    print("  research   - Research specialist")
+    print("  custom     - Define your own role")
+
+    print("\n🔧 Configuration Options:")
+    print("  --no-sandbox     Disable file operation safety")
+    print("  --approval auto  Auto-approve low-risk actions")
+    print("  --approval manual Manual approval for all actions")
+    print("  --model <name>   Specify AI model to use")
 
 
-def demo_legal_assistant():
-    """Demonstrate legal assistant"""
-    print("\n\n🏛️  LEGAL ASSISTANT DEMO")
-    print("=" * 60)
-    
-    agent = ConseilSimulator("legal", no_sandbox=True, approval="manual")
-    agent.show_startup()
-    
-    # Show the contract
-    print("\n📄 Current file: demo/legal/contractor-agreement.md")
-    with open("demo/legal/contractor-agreement.md") as f:
-        print(f.read())
-    
-    # Process review command
-    agent.process_command("Review this contractor agreement and identify any issues or missing clauses that could pose risks to the company")
-    
-    # Simulate response
-    response = """I've reviewed the Independent Contractor Agreement and identified several significant issues:
+def demo_role_switching():
+    """Demonstrate switching between roles"""
+    print("\n\n" + "=" * 70)
+    print("  DEMONSTRATING ROLE SWITCHING")
+    print("=" * 70)
 
-## 🚨 Critical Issues:
+    # Coding Assistant
+    coding = ConseilSimulator("coding")
+    coding.show_startup()
+    coding.process_command("Add type hints to my Python functions and fix any bugs")
+    coding.show_response("""Analyzing Python files in current directory...
 
-1. **Intellectual Property Rights** (Section 6)
-   - Currently states: "All work product created by Contractor shall be owned by Contractor"
-   - This is backwards! The Company should own work product created for them
-   - Recommendation: Change to "work-for-hire" language
+Found 3 files requiring type hints:
+- main.py (5 functions missing hints)
+- utils.py (3 functions missing hints)
+- models.py (2 classes missing hints)
 
-2. **Termination Clause** (Section 4)
-   - No notice period specified
-   - No provisions for termination for cause
-   - Missing obligation to return company property
+🔍 Issues detected:
+- Line 23: Undefined variable 'data' in process_user_input()
+- Line 45: Missing return statement in validate_config()
 
-3. **Missing Clauses**:
-   - **Indemnification**: No protection for Company against contractor's actions
-   - **Insurance**: No requirement for contractor liability insurance
-   - **Non-Solicitation**: No restriction on soliciting company employees/clients
-   - **Dispute Resolution**: No arbitration or mediation clause
-   - **Warranty**: No warranty of contractor's work quality
+✏️ Applying fixes:
+✅ Added type hints to all functions
+✅ Fixed undefined variable bug
+✅ Added missing return statement
+✅ Organized imports per PEP 8
 
-4. **Payment Terms** (Section 2)
-   - No payment schedule specified (NET 30? Upon receipt?)
-   - No expense reimbursement provisions
-   - No late payment terms
+📝 Created pull request with changes""")
 
-5. **Confidentiality** (Section 5)
-   - Too vague - needs definition of "confidential information"
-   - No time limit on confidentiality obligations
-   - No exceptions for publicly available information
+    # Switch to Legal Assistant
+    print("\n" + "-" * 50)
+    print("🔄 Switching to Legal Assistant...")
 
-Would you like me to draft amendments for any of these issues?"""
-    
-    agent.show_response(response)
-    
-    if agent.approval == "manual":
-        print("\n⚠️  Manual Approval Required")
-        print("Command: apply_patch to fix IP ownership clause")
-        print("[A]pprove / [D]eny / [M]odify? ", end="")
+    legal = ConseilSimulator("legal", no_sandbox=True)
+    legal.show_startup()
+    legal.process_command("Review our terms of service for GDPR compliance issues")
+    legal.show_response("""📋 GDPR Compliance Review of Terms of Service
 
+🚨 Critical Issues Found:
 
-def demo_personal_assistant():
-    """Demonstrate personal assistant"""
-    print("\n\n📅 PERSONAL ASSISTANT DEMO")
-    print("=" * 60)
-    
-    agent = ConseilSimulator("personal", no_sandbox=True, approval="auto")
-    agent.show_startup()
-    
-    # Show current tasks
-    print("\n📄 Current file: demo/personal/tasks-today.md")
-    print("(Showing first 10 lines...)")
-    with open("demo/personal/tasks-today.md") as f:
-        lines = f.readlines()[:10]
-        print("".join(lines))
-    
-    # Process organization command
-    agent.process_command("Organize my tasks by priority and time, add time estimates, and create a schedule for the day")
-    
-    response = """I've reorganized your tasks into a prioritized schedule:
+1. **Data Processing Legal Basis** (Article 6)
+   ❌ No clear legal basis specified for data processing
+   ✅ Recommend: Add explicit consent + legitimate interest clauses
 
-## 📅 Monday Schedule
+2. **User Rights Section** (Articles 15-22)
+   ❌ Missing: Right to data portability
+   ❌ Missing: Right to object to processing
+   ❌ Incomplete: Right to erasure implementation
 
-### ⏰ Morning (9:00 AM - 12:00 PM)
-**9:00 - 9:30**: Email client about timeline ⚡ [30 min]
-**10:00 - 10:30**: Team standup 📅 [30 min]  
-**10:30 - 12:00**: Finish project proposal 📝 [1.5 hrs]
+3. **Data Retention** (Article 5.1.e)
+   ❌ No specific retention periods mentioned
+   ✅ Recommend: Define 2-year retention for user data
 
-### 🌞 Afternoon (12:00 PM - 5:00 PM)
-**12:00 - 1:00**: Lunch break
-**1:00 - 2:00**: Review pull requests 💻 [1 hr]
-**2:00 - 3:00**: Meeting with Sarah 📅 [1 hr]
-**3:00 - 4:00**: Update documentation 📚 [1 hr]
-**4:00 - 4:30**: Pay electric bill 💡 [30 min]
-**4:30 - 5:00**: Call dentist for appointment 📞 [30 min]
+4. **Third-Party Sharing** (Article 44-49)
+   ❌ Vague language about "partners and affiliates"
+   ✅ Need explicit list of data processors
 
-### 🌆 Evening (5:00 PM - 8:00 PM)
-**5:00 - 6:00**: Prepare for Tuesday presentation 🎯 [1 hr]
-**6:00 - 7:00**: Gym 💪 [1 hr]
-**7:00 - 8:00**: Grocery shopping 🛒 [1 hr]
+⚖️ Compliance Score: 4/10 (High Risk)
+📄 I can draft GDPR-compliant amendments""")
 
-## ✅ Completed Schedule Summary:
-- Work tasks: 5.5 hours
-- Personal tasks: 2.5 hours  
-- Meetings: 1.5 hours
-- Breaks/Transition: 1.5 hours
+    # Switch to Personal Assistant
+    print("\n" + "-" * 50)
+    print("🔄 Switching to Personal Assistant...")
 
-💡 Tips:
-- Block time for email/Slack: Check at 9am, 1pm, 4:30pm
-- Presentation prep before gym maintains energy
-- Grocery list ready to save time shopping
+    personal = ConseilSimulator("personal", no_sandbox=True, approval="auto")
+    personal.show_startup()
+    personal.process_command("Plan my week - I have 3 meetings, 2 deadlines, and want to include exercise")
+    personal.show_response("""📅 Weekly Schedule Optimization
 
-Auto-approved: Saving organized schedule to tasks-monday-scheduled.md ✓"""
-    
-    agent.show_response(response)
-    print("\n✅ Auto-approved: File saved")
+## This Week's Priorities:
+🎯 **Meetings**: Project kickoff (Mon), Client review (Wed), Team retro (Fri)
+⏰ **Deadlines**: Report submission (Tue), Presentation prep (Thu)
+💪 **Personal**: 4x exercise sessions + adequate rest
 
+## Optimized Schedule:
 
-def demo_finance_assistant():
-    """Demonstrate finance assistant"""
-    print("\n\n💰 FINANCE ASSISTANT DEMO")
-    print("=" * 60)
-    
-    agent = ConseilSimulator("finance", no_sandbox=True, approval="manual")
-    agent.show_startup()
-    
-    # Process analysis command
-    agent.process_command("Analyze expenses-jan.csv and create a spending report with insights and recommendations")
-    
-    response = """## January 2024 Expense Analysis
+**Monday**
+- 9:00 AM: Project kickoff meeting
+- 11:00 AM: Deep work on report (deadline Tue)
+- 2:00 PM: Email processing & admin
+- 6:00 PM: Gym session 💪
 
-### 📊 Summary Statistics
-- **Total Expenses**: $6,088.16
-- **Daily Average**: $203
-- **Number of Transactions**: 14
+**Tuesday**
+- 9:00 AM: Finish & submit report ⏰
+- 11:00 AM: Start presentation prep
+- 2:00 PM: Buffer time for report follow-up
+- 7:00 PM: Yoga class 🧘
 
-### 📈 Spending by Category
+**Wednesday**
+- 10:00 AM: Client review meeting
+- 12:00 PM: Presentation work (focused)
+- 3:00 PM: Client follow-up tasks
+- 6:30 PM: Walking/light cardio 🚶
 
-| Category | Amount | % of Total | Transactions |
-|----------|--------|------------|--------------|
-| Office | $3,687.30 | 60.6% | 3 |
-| Software | $243.16 | 4.0% | 4 |
-| Marketing | $750.00 | 12.3% | 2 |
-| Travel | $495.20 | 8.1% | 2 |
-| Equipment | $189.99 | 3.1% | 1 |
-| Professional | $350.00 | 5.7% | 1 |
-| Meals | $87.50 | 1.4% | 1 |
+**Thursday**
+- 9:00 AM: Presentation finalization ⏰
+- 11:00 AM: Practice presentation
+- 2:00 PM: Prep for Friday retro
+- 6:00 PM: Strength training 💪
 
-### 💡 Key Insights
+**Friday**
+- 10:00 AM: Team retrospective
+- 12:00 PM: Week wrap-up & planning
+- 2:00 PM: Administrative catch-up
+- Weekend: Rest & personal time
 
-1. **Office Costs Dominate** (60.6%)
-   - Rent is the single largest expense at $3,500
-   - Consider: Negotiate rent or explore co-working spaces
-
-2. **Software Subscriptions** ($243.16/month)
-   - Multiple small subscriptions add up
-   - Action: Audit for unused services, consider annual plans
-
-3. **Marketing Spend** ($750)
-   - Split between Facebook ($250) and Google Ads ($500)
-   - ROI tracking needed to evaluate effectiveness
-
-### 🎯 Recommendations
-
-1. **Immediate Actions**:
-   - Review software subscriptions for consolidation
-   - Set up automated expense tracking
-   - Implement receipt scanning system
-
-2. **Cost Optimization**:
-   - Software: Switch to annual billing (typically 15-20% savings)
-   - Travel: Set up corporate accounts for regular services
-   - Marketing: Implement conversion tracking
-
-3. **Budget Targets for February**:
-   - Total: $5,500 (10% reduction)
-   - Focus areas: Software consolidation, marketing efficiency
-
-Would you like me to create a detailed budget template for February?"""
-    
-    agent.show_response(response)
-    print("\n⚠️  Manual Approval Required")
-    print("Command: Create expense_analysis_jan2024.md")
-    print("[A]pprove / [D]eny / [M]odify? ", end="")
+✅ Auto-created calendar events
+✅ Set reminders for deadlines
+✅ Blocked focus time for deep work""")
 
 
 def demo_custom_role():
-    """Demonstrate custom role"""
-    print("\n\n🎨 CUSTOM ROLE DEMO")
-    print("=" * 60)
-    
+    """Demonstrate creating a custom role"""
+    print("\n\n" + "=" * 70)
+    print("  CREATING CUSTOM ROLE - MARKETING SPECIALIST")
+    print("=" * 70)
+
     print("\n$ conseil --role custom \\")
-    print('  --description "You are a technical blog writer creating developer content" \\')
-    print('  --guidelines "Use code examples, be practical, explain complex concepts simply" \\')
-    print("  --no-sandbox")
-    
-    agent = ConseilSimulator("Technical Blog Writer", no_sandbox=True)
-    agent.show_startup()
-    
-    agent.process_command("Write an introduction for a blog post about event-driven architectures")
-    
-    response = """# Event-Driven Architecture: Building Scalable Systems That React
+    print("    --description 'Marketing specialist for content creation and campaigns' \\")
+    print("    --guidelines 'Focus on brand voice, data-driven decisions, and ROI'")
 
-Picture this: You're at a busy coffee shop. When your order is ready, the barista doesn't 
-walk around looking for you—they simply call out your name, and you respond. This is 
-event-driven architecture in action.
+    marketing = ConseilSimulator("marketing specialist", no_sandbox=True)
+    marketing.show_startup()
+    marketing.process_command(
+        "Create a social media campaign for our new product launch targeting developers"
+    )
+    marketing.show_response("""🚀 Developer-Focused Product Launch Campaign
 
-## What We'll Cover
+## Campaign Overview
+**Target**: Software developers & tech leads
+**Duration**: 6 weeks (2 weeks pre-launch + 4 weeks post)
+**Budget**: $15,000 (recommended allocation)
+**Goal**: 10,000 developer signups in first month
 
-```python
-# Traditional approach
-def process_order(order):
-    payment = process_payment(order)
-    inventory = update_inventory(order)
-    notification = send_email(order)
-    return "Order complete"
+## Multi-Channel Strategy
 
-# Event-driven approach  
-def process_order(order):
-    publish_event("OrderPlaced", order)
-    # That's it! Other services listen and react
-```
+### 1. Technical Content Marketing (40% budget)
+📝 **Blog Series**: "Developer Experience Best Practices"
+- Week 1: Problem identification deep-dive
+- Week 2: Technical solution walkthrough
+- Week 3: Implementation case studies
+- Week 4: Performance benchmarks vs alternatives
 
-In this post, we'll explore:
-- Why event-driven architectures matter for modern applications
-- Core concepts: Events, Publishers, and Subscribers
-- Real-world patterns and anti-patterns
-- Building your first event-driven service
+🎥 **Video Content**:
+- Live coding demos on Twitch/YouTube
+- "Behind the scenes" engineering talks
+- Customer success stories from technical users
 
-Ready to build systems that scale naturally? Let's dive in! ☕"""
-    
-    agent.show_response(response)
+### 2. Community Engagement (30% budget)
+👥 **Developer Communities**:
+- Sponsor relevant dev conferences/meetups
+- Host technical webinars
+- Engage in Stack Overflow, Reddit r/programming
+- GitHub repository with examples
+
+🎯 **Influencer Partnerships**:
+- Tech YouTubers for authentic reviews
+- Developer advocates for early feedback
+- Open source maintainers for validation
+
+### 3. Targeted Digital Ads (30% budget)
+📊 **Platforms & Targeting**:
+- LinkedIn (job title: Software Engineer, DevOps)
+- Twitter (interests: programming, dev tools)
+- Dev.to sponsored posts
+- Google Ads (high-intent keywords)
+
+**Creative Focus**:
+- Code snippets showing ease of use
+- Performance improvement metrics
+- Developer testimonials
+- "Before/after" workflow comparisons
+
+## Success Metrics & Tracking
+📈 **KPIs**:
+- Developer signups: 10,000 target
+- Documentation page views: 50,000+
+- GitHub stars/forks: 1,000+
+- Community mentions: Track sentiment
+- Demo requests from enterprise: 100+
+
+🔄 **A/B Tests**:
+- Subject lines in dev newsletter campaigns
+- Landing page code examples vs. videos
+- CTA buttons: "Try Free" vs. "Start Building"
+
+## Content Calendar & Timeline
+Week -2: Teaser content, community engagement
+Week -1: Technical previews, early access program
+Week 0: Launch announcement across all channels
+Week 1-2: User-generated content, case studies
+Week 3-4: Advanced tutorials, enterprise outreach
+
+📋 Ready to execute! Shall I create the detailed asset list and content briefs?""")
 
 
-def main():
-    """Run all demos"""
-    try:
-        # Show CLI help
-        demo_cli_help()
-        input("\n\nPress Enter to see Legal Assistant demo...")
-        
-        # Legal assistant demo
-        demo_legal_assistant()
-        input("\n\nPress Enter to see Personal Assistant demo...")
-        
-        # Personal assistant demo
-        demo_personal_assistant()
-        input("\n\nPress Enter to see Finance Assistant demo...")
-        
-        # Finance assistant demo
-        demo_finance_assistant()
-        input("\n\nPress Enter to see Custom Role demo...")
-        
-        # Custom role demo
-        demo_custom_role()
-        
-        print("\n\n✅ Demo Complete!")
-        print("\nThe flexible Conseil agent can adapt to various professional roles")
-        print("while maintaining its powerful file editing and automation capabilities.")
-        
-    except KeyboardInterrupt:
-        print("\n\nDemo interrupted by user")
-    except Exception as e:
-        print(f"\n\nError during demo: {e}")
+def demo_approval_workflows():
+    """Demonstrate different approval policies"""
+    print("\n\n" + "=" * 70)
+    print("  APPROVAL WORKFLOW DEMONSTRATION")
+    print("=" * 70)
+
+    print("\n🔒 Manual Approval (High-risk operations)")
+    print("$ conseil --role finance --approval manual")
+
+    finance = ConseilSimulator("finance", approval="manual")
+    finance.show_startup()
+    finance.process_command("Transfer $50,000 from operations to marketing budget")
+    finance.show_response("""💰 Budget Transfer Analysis
+
+**Transfer Request**: $50,000 Operations → Marketing
+**Current Operations Balance**: $180,000
+**Current Marketing Balance**: $25,000
+
+📊 **Impact Analysis**:
+- Operations utilization drops to 72% (from 100%)
+- Marketing budget increases by 200%
+- Projected Q4 operations buffer: $130,000 (adequate)
+
+✅ **Recommendation**: APPROVE
+- Transfer supports growth initiatives
+- Operations maintains healthy buffer
+- No cash flow disruption expected
+
+⚠️ MANUAL APPROVAL REQUIRED: High-value financial transaction""")
+
+    print("\n[A]pprove / [D]eny / [M]odify? [Simulated: User types 'A']")
+    print("✅ Approved: Budget transfer processed")
+
+    print("\n\n🟡 Auto-Approval (Low-risk operations)")
+    print("$ conseil --role personal --approval auto")
+
+    personal = ConseilSimulator("personal", approval="auto")
+    personal.show_startup()
+    personal.process_command("Schedule my recurring team standup for 10 AM every Tuesday")
+    personal.show_response("""📅 Recurring Meeting Setup
+
+**Meeting**: Team Standup
+**Schedule**: Every Tuesday at 10:00 AM
+**Duration**: 30 minutes (recommended)
+**Attendees**: Development team (8 people)
+
+✅ Auto-approved: Low-risk calendar operation
+✅ Created recurring event
+✅ Sent calendar invites to team
+✅ Set 5-minute reminder notifications
+
+📝 Note: Meeting conflicts detected for 2 team members on Nov 14th - alternative suggested""")
 
 
 if __name__ == "__main__":
-    # Change to agents directory
-    os.chdir(Path(__file__).parent.parent)
-    main()
+    """Run the demonstration"""
+    print("╔══════════════════════════════════════════════════════════════════════╗")
+    print("║         FLEXIBLE CONSEIL AGENT SYSTEM - INTERACTIVE SIMULATION      ║")
+    print("╚══════════════════════════════════════════════════════════════════════╝")
+
+    demo_cli_help()
+    demo_role_switching()
+    demo_custom_role()
+    demo_approval_workflows()
+
+    print("\n" + "=" * 70)
+    print("✨ Simulation complete! The flexible agent system enables:")
+    print("  • Role-specific expertise and workflows")
+    print("  • Configurable safety and approval policies")
+    print("  • Custom roles for specialized business needs")
+    print("  • Seamless integration with existing tools")
+    print("=" * 70)

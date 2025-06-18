@@ -1,4 +1,5 @@
 """Command line utilities for Vextir OS."""
+
 import asyncio
 import json
 import sys
@@ -18,6 +19,7 @@ def main() -> None:
     result = asyncio.run(process_event_message(event))
     json.dump(result, sys.stdout, indent=2)
     print()
+
 
 if __name__ == "__main__":
     main()

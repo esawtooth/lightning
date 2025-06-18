@@ -24,4 +24,4 @@ COPY . .
 EXPOSE 8501
 
 # Run the application
-CMD ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "8501"]
+CMD ["chainlit", "run", "chainlit_app.py", "--host", "0.0.0.0", "--port", "8501"]

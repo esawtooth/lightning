@@ -38,7 +38,7 @@ pub struct AclEntry {
 }
 
 impl DocumentType {
-    fn as_str(&self) -> &'static str {
+    pub fn as_str(&self) -> &'static str {
         match self {
             DocumentType::Folder => "Folder",
             DocumentType::IndexGuide => "IndexGuide",
@@ -46,7 +46,7 @@ impl DocumentType {
         }
     }
 
-    fn from_str(s: &str) -> Self {
+    pub fn from_str(s: &str) -> Self {
         match s {
             "Folder" => DocumentType::Folder,
             "IndexGuide" => DocumentType::IndexGuide,

@@ -5,26 +5,28 @@ This provides REST API endpoints for the Lightning Core system,
 replacing Azure Functions endpoints for local development.
 """
 
-import os
 import logging
-from typing import Dict, Any, List, Optional
-from datetime import datetime
+import os
 from contextlib import asynccontextmanager
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, Request
+import uvicorn
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-import uvicorn
 
-from lightning_core.runtime import get_runtime, initialize_runtime
 from lightning_core.abstractions import (
-    RuntimeConfig, ExecutionMode, EventMessage, Document
+    Document,
+    EventMessage,
+    ExecutionMode,
+    RuntimeConfig,
 )
+from lightning_core.runtime import get_runtime, initialize_runtime
 from lightning_core.vextir_os.driver_initialization import (
     configure_drivers_for_environment,
-    initialize_all_drivers
+    initialize_all_drivers,
 )
-
 
 # Configure logging
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -38,6 +40,7 @@ runtime = None
 # Pydantic models
 class EventRequest(BaseModel):
     """Event submission request."""
+
     type: str = Field(..., description="Event type (e.g., user.action)")
     userID: str = Field(..., description="User ID")
     data: Dict[str, Any] = Field(default_factory=dict, description="Event data")
@@ -47,6 +50,7 @@ class EventRequest(BaseModel):
 
 class EventResponse(BaseModel):
     """Event submission response."""
+
     success: bool
     event_id: str
     message: str
@@ -54,6 +58,7 @@ class EventResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str
     timestamp: str
     version: str = "1.0.0"
@@ -62,13 +67,17 @@ class HealthResponse(BaseModel):
 
 class PlanRequest(BaseModel):
     """Plan creation request."""
+
     description: str = Field(..., description="Natural language plan description")
     userID: str = Field(..., description="User ID")
-    plan_type: str = Field(default="acyclic", description="Plan type: acyclic or reactive")
+    plan_type: str = Field(
+        default="acyclic", description="Plan type: acyclic or reactive"
+    )
 
 
 class TaskRequest(BaseModel):
     """Task creation request."""
+
     title: str
     description: Optional[str] = None
     assignedTo: Optional[str] = None
@@ -80,23 +89,23 @@ class TaskRequest(BaseModel):
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     global runtime
-    
+
     logger.info("Starting Lightning Core API...")
-    
+
     # Configure environment
     configure_drivers_for_environment()
-    
+
     # Initialize runtime
     config = RuntimeConfig.from_env()
     runtime = await initialize_runtime(config)
-    
+
     # Initialize drivers
     await initialize_all_drivers()
-    
+
     logger.info("Lightning Core API started successfully")
-    
+
     yield
-    
+
     # Cleanup
     logger.info("Shutting down Lightning Core API...")
     if runtime:
@@ -109,7 +118,7 @@ app = FastAPI(
     title="Lightning Core API",
     description="Local API for Lightning Core OS",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -131,9 +140,9 @@ async def health_check():
         "api": "healthy",
         "storage": "unknown",
         "event_bus": "unknown",
-        "context_hub": "unknown"
+        "context_hub": "unknown",
     }
-    
+
     # Check storage
     try:
         if runtime and await runtime.storage.container_exists("health_check"):
@@ -142,24 +151,28 @@ async def health_check():
             services["storage"] = "healthy"  # Container doesn't need to exist
     except Exception:
         services["storage"] = "unhealthy"
-    
+
     # Check event bus
     try:
         if runtime and runtime._event_bus and runtime._event_bus._running:
             services["event_bus"] = "healthy"
     except Exception:
         services["event_bus"] = "unhealthy"
-    
+
     # Check context hub (would need actual check)
     context_hub_url = os.getenv("CONTEXT_HUB_URL", "http://localhost:3000")
     services["context_hub"] = "unknown"  # Would implement actual health check
-    
-    overall_status = "healthy" if all(s == "healthy" or s == "unknown" for s in services.values()) else "degraded"
-    
+
+    overall_status = (
+        "healthy"
+        if all(s == "healthy" or s == "unknown" for s in services.values())
+        else "degraded"
+    )
+
     return HealthResponse(
         status=overall_status,
         timestamp=datetime.utcnow().isoformat(),
-        services=services
+        services=services,
     )
 
 
@@ -176,19 +189,19 @@ async def submit_event(event_req: EventRequest):
                 **event_req.metadata,
                 "source": event_req.source,
                 "userID": event_req.userID,
-                "submitted_via": "api"
-            }
+                "submitted_via": "api",
+            },
         )
-        
+
         # Publish event
         await runtime.publish_event(event)
-        
+
         return EventResponse(
             success=True,
             event_id=event.id,
-            message=f"Event {event.event_type} submitted successfully"
+            message=f"Event {event.event_type} submitted successfully",
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to submit event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -210,7 +223,7 @@ async def get_event_types():
             "plan.execute",
             "system.health_check",
             "agent.invoke",
-            "tool.execute"
+            "tool.execute",
         ]
     }
 
@@ -229,8 +242,8 @@ async def create_plan(plan_req: PlanRequest):
             "plan": {
                 "description": plan_req.description,
                 "type": plan_req.plan_type,
-                "status": "draft"
-            }
+                "status": "draft",
+            },
         }
     except Exception as e:
         logger.error(f"Failed to create plan: {e}")
@@ -244,7 +257,7 @@ async def create_task(task_req: TaskRequest, request: Request):
     try:
         # Get user ID from header or use default
         user_id = request.headers.get("X-User-ID", "local-user")
-        
+
         # Create task event
         event = EventMessage(
             event_type="task.create",
@@ -254,17 +267,14 @@ async def create_task(task_req: TaskRequest, request: Request):
                 "assignedTo": task_req.assignedTo or user_id,
                 "dueDate": task_req.dueDate,
                 "priority": task_req.priority,
-                "status": "pending"
+                "status": "pending",
             },
-            metadata={
-                "userID": user_id,
-                "source": "api"
-            }
+            metadata={"userID": user_id, "source": "api"},
         )
-        
+
         # Publish event
         await runtime.publish_event(event)
-        
+
         # Return task (in production, this would query the database)
         return {
             "success": True,
@@ -272,10 +282,10 @@ async def create_task(task_req: TaskRequest, request: Request):
                 "id": f"task-{datetime.utcnow().timestamp()}",
                 **task_req.dict(),
                 "status": "pending",
-                "createdAt": datetime.utcnow().isoformat()
-            }
+                "createdAt": datetime.utcnow().isoformat(),
+            },
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to create task: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -287,7 +297,7 @@ async def get_tasks(request: Request):
     try:
         # Get user ID from header or use default
         user_id = request.headers.get("X-User-ID", "local-user")
-        
+
         # In production, this would query the database
         # For now, return mock data
         return {
@@ -299,12 +309,12 @@ async def get_tasks(request: Request):
                     "assignedTo": user_id,
                     "status": "pending",
                     "priority": "medium",
-                    "createdAt": datetime.utcnow().isoformat()
+                    "createdAt": datetime.utcnow().isoformat(),
                 }
             ],
-            "total": 1
+            "total": 1,
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get tasks: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -316,24 +326,26 @@ async def get_drivers():
     """Get registered drivers."""
     try:
         from lightning_core.vextir_os.registries import get_driver_registry
-        
+
         registry = get_driver_registry()
         drivers = []
-        
+
         for driver_id in registry._drivers:
             driver = await registry.get_driver(driver_id)
             manifest = registry._manifests.get(driver_id)
             if manifest:
-                drivers.append({
-                    "id": driver_id,
-                    "name": manifest.name,
-                    "description": manifest.description,
-                    "version": manifest.version,
-                    "type": manifest.driver_type
-                })
-        
+                drivers.append(
+                    {
+                        "id": driver_id,
+                        "name": manifest.name,
+                        "description": manifest.description,
+                        "version": manifest.version,
+                        "type": manifest.driver_type,
+                    }
+                )
+
         return {"drivers": drivers, "total": len(drivers)}
-        
+
     except Exception as e:
         logger.error(f"Failed to get drivers: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -345,20 +357,22 @@ async def get_tools():
     """Get available tools."""
     try:
         from lightning_core.vextir_os.registries import get_tool_registry
-        
+
         registry = get_tool_registry()
         tools = []
-        
+
         for tool_id, tool_def in registry._tools.items():
-            tools.append({
-                "id": tool_id,
-                "name": tool_def.get("name", tool_id),
-                "description": tool_def.get("description", ""),
-                "parameters": tool_def.get("parameters", {})
-            })
-        
+            tools.append(
+                {
+                    "id": tool_id,
+                    "name": tool_def.get("name", tool_id),
+                    "description": tool_def.get("description", ""),
+                    "parameters": tool_def.get("parameters", {}),
+                }
+            )
+
         return {"tools": tools, "total": len(tools)}
-        
+
     except Exception as e:
         logger.error(f"Failed to get tools: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -370,21 +384,23 @@ async def get_models():
     """Get available AI models."""
     try:
         from lightning_core.vextir_os.registries import get_model_registry
-        
+
         registry = get_model_registry()
         models = []
-        
+
         for model_id, model_def in registry._models.items():
-            models.append({
-                "id": model_id,
-                "provider": model_def.get("provider", ""),
-                "name": model_def.get("name", model_id),
-                "description": model_def.get("description", ""),
-                "capabilities": model_def.get("capabilities", [])
-            })
-        
+            models.append(
+                {
+                    "id": model_id,
+                    "provider": model_def.get("provider", ""),
+                    "name": model_def.get("name", model_id),
+                    "description": model_def.get("description", ""),
+                    "capabilities": model_def.get("capabilities", []),
+                }
+            )
+
         return {"models": models, "total": len(models)}
-        
+
     except Exception as e:
         logger.error(f"Failed to get models: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -405,15 +421,10 @@ async def root():
             "tasks": "/api/tasks",
             "drivers": "/api/drivers",
             "tools": "/api/tools",
-            "models": "/api/models"
-        }
+            "models": "/api/models",
+        },
     }
 
 
 if __name__ == "__main__":
-    uvicorn.run(
-        "lightning_core.api.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )
+    uvicorn.run("lightning_core.api.main:app", host="0.0.0.0", port=8000, reload=True)

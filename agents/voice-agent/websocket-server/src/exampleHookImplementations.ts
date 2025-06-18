@@ -352,7 +352,7 @@ export const multiLingualHooks: AgentControlHooks = {
   beforeResponse: async (context) => {
     const detectedLang = context.sessionConfig?.detectedLanguage || "en";
     
-    const languageInstructions = {
+    const languageInstructions: Record<string, string> = {
       es: "Responda en español. Sea formal y use 'usted'.",
       fr: "Répondez en français. Soyez poli et formel.",
       de: "Antworten Sie auf Deutsch. Seien Sie höflich und formell.",
@@ -410,7 +410,7 @@ export const enterpriseHooks = combineHooks(
       // Add compliance footer to all responses
       return {
         proceed: true,
-        instructions: context.instructions + "\n\nAlways end responses with: 'This call may be recorded for quality assurance.'"
+        instructions: (context.userInput || '') + "\n\nAlways end responses with: 'This call may be recorded for quality assurance.'"
       };
     }
   }

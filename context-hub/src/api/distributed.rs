@@ -9,13 +9,12 @@ use axum::{
     http::{request::Parts, HeaderMap, StatusCode},
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::{delete, get, post, put},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
 use tower::ServiceBuilder;
 use tower_http::{
     compression::CompressionLayer,
@@ -431,27 +430,27 @@ async fn share_document(
 }
 
 async fn unshare_document(
-    State(state): State<ApiState>,
-    auth: AuthContext,
-    Path(id): Path<Uuid>,
-    Query(params): Query<ShareRequest>,
+    State(_state): State<ApiState>,
+    _auth: AuthContext,
+    Path(_id): Path<Uuid>,
+    Query(_params): Query<ShareRequest>,
 ) -> StatusCode {
     // Would implement ACL removal
     StatusCode::NO_CONTENT
 }
 
 async fn list_documents(
-    State(state): State<ApiState>,
-    auth: AuthContext,
+    State(_state): State<ApiState>,
+    _auth: AuthContext,
 ) -> Result<Json<Vec<DocumentSummary>>, StatusCode> {
     // Would implement document listing with pagination
     Ok(Json(vec![]))
 }
 
 async fn search_documents(
-    State(state): State<ApiState>,
-    auth: AuthContext,
-    Query(params): Query<SearchQuery>,
+    State(_state): State<ApiState>,
+    _auth: AuthContext,
+    Query(_params): Query<SearchQuery>,
 ) -> Result<Json<SearchResult>, StatusCode> {
     // Would implement search across user's documents
     Ok(Json(SearchResult {
