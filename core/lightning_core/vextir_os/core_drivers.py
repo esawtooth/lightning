@@ -12,8 +12,7 @@ from typing import Any, Dict, List, Optional
 
 import openai
 import requests
-from azure.cosmos import CosmosClient
-from events import (
+from lightning_core.events.models import (
     CalendarEvent,
     ContextUpdateEvent,
     EmailEvent,
@@ -22,6 +21,8 @@ from events import (
     LLMChatEvent,
     WorkerTaskEvent,
 )
+from lightning_core.abstractions import Document
+from lightning_core.runtime import LightningRuntime
 
 from .drivers import (
     AgentDriver,
@@ -56,28 +57,11 @@ class ContextHubDriver(ToolDriver):
     ):
         super().__init__(manifest, config)
         self.hub_url = os.environ.get("CONTEXT_HUB_URL", "http://localhost:3000")
-        self.cosmos_conn = os.environ.get("COSMOS_CONNECTION")
         self.cosmos_db = os.environ.get("COSMOS_DATABASE", "vextir")
         self.user_container = os.environ.get("USER_CONTAINER", "users")
 
-        # Initialize Cosmos client
-        self._client = (
-            CosmosClient.from_connection_string(self.cosmos_conn)
-            if self.cosmos_conn
-            else None
-        )
-        self._db = (
-            self._client.create_database_if_not_exists(self.cosmos_db)
-            if self._client
-            else None
-        )
-        self._container = (
-            self._db.create_container_if_not_exists(
-                id=self.user_container, partition_key="/pk"
-            )
-            if self._db
-            else None
-        )
+        # Initialize Lightning Runtime for provider abstraction
+        self.runtime = LightningRuntime()
 
     def get_capabilities(self) -> List[str]:
         return ["context.read", "context.write", "context.search", "context.initialize"]

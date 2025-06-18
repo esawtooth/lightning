@@ -15,20 +15,9 @@ from email.mime.text import MIMEText
 from typing import Any, Dict, List, Optional
 
 import requests
-from azure.cosmos import CosmosClient, PartitionKey
-from azure.identity import DefaultAzureCredential
-from azure.mgmt.containerinstance import ContainerInstanceManagementClient
-from azure.mgmt.containerinstance.models import (
-    Container,
-    ContainerGroup,
-    ContainerGroupRestartPolicy,
-    EnvironmentVariable,
-    OperatingSystemTypes,
-    ResourceRequests,
-    ResourceRequirements,
-)
-from azure.servicebus import ServiceBusClient, ServiceBusMessage
-from events import CalendarEvent, EmailEvent, Event, VoiceCallEvent
+from lightning_core.events.models import CalendarEvent, EmailEvent, Event, VoiceCallEvent
+from lightning_core.abstractions import ContainerConfig, EventMessage, ResourceRequirements
+from lightning_core.runtime import LightningRuntime
 
 from .drivers import (
     AgentDriver,
@@ -56,20 +45,13 @@ class EmailConnectorDriver(IODriver):
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
     ):
         super().__init__(manifest, config)
-        self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
-        self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
-
         self.gmail_token = os.environ.get("GMAIL_OAUTH_TOKEN")
         self.outlook_token = os.environ.get("OUTLOOK_OAUTH_TOKEN")
         self.icloud_username = os.environ.get("ICLOUD_USERNAME")
         self.icloud_app_password = os.environ.get("ICLOUD_APP_PASSWORD")
 
-        # Initialize service bus client
-        self._sb_client = (
-            ServiceBusClient.from_connection_string(self.servicebus_conn)
-            if self.servicebus_conn
-            else None
-        )
+        # Initialize Lightning Runtime for provider abstraction
+        self.runtime = LightningRuntime()
 
     def get_capabilities(self) -> List[str]:
         return ["email.send", "email.receive", "email.webhook"]
@@ -325,20 +307,13 @@ class CalendarConnectorDriver(IODriver):
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
     ):
         super().__init__(manifest, config)
-        self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
-        self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
-
         self.gmail_token = os.environ.get("GMAIL_OAUTH_TOKEN")
         self.outlook_token = os.environ.get("OUTLOOK_OAUTH_TOKEN")
         self.icloud_username = os.environ.get("ICLOUD_USERNAME")
         self.icloud_app_password = os.environ.get("ICLOUD_APP_PASSWORD")
 
-        # Initialize service bus client
-        self._sb_client = (
-            ServiceBusClient.from_connection_string(self.servicebus_conn)
-            if self.servicebus_conn
-            else None
-        )
+        # Initialize Lightning Runtime for provider abstraction
+        self.runtime = LightningRuntime()
 
     def get_capabilities(self) -> List[str]:
         return [
@@ -627,15 +602,8 @@ class UserMessengerDriver(IODriver):
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
     ):
         super().__init__(manifest, config)
-        self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
-        self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
-
-        # Initialize service bus client
-        self._sb_client = (
-            ServiceBusClient.from_connection_string(self.servicebus_conn)
-            if self.servicebus_conn
-            else None
-        )
+        # Initialize Lightning Runtime for provider abstraction
+        self.runtime = LightningRuntime()
 
     def get_capabilities(self) -> List[str]:
         return ["message.send", "notification.deliver"]
@@ -842,41 +810,13 @@ class VoiceCallDriver(IODriver):
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
     ):
         super().__init__(manifest, config)
-        self.cosmos_conn = os.environ.get("COSMOS_CONNECTION")
         self.cosmos_db = os.environ.get("COSMOS_DATABASE", "vextir")
         self.call_container = os.environ.get("CALL_CONTAINER", "calls")
-        self.servicebus_conn = os.environ.get("SERVICEBUS_CONNECTION")
-        self.servicebus_queue = os.environ.get("SERVICEBUS_QUEUE")
-        self.aci_resource_group = os.environ.get("ACI_RESOURCE_GROUP")
-        self.aci_subscription_id = os.environ.get("ACI_SUBSCRIPTION_ID")
         self.aci_region = os.environ.get("ACI_REGION", "centralindia")
         self.voice_image = os.environ.get("VOICE_IMAGE", "voice-agent")
 
-        self._cosmos_client = (
-            CosmosClient.from_connection_string(self.cosmos_conn)
-            if self.cosmos_conn
-            else None
-        )
-        if self._cosmos_client:
-            db = self._cosmos_client.create_database_if_not_exists(self.cosmos_db)
-            self._call_container = db.create_container_if_not_exists(
-                id=self.call_container, partition_key=PartitionKey(path="/pk")
-            )
-        else:
-            self._call_container = None
-
-        self._sb_client = (
-            ServiceBusClient.from_connection_string(self.servicebus_conn)
-            if self.servicebus_conn
-            else None
-        )
-
-        self._credential = DefaultAzureCredential()
-        self._aci_client = None
-        if self.aci_resource_group and self.aci_subscription_id:
-            self._aci_client = ContainerInstanceManagementClient(
-                self._credential, self.aci_subscription_id
-            )
+        # Initialize Lightning Runtime for provider abstraction
+        self.runtime = LightningRuntime()
 
     def get_capabilities(self) -> List[str]:
         return ["voice.call"]
@@ -900,88 +840,68 @@ class VoiceCallDriver(IODriver):
             v_event = event
 
         call_id = uuid.uuid4().hex
-        entity = {
-            "id": call_id,
-            "pk": v_event.user_id,
-            "phone": v_event.phone,
-            "objective": v_event.objective,
-            "status": "pending",
-            "created_at": datetime.utcnow().isoformat(),
-        }
+        
+        # Store call record using abstracted storage
+        from lightning_core.abstractions import Document
+        call_doc = Document(
+            id=call_id,
+            partition_key=v_event.user_id,
+            data={
+                "phone": v_event.phone,
+                "objective": v_event.objective,
+                "status": "pending",
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        )
+        
         try:
-            if self._call_container:
-                self._call_container.upsert_item(entity)
+            await self.runtime.storage.create_document(self.call_container, call_doc)
         except Exception as e:
             logging.error("Failed to record call: %s", e)
 
         result = ""
-        group_name = None
+        container_name = None
         try:
-            if not self._aci_client:
-                raise RuntimeError("ACI client not configured")
-            env_list = [
-                EnvironmentVariable(
-                    name="OPENAI_API_KEY", value=os.environ.get("OPENAI_API_KEY", "")
-                ),
-                EnvironmentVariable(
-                    name="SERVICEBUS_CONNECTION", value=self.servicebus_conn or ""
-                ),
-                EnvironmentVariable(
-                    name="SERVICEBUS_QUEUE", value=self.servicebus_queue or ""
-                ),
-                EnvironmentVariable(
-                    name="COSMOS_CONNECTION", value=self.cosmos_conn or ""
-                ),
-                EnvironmentVariable(name="COSMOS_DATABASE", value=self.cosmos_db),
-                EnvironmentVariable(name="CALL_CONTAINER", value=self.call_container),
-                EnvironmentVariable(name="OUTBOUND_TO", value=v_event.phone),
-                EnvironmentVariable(name="OBJECTIVE", value=v_event.objective or ""),
-                EnvironmentVariable(
-                    name="PUBLIC_URL", value=os.environ.get("PUBLIC_URL", "")
-                ),
-                EnvironmentVariable(
-                    name="TWILIO_ACCOUNT_SID",
-                    value=os.environ.get("TWILIO_ACCOUNT_SID", ""),
-                ),
-                EnvironmentVariable(
-                    name="TWILIO_AUTH_TOKEN",
-                    value=os.environ.get("TWILIO_AUTH_TOKEN", ""),
-                ),
-                EnvironmentVariable(
-                    name="TWILIO_FROM_NUMBER",
-                    value=os.environ.get("TWILIO_FROM_NUMBER", ""),
-                ),
-            ]
-            container = Container(
+            # Create container configuration using abstraction
+            container_config = ContainerConfig(
                 name="voice",
                 image=self.voice_image,
-                resources=ResourceRequirements(
-                    requests=ResourceRequests(cpu=1.0, memory_in_gb=1.0)
-                ),
-                environment_variables=env_list,
+                environment_variables={
+                    "OPENAI_API_KEY": os.environ.get("OPENAI_API_KEY", ""),
+                    "COSMOS_DATABASE": self.cosmos_db,
+                    "CALL_CONTAINER": self.call_container,
+                    "OUTBOUND_TO": v_event.phone,
+                    "OBJECTIVE": v_event.objective or "",
+                    "PUBLIC_URL": os.environ.get("PUBLIC_URL", ""),
+                    "TWILIO_ACCOUNT_SID": os.environ.get("TWILIO_ACCOUNT_SID", ""),
+                    "TWILIO_AUTH_TOKEN": os.environ.get("TWILIO_AUTH_TOKEN", ""),
+                    "TWILIO_FROM_NUMBER": os.environ.get("TWILIO_FROM_NUMBER", ""),
+                },
+                resources=ResourceRequirements(cpu=1.0, memory_gb=1.0),
+                restart_policy="Never"
             )
-            group = ContainerGroup(
-                location=self.aci_region,
-                os_type=OperatingSystemTypes.LINUX,
-                restart_policy=ContainerGroupRestartPolicy.NEVER,
-                containers=[container],
+            
+            container_name = f"voice-{call_id[:8]}"
+            container = await self.runtime.container_runtime.create_container(
+                container_name, container_config
             )
-            group_name = f"voice-{call_id[:8]}"
-            self._aci_client.container_groups.begin_create_or_update(
-                self.aci_resource_group, group_name, group
-            ).result()
-            entity["container_group"] = group_name
-            entity["status"] = "started"
-            entity["updated_at"] = datetime.utcnow().isoformat()
-            if self._call_container:
-                self._call_container.upsert_item(entity)
+            
+            # Update call record
+            call_doc.data.update({
+                "container_id": container.id,
+                "status": "started",
+                "updated_at": datetime.utcnow().isoformat(),
+            })
+            await self.runtime.storage.update_document(self.call_container, call_doc)
             result = "started"
+            
         except Exception as e:
-            entity["status"] = "error"
-            entity["updated_at"] = datetime.utcnow().isoformat()
+            call_doc.data.update({
+                "status": "error",
+                "updated_at": datetime.utcnow().isoformat(),
+            })
             try:
-                if self._call_container:
-                    self._call_container.upsert_item(entity)
+                await self.runtime.storage.update_document(self.call_container, call_doc)
             except Exception:
                 pass
             result = f"error: {e}"
@@ -995,22 +915,16 @@ class VoiceCallDriver(IODriver):
             history=v_event.history + [v_event.to_dict()],
         )
 
-        if self._sb_client:
-            message = ServiceBusMessage(json.dumps(out_event.to_dict()))
-            message.application_properties = {"topic": out_event.type}
-            with self._sb_client:
-                sender = self._sb_client.get_queue_sender(
-                    queue_name=self.servicebus_queue
-                )
-                with sender:
-                    sender.send_messages(message)
-                if self._aci_client and group_name:
-                    try:
-                        self._aci_client.container_groups.begin_delete(
-                            self.aci_resource_group, group_name
-                        )
-                    except Exception:
-                        pass
+        # Send event using abstracted event bus
+        try:
+            event_message = EventMessage(
+                event_type=out_event.type,
+                data=out_event.to_dict(),
+                metadata={"topic": out_event.type}
+            )
+            await self.runtime.event_bus.publish(event_message)
+        except Exception as e:
+            logging.error(f"Failed to publish event: {e}")
 
         output_events.append(out_event)
         return output_events
