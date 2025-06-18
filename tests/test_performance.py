@@ -4,7 +4,8 @@ from datetime import datetime
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from events import Event, WorkerTaskEvent, utils
+from lightning_core.events.models import Event, WorkerTaskEvent
+from events import utils
 
 sample_event = {
     "timestamp": datetime.utcnow().isoformat(),

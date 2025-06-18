@@ -3,14 +3,15 @@ import os
 import sys
 from datetime import datetime
 import time
-
-from azure.cosmos import CosmosClient, PartitionKey
+import asyncio
 
 from agents import AGENT_REGISTRY
-from events import WorkerTaskEvent
+from lightning_core.events.models import WorkerTaskEvent
+from lightning_core.abstractions import Document
+from lightning_core.runtime import LightningRuntime
 
 
-def main() -> int:
+async def main() -> int:
     event_json = os.environ.get("WORKER_EVENT")
     if not event_json:
         print("WORKER_EVENT not set", file=sys.stderr)
@@ -48,23 +49,34 @@ def main() -> int:
         "event_count": len(event.history) + 1,
     }
 
-    cosmos_conn = os.environ.get("COSMOS_CONNECTION")
     task_id = os.environ.get("TASK_ID")
-    if cosmos_conn and task_id:
-        db_name = os.environ.get("COSMOS_DATABASE", "vextir")
+    if task_id:
         container_name = os.environ.get("TASK_CONTAINER", "tasks")
-        client = CosmosClient.from_connection_string(cosmos_conn)
-        db = client.create_database_if_not_exists(db_name)
-        container = db.create_container_if_not_exists(
-            id=container_name, partition_key=PartitionKey(path="/pk")
-        )
+        runtime = LightningRuntime()
+        
         try:
-            item = container.read_item(task_id, partition_key=event.user_id)
-        except Exception:
-            item = {"id": task_id, "pk": event.user_id}
-        item["cost"] = event.cost
-        item["updated_at"] = datetime.utcnow().isoformat()
-        container.upsert_item(item)
+            # Try to get existing document
+            doc = await runtime.storage.get_document(container_name, task_id)
+            if not doc:
+                # Create new document if doesn't exist
+                doc = Document(
+                    id=task_id,
+                    partition_key=event.user_id,
+                    data={"id": task_id, "pk": event.user_id}
+                )
+            
+            # Update with cost data
+            doc.data["cost"] = event.cost
+            doc.data["updated_at"] = datetime.utcnow().isoformat()
+            
+            # Use Lightning's storage abstraction
+            if await runtime.storage.get_document(container_name, task_id):
+                await runtime.storage.update_document(container_name, doc)
+            else:
+                await runtime.storage.create_document(container_name, doc)
+                
+        except Exception as e:
+            print(f"Failed to update task cost: {e}", file=sys.stderr)
 
     if result:
         print(result)
@@ -72,4 +84,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(asyncio.run(main()))

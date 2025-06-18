@@ -6,7 +6,7 @@ import asyncio
 import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from events import LLMChatEvent
+from lightning_core.events.models import LLMChatEvent
 
 
 def load_chat_agent(monkeypatch, capture):

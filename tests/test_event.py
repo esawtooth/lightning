@@ -4,7 +4,7 @@ from datetime import datetime
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from events import Event
+from lightning_core.events.models import Event
 
 
 def test_event_requires_userid():

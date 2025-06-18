@@ -19,8 +19,8 @@
 
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: #000;
+            background: #ffffff;
+            color: #1e3a8a;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -32,24 +32,25 @@
             display: flex;
             width: 100%;
             max-width: 1000px;
-            background: #fff;
+            background: #ffffff;
             border-radius: 16px;
             overflow: hidden;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            backdrop-filter: blur(10px);
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
         }
 
         .hero-section {
             position: relative;
             flex: 1.2;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            color: #fff;
+            background: #f8fafc;
+            color: #1e3a8a;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             padding: 3rem;
             min-height: 500px;
+            border-right: 1px solid #e5e7eb;
         }
 
         .hero-content {
@@ -57,7 +58,7 @@
             max-width: 400px;
         }
 
-        .hero-content h2 {
+        .hero-content h1 {
             font-size: 2.25rem;
             font-weight: 700;
             margin-bottom: 1rem;
@@ -66,12 +67,12 @@
 
         .hero-content p {
             font-size: 1.1rem;
-            opacity: 0.9;
+            color: #475569;
             line-height: 1.6;
         }
 
         .login-container {
-            background: white;
+            background: #ffffff;
             padding: 3rem;
             width: 100%;
             max-width: 450px;
@@ -87,14 +88,14 @@
         }
 
         .logo h1 {
-            color: #1a1a1a;
+            color: #1e3a8a;
             font-size: 1.75rem;
             font-weight: 600;
             margin-bottom: 0.5rem;
         }
 
         .logo p {
-            color: #6b7280;
+            color: #64748b;
             font-size: 0.95rem;
         }
 
@@ -133,7 +134,7 @@
         .btn {
             width: 100%;
             padding: 1rem;
-            background: #667eea;
+            background: #1e3a8a;
             color: white;
             border: none;
             border-radius: 12px;
@@ -149,9 +150,9 @@
         }
 
         .btn:hover {
-            background: #5a67d8;
+            background: #1e40af;
             transform: translateY(-2px);
-            box-shadow: 0 20px 25px -5px rgba(102, 126, 234, 0.4);
+            box-shadow: 0 4px 12px 0 rgba(30, 58, 138, 0.4);
         }
 
         .btn:active {
@@ -165,11 +166,11 @@
 
         .btn-secondary:hover {
             background: #4b5563;
-            box-shadow: 0 20px 25px -5px rgba(107, 114, 128, 0.4);
+            box-shadow: 0 4px 12px 0 rgba(75, 85, 99, 0.4);
         }
 
         .microsoft-btn {
-            background: #667eea;
+            background: #1e3a8a;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -208,34 +209,43 @@
         }
 
         .alert {
-            padding: 0.75rem;
-            border-radius: 8px;
+            padding: 1rem;
+            border-radius: 12px;
             margin-bottom: 1.5rem;
             font-size: 0.9rem;
+            border-left: 4px solid;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
         }
 
         .alert-error {
-            background-color: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
+            background-color: #fef2f2;
+            color: #b91c1c;
+            border-left-color: #dc2626;
         }
 
         .alert-success {
-            background-color: #d1fae5;
-            color: #059669;
-            border: 1px solid #a7f3d0;
+            background-color: #f0fdf4;
+            color: #166534;
+            border-left-color: #16a34a;
         }
 
         .alert-warning {
-            background-color: #fef3c7;
+            background-color: #fffbeb;
             color: #d97706;
-            border: 1px solid #fde68a;
+            border-left-color: #f59e0b;
         }
 
         .alert-info {
-            background-color: #dbeafe;
+            background-color: #eff6ff;
             color: #1d4ed8;
-            border: 1px solid #93c5fd;
+            border-left-color: #3b82f6;
+        }
+
+        .alert-icon {
+            flex-shrink: 0;
+            margin-top: 0.125rem;
         }
 
         .auth-links {
@@ -246,19 +256,15 @@
         }
 
         .auth-links a {
-            color: #0078d4;
+            color: #1e3a8a;
             text-decoration: none;
             font-weight: 500;
+            transition: color 0.2s ease;
         }
 
         .auth-links a:hover {
+            color: #1e40af;
             text-decoration: underline;
-        }
-
-        .vextir-icon {
-            height: 300px;
-            margin: 0 auto 0.5rem auto;
-            display: block;
         }
 
         .pending-container {
@@ -276,64 +282,116 @@
             margin-bottom: 1rem;
         }
 
+        /* Screen reader only content */
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        /* Focus styles for accessibility */
+        .btn:focus-visible,
+        input:focus-visible,
+        a:focus-visible {
+            outline: 2px solid #1e3a8a;
+            outline-offset: 2px;
+        }
+
         /* Responsive layout for mobile screens */
         @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
             .main-wrapper {
                 flex-direction: column;
+                max-width: 100%;
             }
-            .login-container {
+            
+            .hero-section {
                 order: 1;
+                min-height: 300px;
+                padding: 2rem 1.5rem;
             }
-            .carousel-container {
+            
+            .hero-content h1 {
+                font-size: 1.75rem;
+            }
+            
+            .login-container {
                 order: 2;
-                width: 100%;
+                padding: 2rem 1.5rem;
+            }
+            
+            .btn {
+                padding: 0.875rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero-section {
+                padding: 1.5rem 1rem;
+                min-height: 250px;
+            }
+            
+            .hero-content h1 {
+                font-size: 1.5rem;
+            }
+            
+            .login-container {
+                padding: 1.5rem 1rem;
             }
         }
     </style>
 </head>
 <body>
-    <div class="main-wrapper">
-        <div class="carousel-container">
-            <div class="slide active">
-                <h2>AI That Anticipates</h2>
-                <p>Vextir proactively manages tasks so you can own your day.</p>
+    <main class="main-wrapper">
+        <section class="hero-section" aria-labelledby="hero-title">
+            <div class="hero-content">
+                <h1 id="hero-title">AI That Anticipates</h1>
+                <p>Vextir proactively manages tasks so you can own your day. Let intelligent agents tackle busywork—so you can lead, create, and innovate.</p>
             </div>
-            <div class="slide">
-                <h2>Focus Amplified</h2>
-                <p>Let intelligent agents tackle busywork—so you can lead, create, and innovate.</p>
-            </div>
-            <div class="slide">
-                <h2>Secure by Design</h2>
-                <p>Your data, your rules. Automation you can trust.</p>
-            </div>
-        </div>        
-        <div class="login-container">
+        </section>        
+        <section class="login-container" aria-labelledby="login-title">
+            <h2 id="login-title" class="sr-only">Sign in to Vextir</h2>
             <div class="logo">
                 <img class="vextir-icon" src="{{ url_for('static', path='vextir-logo.svg') }}" alt="Vextir logo">
-                <p>Secure AI-powered conversations</p>
+                <p role="banner">Secure AI-powered conversations</p>
             </div>
 
             {% if request.query_params.get("error") %}
-                <div class="alert alert-error">
-                    {% if request.query_params.get("error") == "email_required" %}
-                        Please provide a valid email address.
-                    {% elif request.query_params.get("error") == "request_failed" %}
-                        Unable to process your request. Please try again later.
-                    {% elif request.query_params.get("error") == "auth_failed" %}
-                        Authentication failed. Please try again.
-                    {% elif request.query_params.get("error") == "service_unavailable" %}
-                        Service temporarily unavailable. Please try again later.
-                    {% else %}
-                        An error occurred. Please try again.
-                    {% endif %}
+                <div class="alert alert-error" role="alert" aria-live="polite">
+                    <div class="alert-icon" aria-hidden="true">⚠️</div>
+                    <div>
+                        {% if request.query_params.get("error") == "email_required" %}
+                            Please provide a valid email address.
+                        {% elif request.query_params.get("error") == "request_failed" %}
+                            Unable to process your request. Please try again later.
+                        {% elif request.query_params.get("error") == "auth_failed" %}
+                            Authentication failed. Please try again.
+                        {% elif request.query_params.get("error") == "service_unavailable" %}
+                            Service temporarily unavailable. Please try again later.
+                        {% else %}
+                            An error occurred. Please try again.
+                        {% endif %}
+                    </div>
                 </div>
             {% endif %}
 
             {% if request.query_params.get("message") %}
-                <div class="alert alert-success">
-                    {% if request.query_params.get("message") == "access_requested" %}
-                        Access request submitted! We'll review your request and notify you via email.
-                    {% endif %}
+                <div class="alert alert-success" role="alert" aria-live="polite">
+                    <div class="alert-icon" aria-hidden="true">✅</div>
+                    <div>
+                        {% if request.query_params.get("message") == "access_requested" %}
+                            Access request submitted! We'll review your request and notify you via email.
+                        {% endif %}
+                    </div>
                 </div>
             {% endif %}
 
@@ -348,68 +406,121 @@
                 </div>
             {% else %}
                 <div id="main-auth">
-                    <a href="{{ request.url_for('login') }}" class="btn microsoft-btn">
-                        Sign in with Microsoft
+                    <a href="{{ request.url_for('login') }}" 
+                       class="btn microsoft-btn" 
+                       id="signin-btn"
+                       aria-describedby="signin-description">
+                        <div class="icon" aria-hidden="true"></div>
+                        <span class="btn-text">Sign in with Microsoft</span>
+                        <div class="loading-spinner" aria-hidden="true"></div>
                     </a>
+                    <div id="signin-description" class="sr-only">Sign in using your Microsoft account to access Vextir</div>
                     
                     <div class="auth-links">
-                        <p>Don't have access yet? <a href="#" id="show-request">Request Access</a></p>
+                        <p>Don't have access yet? <a href="#" id="show-request" aria-describedby="request-description">Request Access</a></p>
+                        <div id="request-description" class="sr-only">Click to show the access request form</div>
                     </div>
                 </div>
 
-                <div id="request-form" style="display: none;">
-                    <h3 style="margin-bottom: 1rem; color: #333;">Request Access</h3>
+                <div id="request-form" style="display: none;" role="region" aria-labelledby="request-form-title">
+                    <h3 id="request-form-title" style="margin-bottom: 1rem; color: #333;">Request Access</h3>
                     <p style="margin-bottom: 1.5rem; color: #666; font-size: 0.9rem;">
                         Submit your information and we'll review your access request.
                     </p>
                     
-                    <form action="{{ request.url_for('auth_request_access') }}" method="post">
+                    <form action="{{ request.url_for('auth_request_access') }}" method="post" aria-labelledby="request-form-title">
                         <div class="form-group">
                             <label for="req_name">Name</label>
-                            <input type="text" id="req_name" name="name" required>
+                            <input type="text" id="req_name" name="name" required aria-describedby="name-help">
+                            <div id="name-help" class="sr-only">Enter your full name for the access request</div>
                         </div>
                         <div class="form-group">
                             <label for="req_email">Email</label>
-                            <input type="email" id="req_email" name="email" required placeholder="your.email@example.com">
+                            <input type="email" id="req_email" name="email" required placeholder="your.email@example.com" aria-describedby="email-help">
+                            <div id="email-help" class="sr-only">Enter your email address where we can contact you about your access request</div>
                         </div>
-                        <button type="submit" class="btn">Submit Request</button>
+                        <button type="submit" class="btn" aria-describedby="submit-help">Submit Request</button>
+                        <div id="submit-help" class="sr-only">Submit your access request for review</div>
                     </form>
                     <div class="auth-links">
-                        <p>Already have access? <a href="#" id="show-main">Sign In</a></p>
+                        <p>Already have access? <a href="#" id="show-main" aria-describedby="signin-link-description">Sign In</a></p>
+                        <div id="signin-link-description" class="sr-only">Return to the sign in form</div>
                     </div>
                 </div>
             {% endif %}
-        </div>
-    </div>
+        </section>
+    </main>
 
     <script>
-        const slides = document.querySelectorAll('.slide');
-        let currentSlide = 0;
-        setInterval(() => {
-            slides[currentSlide].classList.remove('active');
-            currentSlide = (currentSlide + 1) % slides.length;
-            slides[currentSlide].classList.add('active');
-        }, 4000);
-
+        // Form toggling functionality
         const mainAuth = document.getElementById('main-auth');
         const requestForm = document.getElementById('request-form');
         const showRequest = document.getElementById('show-request');
         const showMain = document.getElementById('show-main');
+        const signinBtn = document.getElementById('signin-btn');
 
         if (showRequest) {
             showRequest.addEventListener('click', function(e) {
                 e.preventDefault();
-                if (mainAuth) mainAuth.style.display = 'none';
-                if (requestForm) requestForm.style.display = 'block';
+                if (mainAuth) {
+                    mainAuth.style.display = 'none';
+                    mainAuth.style.opacity = '0';
+                }
+                if (requestForm) {
+                    requestForm.style.display = 'block';
+                    setTimeout(() => requestForm.style.opacity = '1', 10);
+                }
             });
         }
 
         if (showMain) {
             showMain.addEventListener('click', function(e) {
                 e.preventDefault();
-                if (requestForm) requestForm.style.display = 'none';
-                if (mainAuth) mainAuth.style.display = 'block';
+                if (requestForm) {
+                    requestForm.style.opacity = '0';
+                    setTimeout(() => requestForm.style.display = 'none', 200);
+                }
+                if (mainAuth) {
+                    mainAuth.style.display = 'block';
+                    setTimeout(() => mainAuth.style.opacity = '1', 10);
+                }
             });
+        }
+
+        // Loading state for sign-in button
+        if (signinBtn) {
+            signinBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                this.classList.add('loading');
+                this.style.pointerEvents = 'none';
+                
+                // Add a small delay to show the loading state
+                setTimeout(() => {
+                    window.location.href = this.href;
+                }, 300);
+            });
+        }
+
+        // Form submission loading state
+        const forms = document.querySelectorAll('form');
+        forms.forEach(form => {
+            form.addEventListener('submit', function() {
+                const submitBtn = this.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.classList.add('loading');
+                    submitBtn.disabled = true;
+                    submitBtn.style.pointerEvents = 'none';
+                }
+            });
+        });
+
+        // Add smooth transitions
+        if (requestForm) {
+            requestForm.style.transition = 'opacity 0.2s ease';
+            requestForm.style.opacity = '0';
+        }
+        if (mainAuth) {
+            mainAuth.style.transition = 'opacity 0.2s ease';
         }
     </script>
 </body>

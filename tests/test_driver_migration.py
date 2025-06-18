@@ -14,7 +14,7 @@ from typing import Dict, Any, List
 # Add Azure Function package path for imports
 sys.path.append('./azure-function')
 
-from events import Event, LLMChatEvent, EmailEvent, CalendarEvent, ContextUpdateEvent, WorkerTaskEvent
+from lightning_core.events.models import Event, LLMChatEvent, EmailEvent, CalendarEvent, ContextUpdateEvent, WorkerTaskEvent
 from vextir_os.universal_processor import UniversalEventProcessor
 from vextir_os.registries import get_driver_registry, get_model_registry, get_tool_registry
 from vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver

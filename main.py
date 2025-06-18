@@ -1,6 +1,6 @@
 if __name__ == "__main__":
     import logging
-    from lightning_planner.pipeline import create_verified_plan
+    from lightning_core.planner.pipeline import create_verified_plan
     logging.basicConfig(level=logging.INFO)
     plan_bundle = create_verified_plan(
         instruction="Every Monday, collect unread HR mails "

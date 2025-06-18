@@ -48,9 +48,26 @@ class AccessControl:
         return True
 
     def _is_admin(self, user_id: str) -> bool:
-        """Check if user is admin (placeholder implementation)"""
-        # TODO: Implement proper admin check
-        return user_id.endswith("_admin")
+        """Check if user is admin using proper authorization system"""
+        try:
+            # Import here to avoid circular imports
+            from lightning_core.runtime import LightningRuntime
+            runtime = LightningRuntime()
+            
+            # Check user record for admin role
+            user_doc = runtime.storage.get_document("users", user_id)
+            if user_doc and user_doc.data.get("role") == "admin":
+                return True
+                
+            # Additional check for system admin users
+            if user_id in ["system", "admin", "lightning_admin"]:
+                return True
+                
+            return False
+        except Exception as e:
+            logging.warning(f"Admin check failed for {user_id}: {e}")
+            # Fail-safe: only allow explicitly known admin patterns as fallback
+            return user_id in ["system", "admin", "lightning_admin"]
 
 
 class ToolType(Enum):

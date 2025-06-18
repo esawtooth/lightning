@@ -136,3 +136,28 @@ class NotificationEvent(VextirEvent):
     """Notification event"""
 
     type: str = "notification"
+
+
+@dataclass
+class LLMChatEvent(VextirEvent):
+    """LLM Chat event"""
+
+    type: str = "llm.chat"
+
+
+@dataclass
+class VoiceCallEvent(VextirEvent):
+    """Voice call event"""
+
+    type: str = "voice.call"
+
+
+@dataclass
+class InstructionEvent(VextirEvent):
+    """Instruction event"""
+
+    type: str = "instruction"
+
+
+# Backward compatibility alias
+Event = VextirEvent

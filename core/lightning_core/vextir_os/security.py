@@ -118,8 +118,8 @@ class PolicyEngine:
         }
 
         try:
-            # Evaluate condition
-            matched = eval(policy.condition, {"__builtins__": {}}, eval_context)
+            # Safely evaluate condition using a restricted expression evaluator
+            matched = self._safe_evaluate_condition(policy.condition, eval_context)
 
             if matched:
                 return PolicyEvaluation(
@@ -191,8 +191,8 @@ class SecurityManager:
         # This could include user info, resource usage, etc.
         return {
             "current_time": datetime.utcnow(),
-            "daily_events": 0,  # TODO: Get from metrics
-            "monthly_cost": 0.0,  # TODO: Get from cost tracking
+            "daily_events": self._get_daily_events(event.user_id),
+            "monthly_cost": self._get_monthly_cost(event.user_id),
         }
 
     async def _log_authorization(
@@ -273,6 +273,94 @@ class SecurityManager:
     def get_audit_log(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get recent audit log entries"""
         return self.audit_log[-limit:]
+
+    def _get_daily_events(self, user_id: str) -> int:
+        """Get daily event count for user (placeholder implementation)"""
+        # This would integrate with actual metrics system
+        # For now, count events in audit log from today
+        today = datetime.utcnow().date()
+        count = 0
+        for entry in self.audit_log:
+            try:
+                entry_date = datetime.fromisoformat(entry["timestamp"]).date()
+                if entry_date == today and entry.get("user_id") == user_id:
+                    count += 1
+            except (ValueError, KeyError):
+                continue
+        return count
+
+    def _get_monthly_cost(self, user_id: str) -> float:
+        """Get monthly cost for user (placeholder implementation)"""
+        # This would integrate with actual cost tracking system
+        # For now, return a mock value based on event count
+        daily_events = self._get_daily_events(user_id)
+        # Assume $0.01 per event as rough estimate
+        return daily_events * 0.01
+
+    def _safe_evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+        """
+        Safely evaluate policy conditions without using eval().
+        Supports basic comparison operations and common expressions.
+        """
+        import re
+        
+        # Basic validation of condition string
+        if not condition or not isinstance(condition, str):
+            return False
+            
+        # Remove whitespace
+        condition = condition.strip()
+        
+        # Define allowed operators and patterns
+        allowed_ops = ['>', '<', '>=', '<=', '==', '!=', 'in', 'not in', 'and', 'or', 'startswith', 'endswith']
+        
+        # Simple pattern matching for common conditions
+        try:
+            # Handle numeric comparisons like "monthly_cost > 100.0"
+            numeric_pattern = r'(\w+)\s*([><=!]+)\s*([\d.]+)'
+            match = re.match(numeric_pattern, condition)
+            if match:
+                var_name, operator, value = match.groups()
+                if var_name in context:
+                    var_value = context[var_name]
+                    num_value = float(value)
+                    
+                    if operator == '>':
+                        return var_value > num_value
+                    elif operator == '<':
+                        return var_value < num_value
+                    elif operator == '>=':
+                        return var_value >= num_value
+                    elif operator == '<=':
+                        return var_value <= num_value
+                    elif operator == '==':
+                        return var_value == num_value
+                    elif operator == '!=':
+                        return var_value != num_value
+                        
+            # Handle string operations like "event_type.startswith('context.')"
+            startswith_pattern = r'(\w+)\.startswith\([\'"](.+?)[\'"]\)'
+            match = re.match(startswith_pattern, condition)
+            if match:
+                var_name, prefix = match.groups()
+                if var_name in context:
+                    return str(context[var_name]).startswith(prefix)
+                    
+            # Handle containment checks like "'Personal' in str(metadata)"
+            contains_pattern = r'[\'"](.+?)[\'"]\s+in\s+str\((\w+)\)'
+            match = re.match(contains_pattern, condition)
+            if match:
+                search_term, var_name = match.groups()
+                if var_name in context:
+                    return search_term in str(context[var_name])
+                    
+            # If no pattern matches, default to False for security
+            logging.warning(f"Unable to safely evaluate condition: {condition}")
+            return False
+            
+        except Exception as e:
+            logging.error(f"Error evaluating condition '{condition}': {e}")
+            return False
 
 
 # Global security manager

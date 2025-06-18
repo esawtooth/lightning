@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import pytest
 
-from events import Event
+from lightning_core.events.models import Event
 from vextir_os.orchestration_drivers import SchedulerDriver
 
 

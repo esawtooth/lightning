@@ -16,6 +16,9 @@ COPY agents/conseil/pnpm-workspace.yaml ./
 COPY agents/conseil/pnpm-lock.yaml ./
 COPY agents/conseil/package.json ./
 
+# Copy patches directory (required for pnpm patched dependencies)
+COPY agents/conseil/patches/ ./patches/
+
 # Copy codex-cli package
 COPY agents/conseil/codex-cli/ ./codex-cli/
 

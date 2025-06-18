@@ -4,7 +4,7 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from events.eventgen.laptop.linux import system_status
-from events import Event
+from lightning_core.events.models import Event
 
 
 def test_collect_events():

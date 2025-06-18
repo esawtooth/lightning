@@ -11,7 +11,7 @@ from datetime import datetime
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-from events import Event, EmailEvent, ContextUpdateEvent
+from lightning_core.events.models import Event, EmailEvent, ContextUpdateEvent
 from vextir_os.event_bus import get_event_bus, EventFilter, EventCategory
 from vextir_os.drivers import get_driver_registry
 from vextir_os.security import get_security_manager, Policy, PolicyAction

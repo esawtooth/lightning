@@ -337,36 +337,37 @@ Start by uploading some documents or creating new notes to build your personal k
         )
 
     async def _get_user_record(self, user_id: str) -> Optional[Dict[str, Any]]:
-        """Get user record from Cosmos DB"""
-        if not self._container:
-            return None
-
+        """Get user record from storage provider"""
         try:
-            items = list(
-                await asyncio.to_thread(
-                    self._container.query_items,
-                    query="SELECT * FROM c WHERE c.user_id=@user_id",
-                    parameters=[{"name": "@user_id", "value": user_id}],
-                    enable_cross_partition_query=True,
-                )
-            )
-            return items[0] if items else None
+            # Use Lightning's document store abstraction
+            doc = await self.runtime.storage.get_document(self.user_container, user_id)
+            return doc.data if doc else None
         except Exception as e:
             logging.error(f"Error fetching user record: {e}")
             return None
 
     async def _update_user_record(self, user_id: str, updates: Dict[str, Any]) -> bool:
-        """Update user record in Cosmos DB"""
-        if not self._container:
-            return False
-
+        """Update user record in storage provider"""
         try:
-            user = await self._get_user_record(user_id)
-            if not user:
-                return False
-
-            user.update(updates)
-            await asyncio.to_thread(self._container.upsert_item, user)
+            # Get existing document
+            doc = await self.runtime.storage.get_document(self.user_container, user_id)
+            if not doc:
+                # Create new document if doesn't exist
+                doc = Document(
+                    id=user_id,
+                    partition_key=user_id,
+                    data={"user_id": user_id}
+                )
+            
+            # Update data
+            doc.data.update(updates)
+            
+            # Use Lightning's document store abstraction
+            if await self.runtime.storage.get_document(self.user_container, user_id):
+                await self.runtime.storage.update_document(self.user_container, doc)
+            else:
+                await self.runtime.storage.create_document(self.user_container, doc)
+            
             return True
         except Exception as e:
             logging.error(f"Error updating user record: {e}")

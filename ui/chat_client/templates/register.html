@@ -19,8 +19,8 @@
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: #000;
-            color: #fff;
+            background: #ffffff;
+            color: #1e3a8a;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -29,12 +29,13 @@
         }
         
         .register-container {
-            background: #111;
-            padding: 2.5rem;
-            border-radius: 12px;
-            box-shadow: 0 20px 25px -5px rgba(255, 255, 255, 0.1), 0 10px 10px -5px rgba(255, 255, 255, 0.04);
+            background: #ffffff;
+            padding: 3rem;
+            border-radius: 16px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
         }
         
         .logo {
@@ -43,15 +44,15 @@
         }
         
         .logo h1 {
-            color: #333;
-            font-size: 2rem;
-            font-weight: 700;
+            color: #1e3a8a;
+            font-size: 1.75rem;
+            font-weight: 600;
             margin-bottom: 0.5rem;
         }
         
         .logo p {
-            color: #666;
-            font-size: 0.9rem;
+            color: #64748b;
+            font-size: 0.95rem;
         }
         
         .form-group {
@@ -61,41 +62,76 @@
         label {
             display: block;
             margin-bottom: 0.5rem;
-            color: #333;
+            color: #1e3a8a;
             font-weight: 500;
+            font-size: 0.9rem;
         }
         
         input[type="text"], input[type="password"], input[type="email"] {
             width: 100%;
-            padding: 0.75rem;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
+            padding: 0.875rem;
+            border: 2px solid #e5e7eb;
+            border-radius: 12px;
             font-size: 1rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: all 0.2s ease;
+            background: #f9fafb;
         }
         
         input[type="text"]:focus, input[type="password"]:focus, input[type="email"]:focus {
             outline: none;
-            border-color: #555;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
+            border-color: #1e3a8a;
+            box-shadow: 0 0 0 3px rgba(30, 58, 138, 0.1);
+            background: #fff;
         }
         
         .btn {
             width: 100%;
-            padding: 0.75rem;
-            background: #333;
+            padding: 1rem;
+            background: #1e3a8a;
             color: white;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
         
         .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 15px -3px rgba(255, 255, 255, 0.1);
+            background: #1e40af;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px 0 rgba(30, 58, 138, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .loading-spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #ffffff;
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .btn.loading .loading-spinner {
+            display: inline-block;
         }
         
         .alert {
@@ -106,9 +142,18 @@
         }
         
         .alert-error {
-            background-color: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
+            background-color: #fef2f2;
+            color: #b91c1c;
+            border-left: 4px solid #dc2626;
+            border-radius: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+
+        .alert-icon {
+            flex-shrink: 0;
+            margin-top: 0.125rem;
         }
         
         .auth-links {
@@ -119,25 +164,71 @@
         }
         
         .auth-links a {
-            color: #fff;
+            color: #1e3a8a;
             text-decoration: none;
             font-weight: 500;
+            transition: color 0.2s ease;
         }
         
         .auth-links a:hover {
+            color: #1e40af;
             text-decoration: underline;
         }
         
         .vextir-icon {
-            height: 40px;
-            margin: 0 auto 0.5rem auto;
+            height: 48px;
+            margin: 0 auto 1rem auto;
             display: block;
         }
         
         .password-requirements {
             font-size: 0.8rem;
-            color: #666;
+            color: #64748b;
             margin-top: 0.25rem;
+        }
+
+        .field-validation {
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+            display: none;
+        }
+
+        .field-validation.error {
+            color: #dc2626;
+            display: block;
+        }
+
+        .field-validation.success {
+            color: #16a34a;
+            display: block;
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-feedback {
+            position: absolute;
+            right: 0.75rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1rem;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 480px) {
+            body {
+                padding: 10px;
+            }
+            
+            .register-container {
+                padding: 2rem 1.5rem;
+                max-width: 100%;
+            }
+            
+            .btn {
+                padding: 0.875rem;
+            }
         }
     </style>
 </head>
@@ -151,47 +242,69 @@
         
         {% if request.query_params.get("error") %}
             <div class="alert alert-error">
-                {% if request.query_params.get("error") == "password_mismatch" %}
-                    Passwords do not match. Please try again.
-                {% elif request.query_params.get("error") == "password_too_short" %}
-                    Password must be at least 6 characters long.
-                {% elif request.query_params.get("error") == "username_exists" %}
-                    Username already exists. Please choose a different one.
-                {% elif request.query_params.get("error") == "service_error" %}
-                    Service temporarily unavailable. Please try again later.
-                {% elif request.query_params.get("error") == "service_unavailable" %}
-                    Unable to connect to authentication service.
-                {% else %}
-                    An error occurred. Please try again.
-                {% endif %}
+                <div class="alert-icon">⚠️</div>
+                <div>
+                    {% if request.query_params.get("error") == "password_mismatch" %}
+                        Passwords do not match. Please try again.
+                    {% elif request.query_params.get("error") == "password_too_short" %}
+                        Password must be at least 6 characters long.
+                    {% elif request.query_params.get("error") == "username_exists" %}
+                        Username already exists. Please choose a different one.
+                    {% elif request.query_params.get("error") == "service_error" %}
+                        Service temporarily unavailable. Please try again later.
+                    {% elif request.query_params.get("error") == "service_unavailable" %}
+                        Unable to connect to authentication service.
+                    {% else %}
+                        An error occurred. Please try again.
+                    {% endif %}
+                </div>
             </div>
         {% endif %}
         
-        <form action="/auth/register" method="post">
+        <form action="/auth/register" method="post" id="register-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="form-group">
                 <label for="username">Username</label>
-                <input type="text" id="username" name="username" required>
+                <div class="input-group">
+                    <input type="text" id="username" name="username" required>
+                    <div class="input-feedback" id="username-feedback"></div>
+                </div>
+                <div class="field-validation" id="username-validation"></div>
             </div>
             
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+                <div class="input-group">
+                    <input type="email" id="email" name="email" required placeholder="your.email@example.com">
+                    <div class="input-feedback" id="email-feedback"></div>
+                </div>
                 <div class="password-requirements">Used for verification and notifications</div>
+                <div class="field-validation" id="email-validation"></div>
             </div>
             
             <div class="form-group">
                 <label for="password">Password</label>
-                <input type="password" id="password" name="password" required minlength="6">
+                <div class="input-group">
+                    <input type="password" id="password" name="password" required minlength="6">
+                    <div class="input-feedback" id="password-feedback"></div>
+                </div>
                 <div class="password-requirements">Minimum 6 characters</div>
+                <div class="field-validation" id="password-validation"></div>
             </div>
             
             <div class="form-group">
                 <label for="confirm_password">Confirm Password</label>
-                <input type="password" id="confirm_password" name="confirm_password" required>
+                <div class="input-group">
+                    <input type="password" id="confirm_password" name="confirm_password" required>
+                    <div class="input-feedback" id="confirm-password-feedback"></div>
+                </div>
+                <div class="field-validation" id="confirm-password-validation"></div>
             </div>
             
-            <button type="submit" class="btn">Request Access</button>
+            <button type="submit" class="btn" id="submit-btn">
+                <div class="loading-spinner"></div>
+                <span class="btn-text">Request Access</span>
+            </button>
         </form>
         
         <div class="auth-links">
@@ -203,22 +316,145 @@
     </div>
     
     <script>
-        // Basic client-side password validation
-        document.querySelector('form').addEventListener('submit', function(e) {
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
+        // Real-time validation
+        const form = document.getElementById('register-form');
+        const submitBtn = document.getElementById('submit-btn');
+        
+        const fields = {
+            username: document.getElementById('username'),
+            email: document.getElementById('email'),
+            password: document.getElementById('password'),
+            confirmPassword: document.getElementById('confirm_password')
+        };
+
+        const feedbacks = {
+            username: document.getElementById('username-feedback'),
+            email: document.getElementById('email-feedback'),
+            password: document.getElementById('password-feedback'),
+            confirmPassword: document.getElementById('confirm-password-feedback')
+        };
+
+        const validations = {
+            username: document.getElementById('username-validation'),
+            email: document.getElementById('email-validation'),
+            password: document.getElementById('password-validation'),
+            confirmPassword: document.getElementById('confirm-password-validation')
+        };
+
+        function showValidation(field, type, message) {
+            const validation = validations[field];
+            validation.className = `field-validation ${type}`;
+            validation.textContent = message;
             
-            if (password !== confirmPassword) {
-                e.preventDefault();
-                alert('Passwords do not match!');
-                return false;
+            const feedback = feedbacks[field];
+            feedback.textContent = type === 'success' ? '✓' : '✕';
+            feedback.style.color = type === 'success' ? '#16a34a' : '#dc2626';
+        }
+
+        function hideValidation(field) {
+            validations[field].className = 'field-validation';
+            feedbacks[field].textContent = '';
+        }
+
+        // Username validation
+        fields.username.addEventListener('input', function() {
+            const value = this.value.trim();
+            if (value.length === 0) {
+                hideValidation('username');
+            } else if (value.length < 3) {
+                showValidation('username', 'error', 'Username must be at least 3 characters');
+            } else if (!/^[a-zA-Z0-9_]+$/.test(value)) {
+                showValidation('username', 'error', 'Username can only contain letters, numbers, and underscores');
+            } else {
+                showValidation('username', 'success', 'Username looks good');
+            }
+        });
+
+        // Email validation
+        fields.email.addEventListener('input', function() {
+            const value = this.value.trim();
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            
+            if (value.length === 0) {
+                hideValidation('email');
+            } else if (!emailRegex.test(value)) {
+                showValidation('email', 'error', 'Please enter a valid email address');
+            } else {
+                showValidation('email', 'success', 'Email looks good');
+            }
+        });
+
+        // Password validation
+        fields.password.addEventListener('input', function() {
+            const value = this.value;
+            if (value.length === 0) {
+                hideValidation('password');
+            } else if (value.length < 6) {
+                showValidation('password', 'error', 'Password must be at least 6 characters');
+            } else {
+                showValidation('password', 'success', 'Password meets requirements');
+            }
+            
+            // Re-validate confirm password if it has a value
+            if (fields.confirmPassword.value) {
+                validateConfirmPassword();
+            }
+        });
+
+        // Confirm password validation
+        function validateConfirmPassword() {
+            const password = fields.password.value;
+            const confirmPassword = fields.confirmPassword.value;
+            
+            if (confirmPassword.length === 0) {
+                hideValidation('confirmPassword');
+            } else if (password !== confirmPassword) {
+                showValidation('confirmPassword', 'error', 'Passwords do not match');
+            } else {
+                showValidation('confirmPassword', 'success', 'Passwords match');
+            }
+        }
+
+        fields.confirmPassword.addEventListener('input', validateConfirmPassword);
+
+        // Form submission
+        form.addEventListener('submit', function(e) {
+            const password = fields.password.value;
+            const confirmPassword = fields.confirmPassword.value;
+            const email = fields.email.value.trim();
+            const username = fields.username.value.trim();
+            
+            // Final validation
+            let hasErrors = false;
+            
+            if (username.length < 3) {
+                showValidation('username', 'error', 'Username must be at least 3 characters');
+                hasErrors = true;
+            }
+            
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showValidation('email', 'error', 'Please enter a valid email address');
+                hasErrors = true;
             }
             
             if (password.length < 6) {
+                showValidation('password', 'error', 'Password must be at least 6 characters');
+                hasErrors = true;
+            }
+            
+            if (password !== confirmPassword) {
+                showValidation('confirmPassword', 'error', 'Passwords do not match');
+                hasErrors = true;
+            }
+            
+            if (hasErrors) {
                 e.preventDefault();
-                alert('Password must be at least 6 characters long!');
                 return false;
             }
+            
+            // Show loading state
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
         });
     </script>
 </body>

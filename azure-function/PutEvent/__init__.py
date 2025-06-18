@@ -6,7 +6,7 @@ from datetime import datetime
 import azure.functions as func
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 
-from events import Event
+from lightning_core.events.models import Event
 from simple_auth import get_user_id_permissive
 
 SERVICEBUS_CONN = os.environ.get("SERVICEBUS_CONNECTION")

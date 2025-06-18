@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from events import CalendarEvent, ContextUpdateEvent, EmailEvent, Event
+from lightning_core.events.models import CalendarEvent, ContextUpdateEvent, EmailEvent, Event
 
 from .drivers import (
     AgentDriver,

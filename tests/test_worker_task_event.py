@@ -3,7 +3,7 @@ from datetime import datetime
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from events import WorkerTaskEvent
+from lightning_core.events.models import WorkerTaskEvent
 
 
 def test_worker_task_missing_commands():

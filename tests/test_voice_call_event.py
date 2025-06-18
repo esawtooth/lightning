@@ -5,7 +5,7 @@ import json
 import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from events import VoiceCallEvent
+from lightning_core.events.models import VoiceCallEvent
 
 
 def test_voice_call_missing_phone():

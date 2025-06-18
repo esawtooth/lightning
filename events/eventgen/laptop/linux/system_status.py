@@ -5,7 +5,7 @@ import getpass
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from events import Event
+from lightning_core.events.models import Event
 
 
 def _read_first(path: str) -> Optional[str]:
