@@ -46,11 +46,13 @@ stack_suffix = pulumi.get_stack()
 
 location          = cfg.get("location") or "centralindia"
 domain            = cfg.get("domain")   or "vextir.com"
-worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/worker-task:latest"
+worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/lightning-worker:latest"
+conseil_image     = cfg.get("conseilImage") or f"vextiracr{stack_suffix}.azurecr.io/conseil-agent:latest"
 voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
+voice_webapp_image = cfg.get("voiceWebappImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-webapp:latest"
 # Image for the context hub container.
 hub_image_cfg     = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/context-hub:latest"
-ui_image          = cfg.require("uiImage")
+ui_image          = cfg.get("uiImage") or f"vextiracr{stack_suffix}.azurecr.io/integrated-ui:latest"
 
 openai_api_key    = cfg.require_secret("openaiApiKey")
 aad_client_id     = cfg.require_secret("aadClientId")
@@ -535,6 +537,19 @@ voice_cg = aci_group(
     public=True,
 )
 
+conseil_cg = aci_group(
+    "conseil",
+    conseil_image,
+    8080,
+    [
+        containerinstance.EnvironmentVariableArgs(name="OPENAI_API_KEY", secure_value=openai_api_key),
+        containerinstance.EnvironmentVariableArgs(name="NODE_ENV", value="production"),
+        containerinstance.EnvironmentVariableArgs(name="CONSEIL_MODE", value="server"),
+    ],
+    cmd=["node", "dist/cli.js", "--help"],
+    public=False,  # Internal service for agent execution
+)
+
 hub_cg = aci_group(
     "contexthub",
     hub_image,
@@ -560,6 +575,7 @@ hub_internal_url = hub_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:3000")
 hub_url = pulumi.Output.concat("https://hub.", domain)
 
 pulumi.export("voiceWsFqdn", voice_cg.ip_address.apply(lambda ip: ip.fqdn))
+pulumi.export("conseilIp", conseil_cg.ip_address.apply(lambda ip: ip.ip))
 pulumi.export("contextHubIp", hub_cg.ip_address.apply(lambda ip: ip.ip))
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -687,11 +703,13 @@ func_settings = {
     "SERVICEBUS_QUEUE": sb_queue.name,
     "OPENAI_API_KEY": openai_api_key,
     "WORKER_IMAGE": worker_image,
+    "CONSEIL_IMAGE": conseil_image,
     "AAD_CLIENT_ID": aad_app.client_id,
     "AAD_CLIENT_SECRET": aad_password.value,
     "AAD_TENANT_ID": aad_tenant_id,
     "NOTIFY_URL": pulumi.Output.concat("https://www.", domain, "/chat/notify"),
     "HUB_URL": hub_internal_url,
+    "CONSEIL_URL": conseil_cg.ip_address.apply(lambda ip: f"http://{ip.ip}:8080"),
     "ACS_CONNECTION": comm_keys.primary_connection_string,
     "ACS_SENDER": pulumi.Output.concat("no-reply@", domain),
     "VERIFY_BASE": pulumi.Output.concat("https://www.", domain),

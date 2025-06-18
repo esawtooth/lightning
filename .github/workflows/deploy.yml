@@ -62,12 +62,15 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image_tag: worker-task
+          - image_tag: lightning-worker
             context: .
-            file: ./agents/Dockerfile.worker
-          - image_tag: chainlit-client
+            file: ./agents/Dockerfile.lightning-worker
+          - image_tag: conseil-agent
             context: .
-            file: ./ui/chat_client/Dockerfile
+            file: ./agents/conseil/Dockerfile
+          - image_tag: integrated-ui
+            context: .
+            file: ./ui/integrated_app/Dockerfile
           - image_tag: voice-ws
             context: ./agents/voice-agent/websocket-server
             file: ./agents/voice-agent/websocket-server/Dockerfile
@@ -159,8 +162,10 @@ jobs:
           
           # Use placeholder images initially - will be updated after build
           pulumi config set workerImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
+          pulumi config set conseilImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           pulumi config set uiImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"  
           pulumi config set voiceWsImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
+          pulumi config set voiceWebappImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           pulumi config set hubImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           
           echo "configured=true" >> $GITHUB_OUTPUT
@@ -218,9 +223,11 @@ jobs:
           pulumi config set twilioAuthToken "${{ secrets.TWILIO_AUTH_TOKEN }}" --secret
           
           # Update to real images
-          pulumi config set workerImage "vextiracrdev.azurecr.io/worker-task:${{ github.sha }}"
-          pulumi config set uiImage "vextiracrdev.azurecr.io/chainlit-client:${{ github.sha }}"
+          pulumi config set workerImage "vextiracrdev.azurecr.io/lightning-worker:${{ github.sha }}"
+          pulumi config set conseilImage "vextiracrdev.azurecr.io/conseil-agent:${{ github.sha }}"
+          pulumi config set uiImage "vextiracrdev.azurecr.io/integrated-ui:${{ github.sha }}"
           pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${{ github.sha }}"
+          pulumi config set voiceWebappImage "vextiracrdev.azurecr.io/voice-webapp:${{ github.sha }}"
           pulumi config set hubImage "vextiracrdev.azurecr.io/context-hub:${{ github.sha }}"
 
           # Deploy with real images
