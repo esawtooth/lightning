@@ -51,7 +51,7 @@ pub fn router(
     Router::new()
         .route("/documents", post(create_document).get(list_documents))
         .route(
-            "/documents/:id",
+            "/documents/{id}",
             get(get_document)
                 .put(update_document)
                 .delete(delete_document),

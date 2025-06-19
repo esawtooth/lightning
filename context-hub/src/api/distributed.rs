@@ -161,13 +161,13 @@ pub fn create_router(state: ApiState) -> Router {
         // Document endpoints
         .route("/documents", post(create_document).get(list_documents))
         .route(
-            "/documents/:id",
+            "/documents/{id}",
             get(get_document)
                 .put(update_document)
                 .delete(delete_document),
         )
-        .route("/documents/:id/share", post(share_document))
-        .route("/documents/:id/unshare", delete(unshare_document))
+        .route("/documents/{id}/share", post(share_document))
+        .route("/documents/{id}/unshare", delete(unshare_document))
         
         // Search
         .route("/search", get(search_documents))
