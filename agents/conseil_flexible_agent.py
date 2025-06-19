@@ -4,11 +4,17 @@ Supports multiple job roles beyond coding
 """
 
 import os
+import sys
+import logging
 from typing import Dict, Any, Optional, List
 from enum import Enum
 
-from lightning_core.drivers import AgentDriver
-from lightning_core.events import Event, EventType
+# Add the core directory to the path if running standalone
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
+
+from lightning_core.vextir_os.drivers import AgentDriver, DriverManifest, DriverType, ResourceSpec
+from lightning_core.vextir_os.events import Event
+from lightning_core.llm import get_completions_api, Message, MessageRole
 
 
 class JobRole(Enum):
@@ -28,9 +34,9 @@ class FlexibleConseilAgent(AgentDriver):
     """
     Flexible Conseil agent that can operate in different professional roles.
 
-    This agent wraps the Conseil CLI with configurable job roles, allowing it
-    to function as a coding assistant, legal document reviewer, personal assistant,
-    financial analyst, or any custom-defined role.
+    This agent uses the Lightning Core model registry and completions API,
+    allowing it to function as a coding assistant, legal document reviewer, 
+    personal assistant, financial analyst, or any custom-defined role.
     """
     def __init__(
         self,
@@ -40,7 +46,7 @@ class FlexibleConseilAgent(AgentDriver):
         custom_guidelines: Optional[str] = None,
         enable_sandbox: bool = True,
         approval_policy: str = "manual",
-        model: str = "gpt-4",
+        model: str = "gpt-4o-mini",
         working_directory: Optional[str] = None,
         **kwargs
     ):
@@ -54,10 +60,29 @@ class FlexibleConseilAgent(AgentDriver):
             custom_guidelines: Guidelines for custom role
             enable_sandbox: Whether to sandbox file operations
             approval_policy: Command approval policy (auto, manual, guided)
-            model: AI model to use
+            model: AI model to use (from Lightning model registry)
             working_directory: Directory for agent operations
         """
-        super().__init__(name=name, **kwargs)
+        # Create manifest
+        manifest = DriverManifest(
+            id=name,
+            name=f"Flexible Conseil Agent ({role.value})",
+            version="1.0.0",
+            author="Lightning",
+            description=custom_description or f"Conseil agent in {role.value} role",
+            driver_type=DriverType.AGENT,
+            capabilities=[f"conseil.{role.value}", "chat", "task_execution"],
+            resource_requirements=ResourceSpec(memory_mb=1024, timeout_seconds=300),
+        )
+        
+        # Initialize parent with model configuration
+        config = kwargs.get("config", {})
+        config.update({
+            "model": model,
+            "system_prompt": self._build_system_prompt(role, custom_description, custom_guidelines)
+        })
+        
+        super().__init__(manifest=manifest, config=config)
 
         self.role = role
         self.custom_description = custom_description
@@ -70,45 +95,70 @@ class FlexibleConseilAgent(AgentDriver):
         # Validate custom role configuration
         if role == JobRole.CUSTOM and not custom_description:
             raise ValueError("Custom role requires a description")
+    
+    def _build_system_prompt(self, role: JobRole, custom_description: Optional[str], custom_guidelines: Optional[str]) -> str:
+        """Build role-specific system prompt."""
+        base_prompts = {
+            JobRole.CODING: """You are a skilled software engineer assistant. You help with coding tasks, 
+            debugging, code reviews, and software architecture. You write clean, efficient, and well-documented code.""",
+            
+            JobRole.LEGAL: """You are a legal document assistant. You help review contracts, agreements, 
+            and legal documents. You identify potential issues, suggest improvements, and ensure clarity. 
+            Note: You provide assistance but are not a lawyer and cannot give legal advice.""",
+            
+            JobRole.PERSONAL: """You are a helpful personal assistant. You help with scheduling, reminders, 
+            email drafts, travel planning, and various personal tasks. You are organized, proactive, and considerate.""",
+            
+            JobRole.FINANCE: """You are a financial analysis assistant. You help analyze financial data, 
+            create reports, track expenses, and provide insights. You are detail-oriented and accurate with numbers.""",
+            
+            JobRole.RESEARCH: """You are a research assistant. You help gather information, analyze sources, 
+            create summaries, and compile research reports. You are thorough, objective, and cite sources properly.""",
+            
+            JobRole.TECHNICAL_WRITER: """You are a technical writing assistant. You help create documentation, 
+            user guides, API references, and technical articles. You write clearly and structure information logically.""",
+            
+            JobRole.PROJECT_MANAGER: """You are a project management assistant. You help with project planning, 
+            task tracking, timeline management, and team coordination. You are organized and deadline-focused.""",
+            
+            JobRole.DATA_ANALYST: """You are a data analysis assistant. You help analyze datasets, create 
+            visualizations, identify patterns, and generate insights. You are skilled in statistics and data interpretation.""",
+        }
+        
+        if role == JobRole.CUSTOM:
+            prompt = custom_description or "You are a helpful assistant."
+            if custom_guidelines:
+                prompt += f"\n\nGuidelines:\n{custom_guidelines}"
+        else:
+            prompt = base_prompts.get(role, "You are a helpful assistant.")
+            
+        # Add general instructions
+        prompt += "\n\nAlways be helpful, accurate, and professional. If you're unsure about something, say so."
+        
+        return prompt
 
     async def initialize(self):
         """Initialize the agent with role-specific configuration"""
         await super().initialize()
 
-        # Log role configuration
+        # Log role configuration  
+        self.logger = logging.getLogger(self.__class__.__name__)
         role_desc = self.custom_description if self.role == JobRole.CUSTOM else f"{self.role.value} assistant"
         self.logger.info(f"Initialized {self.name} as {role_desc}")
         self.logger.info(f"Sandbox: {'Enabled' if self.enable_sandbox else 'Disabled'}")
         self.logger.info(f"Approval: {self.approval_policy}")
 
-    def _build_conseil_command(self, prompt: str) -> List[str]:
-        """Build the Conseil CLI command with role configuration"""
-        cmd = ["conseil"]
-
-        # Add role configuration
-        cmd.extend(["--role", self.role.value])
-
-        # Add custom role details if applicable
-        if self.role == JobRole.CUSTOM:
-            cmd.extend(["--description", self.custom_description])
-            if self.custom_guidelines:
-                cmd.extend(["--guidelines", self.custom_guidelines])
-
-        # Add sandbox configuration
-        if not self.enable_sandbox:
-            cmd.append("--no-sandbox")
-
-        # Add other options
-        cmd.extend([
-            "--model", self.model,
-            "--approval", self.approval_policy
-        ])
-
-        return cmd
+    def get_capabilities(self) -> List[str]:
+        """Return agent capabilities based on role."""
+        return self.manifest.capabilities
+    
+    def get_resource_requirements(self) -> ResourceSpec:
+        """Return resource requirements."""
+        return self.manifest.resource_requirements
 
     async def process_request(self, request: str, context: Optional[Dict[str, Any]] = None) -> str:
         """
-        Process a request using the configured Conseil agent.
+        Process a request using the Lightning Core completions API.
 
         Args:
             request: The task or question for the agent
@@ -117,57 +167,71 @@ class FlexibleConseilAgent(AgentDriver):
         Returns:
             Agent's response or action summary
         """
-        # Change to working directory if specified
-        original_dir = os.getcwd()
-        if context and "working_directory" in context:
-            os.chdir(context["working_directory"])
-        elif self.working_directory != original_dir:
-            os.chdir(self.working_directory)
-
+        # Build context information
+        context_info = ""
+        if context:
+            if "working_directory" in context:
+                context_info += f"\nWorking Directory: {context['working_directory']}"
+            if "files" in context:
+                context_info += f"\nRelevant Files: {', '.join(context['files'])}"
+            if "additional_info" in context:
+                context_info += f"\n{context['additional_info']}"
+        
+        # Prepare messages
+        messages = []
+        
+        # Add context if available
+        if context_info:
+            messages.append({
+                "role": "user",
+                "content": f"Context for this request:{context_info}"
+            })
+        
+        # Add the main request
+        messages.append({
+            "role": "user", 
+            "content": request
+        })
+        
+        # Make completion request using the Lightning Core API
         try:
-            # Build command
-            cmd = self._build_conseil_command(request)
+            response = await self.complete(
+                messages=messages,
+                temperature=0.7,
+                max_tokens=2000,
+            )
+            
+            return response
+            
+        except Exception as e:
+            self.logger.error(f"Error processing request: {e}")
+            return f"Error: Unable to process request - {str(e)}"
 
-            # Log the command for debugging
-            self.logger.debug(f"Executing Conseil command: {' '.join(cmd)}")
-
-            # Execute Conseil (simplified - in practice would use subprocess)
-            # This is a placeholder for the actual implementation
-            result = await self._execute_conseil(cmd, request)
-
-            return result
-
-        finally:
-            # Restore original directory
-            os.chdir(original_dir)
-
-    async def _execute_conseil(self, cmd: List[str], prompt: str) -> str:
-        """Execute Conseil CLI and return results"""
-        # This would actually run the Conseil CLI process
-        # For now, return a placeholder
-        return f"Executed {self.role.value} assistant for: {prompt}"
-
-    async def handle_event(self, event: Event) -> Optional[Event]:
+    async def handle_event(self, event: Event) -> List[Event]:
         """Handle incoming events"""
-        if event.type == EventType.INPUT and event.data.get("agent") == self.name:
+        output_events = []
+        
+        if event.type == "agent.task" and event.metadata.get("agent_id") == self.name:
             # Process the request
-            request = event.data.get("prompt", "")
-            context = event.data.get("context", {})
+            request = event.metadata.get("task", "")
+            context = event.metadata.get("context", {})
 
             result = await self.process_request(request, context)
 
             # Return result event
-            return Event(
-                type=EventType.OUTPUT,
+            output_events.append(Event(
+                type="agent.task.completed",
                 source=self.name,
-                data={
+                user_id=event.user_id,
+                metadata={
                     "result": result,
                     "role": self.role.value,
-                    "request_id": event.data.get("request_id")
+                    "request_id": event.metadata.get("request_id"),
+                    "agent_id": self.name
                 }
-            )
+            ))
 
-        return None
+        return output_events
 
 
 # Factory functions for common agent configurations
@@ -184,6 +248,7 @@ def create_legal_assistant(
         enable_sandbox=False,  # Legal docs often need direct access
         approval_policy="manual",  # Careful review for legal changes
         working_directory=working_directory,
+        model="gpt-4o",  # Use more capable model for legal work
         **kwargs
     )
 

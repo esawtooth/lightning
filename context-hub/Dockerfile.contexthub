@@ -5,7 +5,9 @@ WORKDIR /build/context-hub
 RUN cargo build --release
 
 FROM debian:bullseye-slim
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /build/context-hub/target/release/context-hub /usr/local/bin/context-hub
 WORKDIR /app
+RUN mkdir -p data index snapshots blobs
 EXPOSE 3000
 CMD ["context-hub"]

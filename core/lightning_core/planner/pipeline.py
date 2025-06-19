@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict
 
-from .planner import call_planner_llm
+from .planner import call_planner_llm_sync
 from .registry import ToolRegistry
 from .storage import PlanStore
 from .validator import PlanValidationError, validate_plan
@@ -25,7 +25,12 @@ def create_verified_plan(
         else ToolRegistry.load()
     )
 
-    plan_json = call_planner_llm(instruction, subset, **openai_kwargs)
+    # Extract model and user_id if provided in kwargs
+    model = openai_kwargs.pop("model", None)
+    
+    plan_json = call_planner_llm_sync(
+        instruction, subset, model=model, user_id=user_id, **openai_kwargs
+    )
 
     try:
         validate_plan(plan_json)

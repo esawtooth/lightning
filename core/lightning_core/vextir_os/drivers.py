@@ -97,13 +97,42 @@ class AgentDriver(Driver):
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
     ):
         super().__init__(manifest, config)
-        self.model_name = config.get("model", "gpt-4") if config else "gpt-4"
+        self.model_name = config.get("model", "gpt-4o-mini") if config else "gpt-4o-mini"
         self.tools = config.get("tools", []) if config else []
         self.system_prompt = config.get("system_prompt", "") if config else ""
+        self._completions_api = None
 
     async def get_model_client(self):
-        """Get LLM client (to be implemented by subclasses)"""
-        raise NotImplementedError("Subclasses must implement get_model_client")
+        """Get LLM client using the model registry"""
+        if self._completions_api is None:
+            from ..llm import get_completions_api
+            self._completions_api = get_completions_api()
+        return self._completions_api
+
+    async def complete(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        **kwargs
+    ) -> str:
+        """Make a completion request using the model registry"""
+        api = await self.get_model_client()
+        
+        # Add system prompt if not already in messages
+        if self.system_prompt and (not messages or messages[0].get("role") != "system"):
+            messages = [{"role": "system", "content": self.system_prompt}] + messages
+        
+        response = await api.create(
+            model=self.model_name,
+            messages=messages,
+            user_id=self.manifest.id,  # Use driver ID for tracking
+            temperature=temperature,
+            max_tokens=max_tokens,
+            **kwargs
+        )
+        
+        return response.choices[0].message.content
 
     async def build_context(self, event: Event) -> str:
         """Build context for LLM from event and context hub"""

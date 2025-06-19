@@ -10,7 +10,6 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-import openai
 import requests
 from lightning_core.events.models import (
     CalendarEvent,
@@ -394,9 +393,8 @@ class ChatAgentDriver(AgentDriver):
             "CONTEXT_HUB_URL", "http://localhost:3000"
         )
 
-        # Set OpenAI API key
-        if self.openai_api_key:
-            openai.api_key = self.openai_api_key
+        # Initialize completions API
+        self._completions_api = None
 
         self.system_prompt = """
 You are a helpful AI assistant with access to the user's personal context hub. You can search their documents, notes, and files using the search_user_context function when relevant to their questions. Always cite sources when referencing information from their context hub.
@@ -427,30 +425,47 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                 messages[0]["content"] += "\n\n" + system_message["content"]
 
             try:
+                # Get completions API
+                if self._completions_api is None:
+                    from ..llm import get_completions_api
+                    self._completions_api = get_completions_api()
+
                 # Get model from registry
                 model_registry = get_model_registry()
                 model = model_registry.get_model(self.default_model)
                 if not model:
                     model = model_registry.get_cheapest_model("chat")
+                
+                model_id = model.id if model else self.default_model
 
                 # First attempt with function calling
-                response = await asyncio.to_thread(
-                    openai.ChatCompletion.create,
+                response = await self._completions_api.create(
+                    model=model_id,
                     messages=messages,
-                    model=model.id if model else self.default_model,
+                    user_id=event.user_id,
                     tools=[self._get_context_search_tool()],
                     tool_choice="auto",
                 )
 
-                message = response["choices"][0]["message"]
-                usage = response.get("usage", {})
+                message = response.choices[0].message
+                usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+                if response.usage:
+                    usage = {
+                        "prompt_tokens": response.usage.prompt_tokens,
+                        "completion_tokens": response.usage.completion_tokens,
+                        "total_tokens": response.usage.total_tokens,
+                    }
 
                 # Check if the model wants to call a function
-                if message.get("tool_calls"):
+                if message.tool_calls:
                     # Handle function calls
-                    messages.append(message)
+                    messages.append({
+                        "role": message.role.value,
+                        "content": message.content,
+                        "tool_calls": message.tool_calls
+                    })
 
-                    for tool_call in message["tool_calls"]:
+                    for tool_call in message.tool_calls:
                         function_name = tool_call["function"]["name"]
                         try:
                             arguments = json.loads(tool_call["function"]["arguments"])
@@ -472,16 +487,21 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                         )
 
                     # Get final response with function results
-                    final_response = await asyncio.to_thread(
-                        openai.ChatCompletion.create,
+                    final_response = await self._completions_api.create(
+                        model=model_id,
                         messages=messages,
-                        model=model.id if model else self.default_model,
+                        user_id=event.user_id,
                     )
 
-                    reply = final_response["choices"][0]["message"]["content"]
-                    usage.update(final_response.get("usage", {}))
+                    reply = final_response.choices[0].message.content
+                    if final_response.usage:
+                        usage = {
+                            "prompt_tokens": usage["prompt_tokens"] + final_response.usage.prompt_tokens,
+                            "completion_tokens": usage["completion_tokens"] + final_response.usage.completion_tokens,
+                            "total_tokens": usage["total_tokens"] + final_response.usage.total_tokens,
+                        }
                 else:
-                    reply = message["content"]
+                    reply = message.content
 
                 logging.info("Assistant reply: %s", reply)
 

@@ -3,25 +3,18 @@ import json
 import logging
 import textwrap
 import time
-from typing import Any, Dict
-
-import openai
-from openai import OpenAI
+from typing import Any, Dict, Optional
+import asyncio
 
 from .registry import EventRegistry, ToolRegistry
 from .schema import PlanModel  # only for post‑validation typing
 from .validator import PlanValidationError, validate_plan
 
-# OpenAI client will be initialized when needed
-openai_client = None
+# Import the completions API
+from ..llm import get_completions_api, Message, MessageRole
 
-
-def _get_openai_client():
-    """Get or create OpenAI client"""
-    global openai_client
-    if openai_client is None:
-        openai_client = OpenAI()
-    return openai_client
+# Default model for planning (can be overridden)
+DEFAULT_PLANNER_MODEL = "o3-mini"  # Use o3-mini as default for planning
 
 
 # ---------------------------------------------------------------------------
@@ -86,41 +79,94 @@ def _make_system_prompt() -> str:
 # ---------------------------------------------------------------------------
 # Main function
 # ---------------------------------------------------------------------------
-def call_planner_llm(
+async def call_planner_llm(
     instruction: str,
     registry_subset: Dict[str, Any],  # kept for API symmetry
     max_retries: int = 4,
     seconds_between: float = 0.8,
+    model: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-
+    """
+    Call the planner LLM to generate a workflow plan.
+    
+    Args:
+        instruction: User instruction for the plan
+        registry_subset: Registry subset (kept for API compatibility)
+        max_retries: Maximum number of retry attempts
+        seconds_between: Seconds to wait between retries
+        model: Model to use (defaults to DEFAULT_PLANNER_MODEL)
+        user_id: User ID for usage tracking
+        
+    Returns:
+        Valid plan dictionary
+    """
+    api = get_completions_api()
+    model = model or DEFAULT_PLANNER_MODEL
+    
     system_prompt = _make_system_prompt()
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": instruction},
+        Message(role=MessageRole.SYSTEM, content=system_prompt),
+        Message(role=MessageRole.USER, content=instruction),
     ]
 
     for attempt in range(1, max_retries + 1):
-        client = _get_openai_client()
-        resp = client.chat.completions.create(
-            model="o3", messages=messages, response_format={"type": "json_object"}
-        )
-        plan_json = json.loads(resp.choices[0].message.content)
-
         try:
+            # Use the completions API with JSON response format
+            resp = await api.create(
+                model=model,
+                messages=messages,
+                user_id=user_id,
+                response_format={"type": "json_object"},
+                temperature=0.7,
+            )
+            
+            # Parse the JSON response
+            plan_json = json.loads(resp.choices[0].message.content)
+
+            # Validate the plan
             validate_plan(plan_json)
             return plan_json  # ✅ passes on this attempt
+            
         except PlanValidationError as e:
             logging.warning("Attempt %d failed: %s", attempt, e)
             messages.append(
-                {
-                    "role": "system",
-                    "content": f"CRITIC: {e}\nPlease re‑emit a corrected plan.",
-                }
+                Message(
+                    role=MessageRole.SYSTEM,
+                    content=f"CRITIC: {e}\nPlease re‑emit a corrected plan.",
+                )
             )
-            time.sleep(seconds_between)
+            await asyncio.sleep(seconds_between)
+        except Exception as e:
+            logging.error(f"Error in planner attempt {attempt}: {e}")
+            if attempt == max_retries:
+                raise
+            await asyncio.sleep(seconds_between)
 
     raise RuntimeError(
         f"Planner could not produce a valid plan in {max_retries} attempts."
+    )
+
+
+# Synchronous wrapper for backward compatibility
+def call_planner_llm_sync(
+    instruction: str,
+    registry_subset: Dict[str, Any] = None,
+    max_retries: int = 4,
+    seconds_between: float = 0.8,
+    model: Optional[str] = None,
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Synchronous wrapper for call_planner_llm"""
+    return asyncio.run(
+        call_planner_llm(
+            instruction=instruction,
+            registry_subset=registry_subset or {},
+            max_retries=max_retries,
+            seconds_between=seconds_between,
+            model=model,
+            user_id=user_id,
+        )
     )
 
 
