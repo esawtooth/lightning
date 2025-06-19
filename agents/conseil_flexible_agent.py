@@ -12,9 +12,8 @@ from enum import Enum
 # Add the core directory to the path if running standalone
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'core'))
 
-from lightning_core.vextir_os.drivers import AgentDriver, DriverManifest, DriverType, ResourceSpec
-from lightning_core.vextir_os.events import Event
-from lightning_core.llm import get_completions_api, Message, MessageRole
+from lightning_core.vextir_os.drivers import AgentDriver, DriverManifest, DriverType, ResourceSpec  # noqa: E402
+from lightning_core.vextir_os.events import Event  # noqa: E402
 
 
 class JobRole(Enum):
@@ -35,7 +34,7 @@ class FlexibleConseilAgent(AgentDriver):
     Flexible Conseil agent that can operate in different professional roles.
 
     This agent uses the Lightning Core model registry and completions API,
-    allowing it to function as a coding assistant, legal document reviewer, 
+    allowing it to function as a coding assistant, legal document reviewer,
     personal assistant, financial analyst, or any custom-defined role.
     """
     def __init__(
@@ -74,14 +73,14 @@ class FlexibleConseilAgent(AgentDriver):
             capabilities=[f"conseil.{role.value}", "chat", "task_execution"],
             resource_requirements=ResourceSpec(memory_mb=1024, timeout_seconds=300),
         )
-        
+
         # Initialize parent with model configuration
         config = kwargs.get("config", {})
         config.update({
             "model": model,
             "system_prompt": self._build_system_prompt(role, custom_description, custom_guidelines)
         })
-        
+
         super().__init__(manifest=manifest, config=config)
 
         self.role = role
@@ -95,53 +94,61 @@ class FlexibleConseilAgent(AgentDriver):
         # Validate custom role configuration
         if role == JobRole.CUSTOM and not custom_description:
             raise ValueError("Custom role requires a description")
-    
-    def _build_system_prompt(self, role: JobRole, custom_description: Optional[str], custom_guidelines: Optional[str]) -> str:
+
+    def _build_system_prompt(self, role: JobRole, custom_description: Optional[str],
+                             custom_guidelines: Optional[str]) -> str:
         """Build role-specific system prompt."""
         base_prompts = {
-            JobRole.CODING: """You are a skilled software engineer assistant. You help with coding tasks, 
-            debugging, code reviews, and software architecture. You write clean, efficient, and well-documented code.""",
-            
-            JobRole.LEGAL: """You are a legal document assistant. You help review contracts, agreements, 
-            and legal documents. You identify potential issues, suggest improvements, and ensure clarity. 
-            Note: You provide assistance but are not a lawyer and cannot give legal advice.""",
-            
-            JobRole.PERSONAL: """You are a helpful personal assistant. You help with scheduling, reminders, 
-            email drafts, travel planning, and various personal tasks. You are organized, proactive, and considerate.""",
-            
-            JobRole.FINANCE: """You are a financial analysis assistant. You help analyze financial data, 
+            JobRole.CODING: (
+                "You are a skilled software engineer assistant. You help with coding tasks, "
+                "debugging, code reviews, and software architecture. You write clean, efficient, "
+                "and well-documented code."
+            ),
+            JobRole.LEGAL: (
+                "You are a legal document assistant. You help review contracts, agreements, "
+                "and legal documents. You identify potential issues, suggest improvements, and ensure clarity. "
+                "Note: You provide assistance but are not a lawyer and cannot give legal advice."
+            ),
+            JobRole.PERSONAL: (
+                "You are a helpful personal assistant. You help with scheduling, reminders, "
+                "email drafts, travel planning, and various personal tasks. You are organized, "
+                "proactive, and considerate."
+            ),
+            JobRole.FINANCE: """You are a financial analysis assistant. You help analyze financial data,
             create reports, track expenses, and provide insights. You are detail-oriented and accurate with numbers.""",
-            
-            JobRole.RESEARCH: """You are a research assistant. You help gather information, analyze sources, 
+            JobRole.RESEARCH: """You are a research assistant. You help gather information, analyze sources,
             create summaries, and compile research reports. You are thorough, objective, and cite sources properly.""",
-            
-            JobRole.TECHNICAL_WRITER: """You are a technical writing assistant. You help create documentation, 
-            user guides, API references, and technical articles. You write clearly and structure information logically.""",
-            
-            JobRole.PROJECT_MANAGER: """You are a project management assistant. You help with project planning, 
+            JobRole.TECHNICAL_WRITER: (
+                "You are a technical writing assistant. You help create documentation, "
+                "user guides, API references, and technical articles. You write clearly and "
+                "structure information logically."
+            ),
+            JobRole.PROJECT_MANAGER: """You are a project management assistant. You help with project planning,
             task tracking, timeline management, and team coordination. You are organized and deadline-focused.""",
-            
-            JobRole.DATA_ANALYST: """You are a data analysis assistant. You help analyze datasets, create 
-            visualizations, identify patterns, and generate insights. You are skilled in statistics and data interpretation.""",
+            JobRole.DATA_ANALYST: (
+                "You are a data analysis assistant. You help analyze datasets, create "
+                "visualizations, identify patterns, and generate insights. You are skilled in "
+                "statistics and data interpretation."
+            ),
         }
-        
+
         if role == JobRole.CUSTOM:
             prompt = custom_description or "You are a helpful assistant."
             if custom_guidelines:
                 prompt += f"\n\nGuidelines:\n{custom_guidelines}"
         else:
             prompt = base_prompts.get(role, "You are a helpful assistant.")
-            
+
         # Add general instructions
         prompt += "\n\nAlways be helpful, accurate, and professional. If you're unsure about something, say so."
-        
+
         return prompt
 
     async def initialize(self):
         """Initialize the agent with role-specific configuration"""
         await super().initialize()
 
-        # Log role configuration  
+        # Log role configuration
         self.logger = logging.getLogger(self.__class__.__name__)
         role_desc = self.custom_description if self.role == JobRole.CUSTOM else f"{self.role.value} assistant"
         self.logger.info(f"Initialized {self.name} as {role_desc}")
@@ -151,7 +158,7 @@ class FlexibleConseilAgent(AgentDriver):
     def get_capabilities(self) -> List[str]:
         """Return agent capabilities based on role."""
         return self.manifest.capabilities
-    
+
     def get_resource_requirements(self) -> ResourceSpec:
         """Return resource requirements."""
         return self.manifest.resource_requirements
@@ -176,23 +183,23 @@ class FlexibleConseilAgent(AgentDriver):
                 context_info += f"\nRelevant Files: {', '.join(context['files'])}"
             if "additional_info" in context:
                 context_info += f"\n{context['additional_info']}"
-        
+
         # Prepare messages
         messages = []
-        
+
         # Add context if available
         if context_info:
             messages.append({
                 "role": "user",
                 "content": f"Context for this request:{context_info}"
             })
-        
+
         # Add the main request
         messages.append({
-            "role": "user", 
+            "role": "user",
             "content": request
         })
-        
+
         # Make completion request using the Lightning Core API
         try:
             response = await self.complete(
@@ -200,9 +207,9 @@ class FlexibleConseilAgent(AgentDriver):
                 temperature=0.7,
                 max_tokens=2000,
             )
-            
+
             return response
-            
+
         except Exception as e:
             self.logger.error(f"Error processing request: {e}")
             return f"Error: Unable to process request - {str(e)}"
@@ -210,7 +217,7 @@ class FlexibleConseilAgent(AgentDriver):
     async def handle_event(self, event: Event) -> List[Event]:
         """Handle incoming events"""
         output_events = []
-        
+
         if event.type == "agent.task" and event.metadata.get("agent_id") == self.name:
             # Process the request
             request = event.metadata.get("task", "")

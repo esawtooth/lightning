@@ -376,9 +376,9 @@ Start by uploading some documents or creating new notes to build your personal k
 @driver(
     "chat_agent",
     DriverType.AGENT,
-    capabilities=["llm.chat", "context.search", "conversation.manage"],
+    capabilities=["llm.chat", "context.search", "context.read", "context.write", "context.list", "conversation.manage"],
     name="Chat Agent Driver",
-    description="AI chat agent with context integration",
+    description="AI chat agent with full context hub access (search, read, write)",
 )
 class ChatAgentDriver(AgentDriver):
     """Replaces ChatResponder Azure Function"""
@@ -397,11 +397,20 @@ class ChatAgentDriver(AgentDriver):
         self._completions_api = None
 
         self.system_prompt = """
-You are a helpful AI assistant with access to the user's personal context hub. You can search their documents, notes, and files using the search_user_context function when relevant to their questions. Always cite sources when referencing information from their context hub.
+You are a helpful AI assistant with full access to the user's personal context hub. You have the following capabilities:
+
+1. **Search Documents**: Use search_user_context to find relevant documents based on keywords
+2. **Read Documents**: Use read_document to get the full content of a specific document when you have its ID
+3. **Write Documents**: Use write_document to create new documents or update existing ones
+4. **List Documents**: Use list_documents to see what's in a specific folder
+
+IMPORTANT: The context hub may contain "Index Guides" that provide specific instructions on how to use and organize content within folders. Always respect and follow these guides when working with documents. The guides are automatically included with search results and document listings.
+
+Always cite sources when referencing information from their context hub. When creating or updating documents, confirm the action with the user first unless they explicitly ask you to do so.
 """
 
     def get_capabilities(self) -> List[str]:
-        return ["llm.chat", "context.search", "conversation.manage"]
+        return ["llm.chat", "context.search", "context.read", "context.write", "context.list", "conversation.manage"]
 
     def get_resource_requirements(self) -> ResourceSpec:
         return ResourceSpec(memory_mb=1024, timeout_seconds=60)
@@ -443,7 +452,7 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                     model=model_id,
                     messages=messages,
                     user_id=event.user_id,
-                    tools=[self._get_context_search_tool()],
+                    tools=self._get_context_tools(),
                     tool_choice="auto",
                 )
 
@@ -565,30 +574,94 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
 
         return output_events
 
-    def _get_context_search_tool(self) -> Dict[str, Any]:
-        """Define the context search tool for function calling"""
-        return {
-            "type": "function",
-            "function": {
-                "name": "search_user_context",
-                "description": "Search the user's personal context hub for relevant documents, notes, and information",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The search query to find relevant content in the user's documents",
+    def _get_context_tools(self) -> List[Dict[str, Any]]:
+        """Define all context hub tools for function calling"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "search_user_context",
+                    "description": "Search the user's personal context hub for relevant documents, notes, and information",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The search query to find relevant content in the user's documents",
+                            },
+                            "limit": {
+                                "type": "integer",
+                                "description": "Maximum number of results to return (default: 5)",
+                                "default": 5,
+                            },
                         },
-                        "limit": {
-                            "type": "integer",
-                            "description": "Maximum number of results to return (default: 5)",
-                            "default": 5,
-                        },
+                        "required": ["query"],
                     },
-                    "required": ["query"],
                 },
             },
-        }
+            {
+                "type": "function",
+                "function": {
+                    "name": "read_document",
+                    "description": "Read the full content of a specific document from the user's context hub",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "document_id": {
+                                "type": "string",
+                                "description": "The UUID of the document to read",
+                            },
+                        },
+                        "required": ["document_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "write_document",
+                    "description": "Create or update a document in the user's context hub",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "name": {
+                                "type": "string",
+                                "description": "The name/title of the document",
+                            },
+                            "content": {
+                                "type": "string",
+                                "description": "The content of the document",
+                            },
+                            "document_id": {
+                                "type": "string",
+                                "description": "Optional: UUID of existing document to update. If not provided, creates a new document",
+                            },
+                            "parent_folder_id": {
+                                "type": "string",
+                                "description": "Optional: UUID of parent folder. If not provided, creates in root",
+                            },
+                        },
+                        "required": ["name", "content"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "list_documents",
+                    "description": "List documents in a specific folder or root of the user's context hub",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "folder_id": {
+                                "type": "string",
+                                "description": "Optional: UUID of folder to list. If not provided, lists root folder",
+                            },
+                        },
+                    },
+                },
+            },
+        ]
 
     async def _handle_function_call(
         self, function_name: str, arguments: Dict[str, Any], user_id: str
@@ -607,18 +680,102 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
 
             # Format results for the LLM
             formatted_results = []
+            index_guides = set()  # Collect unique index guides
+            
             for result in results:
+                # Collect index guides
+                guide = result.get('index_guide')
+                if guide:
+                    index_guides.add(guide)
+                
+                # Format the result
+                content_snippet = result.get('snippet', result.get('content', '')[:500])
                 formatted_results.append(
-                    f"**{result.get('name', 'Untitled')}**\n{result.get('content', '')[:500]}..."
+                    f"**{result.get('name', 'Untitled')}** (ID: {result.get('id', 'unknown')})\n{content_snippet}..."
                 )
 
             if formatted_results:
-                return (
-                    f"Found {len(formatted_results)} relevant documents:\n\n"
-                    + "\n\n".join(formatted_results)
-                )
+                response = f"Found {len(formatted_results)} relevant documents:\n\n"
+                
+                # Include index guides if present
+                if index_guides:
+                    response += "**Folder Guidelines:**\n"
+                    for guide in index_guides:
+                        response += f"{guide}\n\n---\n\n"
+                    response += "**Search Results:**\n\n"
+                
+                response += "\n\n".join(formatted_results)
+                return response
             else:
                 return "No relevant documents found in your context hub."
+
+        elif function_name == "read_document":
+            document_id = arguments.get("document_id", "")
+            if not document_id:
+                return "Error: No document ID provided"
+
+            document = await self._read_document(user_id, document_id)
+            if document:
+                response = f"**{document.get('name', 'Untitled')}**\n\n"
+                
+                # Include index guide if present
+                index_guide = document.get('index_guide')
+                if index_guide:
+                    response += f"**Folder Guidelines:**\n{index_guide}\n\n---\n\n"
+                
+                response += f"**Document Content:**\n{document.get('content', '')}"
+                return response
+            else:
+                return f"Error: Document with ID {document_id} not found or access denied"
+
+        elif function_name == "write_document":
+            name = arguments.get("name", "")
+            content = arguments.get("content", "")
+            document_id = arguments.get("document_id")
+            parent_folder_id = arguments.get("parent_folder_id")
+
+            if not name or not content:
+                return "Error: Document name and content are required"
+
+            result = await self._write_document(
+                user_id, name, content, document_id, parent_folder_id
+            )
+            if result:
+                if document_id:
+                    return f"Document '{name}' (ID: {result['id']}) has been updated successfully"
+                else:
+                    return f"New document '{name}' (ID: {result['id']}) has been created successfully"
+            else:
+                return "Error: Failed to write document"
+
+        elif function_name == "list_documents":
+            folder_id = arguments.get("folder_id")
+            documents = await self._list_documents(user_id, folder_id)
+            
+            if documents:
+                # Get index guide from the first document (they all have the same guide for a folder)
+                index_guide = None
+                if documents and isinstance(documents, list) and len(documents) > 0:
+                    index_guide = documents[0].get('index_guide')
+                
+                response = ""
+                
+                # Include index guide if present
+                if index_guide:
+                    response += f"**Folder Guidelines:**\n{index_guide}\n\n---\n\n"
+                
+                formatted_list = []
+                for doc in documents:
+                    doc_type = doc.get('doc_type', 'Text')
+                    icon = "📁" if doc_type == "Folder" else "📄"
+                    formatted_list.append(
+                        f"{icon} {doc.get('name', 'Untitled')} (ID: {doc.get('id', 'unknown')})"
+                    )
+                
+                response += f"**Documents in folder:**\n" + "\n".join(formatted_list)
+                return response
+            else:
+                return "No documents found in the specified folder"
 
         return f"Unknown function: {function_name}"
 
@@ -635,7 +792,12 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                 requests.get, url, headers=headers, params=params, timeout=10
             )
             if response.status_code == 200:
-                return response.json().get("results", [])
+                # Handle both old format (results key) and new format (direct array)
+                data = response.json()
+                if isinstance(data, list):
+                    return data
+                else:
+                    return data.get("results", [])
             else:
                 logging.error(
                     f"Context search failed for user {user_id}: {response.status_code}"
@@ -644,6 +806,148 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
         except Exception as e:
             logging.error(f"Context Hub connection failed for user {user_id}: {e}")
             raise RuntimeError(f"Context Hub required but unavailable: {e}") from e
+
+    async def _read_document(
+        self, user_id: str, document_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Read a specific document from context hub"""
+        try:
+            url = f"{self.context_hub_url.rstrip('/')}/docs/{document_id}"
+            headers = {"X-User-Id": user_id}
+
+            response = await asyncio.to_thread(
+                requests.get, url, headers=headers, timeout=10
+            )
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                return None
+            else:
+                logging.error(
+                    f"Document read failed for user {user_id}, doc {document_id}: {response.status_code}"
+                )
+                return None
+        except Exception as e:
+            logging.error(f"Context Hub read failed for user {user_id}: {e}")
+            return None
+
+    async def _write_document(
+        self,
+        user_id: str,
+        name: str,
+        content: str,
+        document_id: Optional[str] = None,
+        parent_folder_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """Create or update a document in context hub"""
+        try:
+            headers = {"X-User-Id": user_id, "Content-Type": "application/json"}
+            
+            if document_id:
+                # Update existing document
+                url = f"{self.context_hub_url.rstrip('/')}/docs/{document_id}"
+                data = {"content": content}
+                response = await asyncio.to_thread(
+                    requests.put, url, headers=headers, json=data, timeout=10
+                )
+                if response.status_code == 204:
+                    # Successfully updated, return the document info
+                    return {"id": document_id, "name": name}
+                else:
+                    logging.error(
+                        f"Document update failed for user {user_id}, doc {document_id}: {response.status_code}"
+                    )
+                    return None
+            else:
+                # Create new document
+                url = f"{self.context_hub_url.rstrip('/')}/docs"
+                data = {
+                    "name": name,
+                    "content": content,
+                    "parent_folder_id": parent_folder_id,
+                    "doc_type": "Text",
+                }
+                response = await asyncio.to_thread(
+                    requests.post, url, headers=headers, json=data, timeout=10
+                )
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logging.error(
+                        f"Document creation failed for user {user_id}: {response.status_code}"
+                    )
+                    return None
+        except Exception as e:
+            logging.error(f"Context Hub write failed for user {user_id}: {e}")
+            return None
+
+    async def _list_documents(
+        self, user_id: str, folder_id: Optional[str] = None
+    ) -> Optional[List[Dict[str, Any]]]:
+        """List documents in a folder"""
+        try:
+            # If folder_id is provided, use folders endpoint
+            if folder_id:
+                url = f"{self.context_hub_url.rstrip('/')}/folders/{folder_id}"
+            else:
+                # List documents endpoint returns all documents when no folder specified
+                url = f"{self.context_hub_url.rstrip('/')}/docs"
+                headers = {"X-User-Id": user_id}
+                response = await asyncio.to_thread(
+                    requests.get, url, headers=headers, timeout=10
+                )
+                
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    logging.error(
+                        f"Root folder listing failed for user {user_id}: {response.status_code}"
+                    )
+                    return []
+            
+            headers = {"X-User-Id": user_id}
+            response = await asyncio.to_thread(
+                requests.get, url, headers=headers, timeout=10
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 404:
+                return []
+            else:
+                logging.error(
+                    f"Folder listing failed for user {user_id}, folder {folder_id}: {response.status_code}"
+                )
+                return []
+        except Exception as e:
+            logging.error(f"Context Hub listing failed for user {user_id}: {e}")
+            return []
+    
+    async def _get_folder_guide(
+        self, user_id: str, folder_id: str
+    ) -> Optional[str]:
+        """Get the Index Guide content for a folder"""
+        try:
+            # Use the dedicated endpoint
+            url = f"{self.context_hub_url.rstrip('/')}/folders/{folder_id}/guide"
+            headers = {"X-User-Id": user_id}
+            
+            response = await asyncio.to_thread(
+                requests.get, url, headers=headers, timeout=10
+            )
+            
+            if response.status_code == 200:
+                guide_data = response.json()
+                return guide_data.get('content', '')
+            elif response.status_code == 404:
+                logging.info(f"No guide found for folder {folder_id}")
+                return None
+            else:
+                logging.error(f"Failed to get folder guide: {response.status_code}")
+                return None
+        except Exception as e:
+            logging.error(f"Failed to get folder guide for {folder_id}: {e}")
+            return None
 
 
 @driver(
