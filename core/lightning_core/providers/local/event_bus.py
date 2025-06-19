@@ -31,10 +31,15 @@ class LocalEventBus(EventBus):
         self._subscriptions: Dict[str, EventSubscription] = {}
         self._handlers: Dict[str, List[EventSubscription]] = defaultdict(list)
         self._dead_letter_queue: List[tuple[EventMessage, str]] = []
+        self._orphaned_events: List[tuple[EventMessage, str]] = []
+        self._event_history: List[tuple[EventMessage, str, datetime]] = []
         self._running = False
         self._tasks: Set[asyncio.Task] = set()
         self._max_retries = kwargs.get("max_retries", 3)
         self._retry_delay = kwargs.get("retry_delay", 1.0)
+        self._max_history_size = kwargs.get("max_history_size", 10000)
+        self._track_orphaned = kwargs.get("track_orphaned", True)
+        self._default_ttl_seconds = kwargs.get("default_ttl_seconds", 3600)  # 1 hour default
 
     async def publish(self, event: EventMessage, topic: Optional[str] = None) -> None:
         """Publish an event to the event bus."""
@@ -43,9 +48,13 @@ class LocalEventBus(EventBus):
         if topic not in self._topics:
             await self.create_topic(topic)
 
+        # Apply default TTL if not set
+        if event.ttl_seconds is None:
+            event.ttl_seconds = self._default_ttl_seconds
+
         # Put event in the queue
         await self._topics[topic].put(event)
-        logger.debug(f"Published event {event.id} to topic {topic}")
+        logger.debug(f"Published event {event.id} to topic {topic} with TTL {event.ttl_seconds}s")
 
     async def publish_batch(
         self, events: List[EventMessage], topic: Optional[str] = None
@@ -104,6 +113,10 @@ class LocalEventBus(EventBus):
         for topic in self._topics:
             task = asyncio.create_task(self._process_topic(topic))
             self._tasks.add(task)
+
+        # Start cleanup task for expired events
+        cleanup_task = asyncio.create_task(self._cleanup_expired_events())
+        self._tasks.add(cleanup_task)
 
         logger.info("Local event bus started")
 
@@ -200,6 +213,18 @@ class LocalEventBus(EventBus):
 
     async def _process_event(self, event: EventMessage, topic: str) -> None:
         """Process a single event."""
+        # Check if event has expired
+        if event.is_expired():
+            logger.warning(f"Expired event dropped: {event.event_type} (ID: {event.id})")
+            return
+
+        # Track event in history
+        if self._track_orphaned:
+            self._event_history.append((event, topic, datetime.utcnow()))
+            # Maintain history size limit
+            if len(self._event_history) > self._max_history_size:
+                self._event_history = self._event_history[-self._max_history_size:]
+
         # Find matching subscriptions
         matching_subscriptions = []
 
@@ -214,10 +239,25 @@ class LocalEventBus(EventBus):
                 if re.match(f"^{regex_pattern}$", event.event_type):
                     matching_subscriptions.extend(subscriptions)
 
+        # Check if event is orphaned (no matching subscriptions)
+        if not matching_subscriptions and self._track_orphaned:
+            logger.warning(f"Orphaned event detected: {event.event_type} (ID: {event.id})")
+            self._orphaned_events.append((event, topic))
+            # Limit orphaned events storage
+            if len(self._orphaned_events) > 1000:
+                self._orphaned_events = self._orphaned_events[-1000:]
+            return
+
         # Process with each matching handler
+        handled = False
         for subscription in matching_subscriptions:
             if self._matches_filter(event, subscription.filter_expression):
                 await self._invoke_handler(subscription, event, topic)
+                handled = True
+
+        # Track if event had subscribers but none handled it (due to filters)
+        if not handled and self._track_orphaned:
+            logger.info(f"Event {event.event_type} had subscribers but was filtered out")
 
     def _matches_filter(
         self, event: EventMessage, filter_expression: Optional[Dict[str, Any]]
@@ -279,3 +319,98 @@ class LocalEventBus(EventBus):
                 logger.error(
                     f"Event {event.id} moved to dead letter queue after {retry_count} retries"
                 )
+
+    async def has_subscribers(self, event_type: str, topic: Optional[str] = None) -> bool:
+        """Check if an event type has any active subscribers."""
+        # Check direct matches
+        if event_type in self._handlers and self._handlers[event_type]:
+            return True
+
+        # Check wildcard patterns
+        for pattern, subscriptions in self._handlers.items():
+            if "*" in pattern and subscriptions:  # Check if pattern has active subscriptions
+                regex_pattern = pattern.replace(".", r"\.").replace("*", ".*")
+                if re.match(f"^{regex_pattern}$", event_type):
+                    return True
+
+        return False
+
+    async def get_orphaned_events(
+        self, since: Optional[datetime] = None, max_items: Optional[int] = None
+    ) -> List[EventMessage]:
+        """Get events that were published but had no subscribers."""
+        events = []
+        
+        for event, topic in self._orphaned_events:
+            if since and event.timestamp < since:
+                continue
+            events.append(event)
+            
+            if max_items and len(events) >= max_items:
+                break
+
+        return events
+
+    async def drain_orphaned_events(
+        self, event_types: Optional[List[str]] = None, before: Optional[datetime] = None
+    ) -> int:
+        """Remove orphaned events from the system."""
+        count = 0
+        new_orphaned = []
+
+        for event, topic in self._orphaned_events:
+            should_drain = True
+
+            # Check event type filter
+            if event_types and event.event_type not in event_types:
+                should_drain = False
+
+            # Check timestamp filter
+            if before and event.timestamp >= before:
+                should_drain = False
+
+            if should_drain:
+                count += 1
+                logger.info(f"Draining orphaned event: {event.event_type} (ID: {event.id})")
+            else:
+                new_orphaned.append((event, topic))
+
+        self._orphaned_events = new_orphaned
+        return count
+
+    async def _cleanup_expired_events(self):
+        """Background task to clean up expired events."""
+        cleanup_interval = 300  # 5 minutes
+        
+        while self._running:
+            try:
+                await asyncio.sleep(cleanup_interval)
+                
+                # Clean up expired orphaned events
+                original_count = len(self._orphaned_events)
+                self._orphaned_events = [
+                    (event, topic) for event, topic in self._orphaned_events
+                    if not event.is_expired()
+                ]
+                removed_count = original_count - len(self._orphaned_events)
+                
+                if removed_count > 0:
+                    logger.info(f"Cleaned up {removed_count} expired orphaned events")
+                
+                # Clean up expired events from history
+                original_history = len(self._event_history)
+                self._event_history = [
+                    (event, topic, ts) for event, topic, ts in self._event_history
+                    if not event.is_expired()
+                ]
+                history_removed = original_history - len(self._event_history)
+                
+                if history_removed > 0:
+                    logger.debug(f"Cleaned up {history_removed} expired events from history")
+                    
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in cleanup task: {e}")
+                
+        logger.info("Cleanup task stopped")

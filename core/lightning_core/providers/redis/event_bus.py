@@ -323,11 +323,26 @@ class RedisEventBus(EventBus):
                 if self._matches_wildcard(event.event_type, sub_type):
                     matching_subscriptions.extend(subs)
 
+        # Check if event is orphaned (no matching subscriptions)
+        if not matching_subscriptions:
+            logger.warning(f"Orphaned event in Redis: {event.event_type} (ID: {event.id})")
+            # Store as orphaned event with metadata
+            orphaned_key = f"orphaned:{event.event_type}:{event.id}"
+            await self._redis.hset(orphaned_key, mapping={
+                "event": event.to_json(),
+                "channel": channel,
+                "timestamp": datetime.utcnow().isoformat()
+            })
+            await self._redis.expire(orphaned_key, 86400)  # 24 hour TTL
+            return
+
         # Process with each matching handler
+        handled = False
         for subscription in matching_subscriptions:
             if self._matches_filter(event, subscription.filter_expression):
                 try:
                     await subscription.handler(event)
+                    handled = True
                     logger.debug(
                         f"Successfully processed event {event.id} with handler {subscription.subscription_id}"
                     )
@@ -342,6 +357,10 @@ class RedisEventBus(EventBus):
                     )
                     await self._redis.lpush(dead_letter_key, event.to_json())
                     await self._redis.expire(dead_letter_key, 86400)  # 24 hour TTL
+
+        # Log if event had subscribers but was filtered out
+        if not handled:
+            logger.info(f"Event {event.event_type} had subscribers but was filtered out")
 
     def _matches_wildcard(self, event_type: str, pattern: str) -> bool:
         """Check if event type matches wildcard pattern."""
@@ -385,3 +404,92 @@ class RedisEventBus(EventBus):
                     return False
 
         return True
+
+    async def has_subscribers(self, event_type: str, topic: Optional[str] = None) -> bool:
+        """Check if an event type has any active subscribers."""
+        # Check direct matches
+        if event_type in self._handlers and self._handlers[event_type]:
+            return True
+
+        # Check wildcard patterns
+        for pattern in self._handlers:
+            if self._matches_wildcard(event_type, pattern):
+                return True
+
+        return False
+
+    async def get_orphaned_events(
+        self, since: Optional[datetime] = None, max_items: Optional[int] = None
+    ) -> List[EventMessage]:
+        """Get events that were published but had no subscribers."""
+        events = []
+        
+        # Scan for orphaned event keys
+        pattern = "orphaned:*"
+        cursor = 0
+        keys = []
+
+        while True:
+            cursor, batch = await self._redis.scan(cursor, match=pattern)
+            keys.extend(batch)
+            if cursor == 0:
+                break
+
+        # Get events from Redis
+        for key in keys[:max_items] if max_items else keys:
+            data = await self._redis.hgetall(key)
+            if data and "event" in data:
+                try:
+                    event = EventMessage.from_json(data["event"])
+                    timestamp = datetime.fromisoformat(data.get("timestamp", datetime.utcnow().isoformat()))
+                    
+                    if since and timestamp < since:
+                        continue
+                        
+                    events.append(event)
+                except Exception as e:
+                    logger.error(f"Failed to parse orphaned event from {key}: {e}")
+
+        return events[:max_items] if max_items else events
+
+    async def drain_orphaned_events(
+        self, event_types: Optional[List[str]] = None, before: Optional[datetime] = None
+    ) -> int:
+        """Remove orphaned events from the system."""
+        count = 0
+        
+        # Scan for orphaned event keys
+        pattern = "orphaned:*"
+        cursor = 0
+
+        while True:
+            cursor, keys = await self._redis.scan(cursor, match=pattern)
+            
+            for key in keys:
+                data = await self._redis.hgetall(key)
+                if data and "event" in data:
+                    try:
+                        event = EventMessage.from_json(data["event"])
+                        timestamp = datetime.fromisoformat(data.get("timestamp", datetime.utcnow().isoformat()))
+                        
+                        should_drain = True
+                        
+                        # Check event type filter
+                        if event_types and event.event_type not in event_types:
+                            should_drain = False
+                            
+                        # Check timestamp filter
+                        if before and timestamp >= before:
+                            should_drain = False
+                            
+                        if should_drain:
+                            await self._redis.delete(key)
+                            count += 1
+                            logger.info(f"Drained orphaned event: {event.event_type} (ID: {event.id})")
+                    except Exception as e:
+                        logger.error(f"Error processing orphaned event {key}: {e}")
+            
+            if cursor == 0:
+                break
+
+        return count

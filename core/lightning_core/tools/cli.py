@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
 """
 CLI tool for managing Lightning Core tool registries.
-Provides visibility and control over tools available to different components.
+Provides visibility into the simplified tool registry.
 """
 
 import argparse
+import asyncio
 import json
-from pathlib import Path
 from typing import Any, Dict, List
 
-from .planner_bridge import PlannerToolBridge
-from .registry import AccessScope, ToolType, get_tool_registry
+from .simple_registry import AccessScope, ToolType, get_tool_registry, load_planner_tools
 
 
 def simple_table(headers: List[str], rows: List[List[str]]) -> str:
@@ -43,24 +42,34 @@ def simple_table(headers: List[str], rows: List[List[str]]) -> str:
     return "\n".join(lines)
 
 
-def list_all_tools(format_type: str = "table") -> None:
-    """List all tools in the unified registry"""
+async def list_all_tools(format_type: str = "table") -> None:
+    """List all tools in the simplified registry"""
     registry = get_tool_registry()
-    tools = registry.list_tools()
+    tools = await registry.list_tools()
 
     if format_type == "json":
-        tool_data = [tool.to_planner_format() for tool in tools]
+        tool_data = [
+            {
+                "id": tool.id,
+                "name": tool.name,
+                "description": tool.description,
+                "type": tool.tool_type.value,
+                "capabilities": list(tool.capabilities),
+                "access_scopes": [scope.value for scope in tool.access_scopes],
+                "enabled": tool.enabled,
+            }
+            for tool in tools
+        ]
         print(json.dumps(tool_data, indent=2))
         return
 
     # Table format
-    headers = ["Tool ID", "Type", "Description", "Capabilities", "Inputs", "Produces"]
+    headers = ["Tool ID", "Type", "Description", "Capabilities", "Access Scopes"]
     rows = []
 
     for tool in tools:
-        inputs = ", ".join(tool.inputs.keys()) if tool.inputs else "None"
-        produces = ", ".join(tool.produces) if tool.produces else "None"
         capabilities = ", ".join(tool.capabilities) if tool.capabilities else "None"
+        scopes = ", ".join(scope.value for scope in tool.access_scopes)
 
         rows.append(
             [
@@ -72,8 +81,7 @@ def list_all_tools(format_type: str = "table") -> None:
                     else tool.description
                 ),
                 capabilities[:30] + "..." if len(capabilities) > 30 else capabilities,
-                inputs[:30] + "..." if len(inputs) > 30 else inputs,
-                produces[:30] + "..." if len(produces) > 30 else produces,
+                scopes[:30] + "..." if len(scopes) > 30 else scopes,
             ]
         )
 
@@ -81,10 +89,9 @@ def list_all_tools(format_type: str = "table") -> None:
     print(simple_table(headers, rows))
 
 
-def list_planner_tools(format_type: str = "table") -> None:
+async def list_planner_tools(format_type: str = "table") -> None:
     """List tools available to the planner"""
-    bridge = PlannerToolBridge()
-    tools = bridge.load()
+    tools = await load_planner_tools()
 
     if format_type == "json":
         print(json.dumps(tools, indent=2))
@@ -94,17 +101,20 @@ def list_planner_tools(format_type: str = "table") -> None:
     headers = ["Tool ID", "Description", "Inputs", "Produces"]
     rows = []
 
-    for tool_id, tool_spec in tools.items():
-        inputs = ", ".join(tool_spec.get("inputs", {}).keys())
-        produces = ", ".join(tool_spec.get("produces", []))
-        description = tool_spec.get("description", "")
+    for tool_id, tool_data in tools.items():
+        inputs = ", ".join(tool_data.get("inputs", {}).keys()) or "None"
+        produces = ", ".join(tool_data.get("produces", [])) or "None"
 
         rows.append(
             [
                 tool_id,
-                description[:60] + "..." if len(description) > 60 else description,
-                inputs[:40] + "..." if len(inputs) > 40 else inputs,
-                produces[:40] + "..." if len(produces) > 40 else produces,
+                (
+                    tool_data.get("description", "")[:50] + "..."
+                    if len(tool_data.get("description", "")) > 50
+                    else tool_data.get("description", "")
+                ),
+                inputs[:30] + "..." if len(inputs) > 30 else inputs,
+                produces[:30] + "..." if len(produces) > 30 else produces,
             ]
         )
 
@@ -112,59 +122,33 @@ def list_planner_tools(format_type: str = "table") -> None:
     print(simple_table(headers, rows))
 
 
-def list_tools_by_type(tool_type: str, format_type: str = "table") -> None:
-    """List tools filtered by type"""
-    registry = get_tool_registry()
-
+async def list_tools_by_type(tool_type: str, format_type: str = "table") -> None:
+    """List tools of a specific type"""
     try:
-        filter_type = ToolType(tool_type.lower())
-        tools = registry.list_tools(tool_type=filter_type)
+        type_enum = ToolType(tool_type)
     except ValueError:
         print(f"Invalid tool type: {tool_type}")
         print(f"Valid types: {[t.value for t in ToolType]}")
         return
 
-    if format_type == "json":
-        tool_data = [tool.to_planner_format() for tool in tools]
-        print(json.dumps(tool_data, indent=2))
-        return
-
-    # Table format
-    headers = ["Tool ID", "Description", "Capabilities", "Enabled"]
-    rows = []
-
-    for tool in tools:
-        capabilities = ", ".join(tool.capabilities) if tool.capabilities else "None"
-
-        rows.append(
-            [
-                tool.id,
-                (
-                    tool.description[:60] + "..."
-                    if len(tool.description) > 60
-                    else tool.description
-                ),
-                capabilities[:40] + "..." if len(capabilities) > 40 else capabilities,
-                "✓" if tool.enabled else "✗",
-            ]
-        )
-
-    print(f"\n=== {tool_type.upper()} TOOLS ({len(tools)} total) ===")
-    print(simple_table(headers, rows))
-
-
-def list_tools_by_capability(capability: str, format_type: str = "table") -> None:
-    """List tools filtered by capability"""
     registry = get_tool_registry()
-    tools = registry.list_tools(capability=capability)
+    tools = await registry.list_tools(tool_type=type_enum)
 
     if format_type == "json":
-        tool_data = [tool.to_planner_format() for tool in tools]
+        tool_data = [
+            {
+                "id": tool.id,
+                "name": tool.name,
+                "description": tool.description,
+                "capabilities": list(tool.capabilities),
+            }
+            for tool in tools
+        ]
         print(json.dumps(tool_data, indent=2))
         return
 
     # Table format
-    headers = ["Tool ID", "Type", "Description", "All Capabilities"]
+    headers = ["Tool ID", "Name", "Description", "Capabilities"]
     rows = []
 
     for tool in tools:
@@ -173,7 +157,7 @@ def list_tools_by_capability(capability: str, format_type: str = "table") -> Non
         rows.append(
             [
                 tool.id,
-                tool.tool_type.value,
+                tool.name,
                 (
                     tool.description[:50] + "..."
                     if len(tool.description) > 50
@@ -183,14 +167,53 @@ def list_tools_by_capability(capability: str, format_type: str = "table") -> Non
             ]
         )
 
+    print(f"\n=== TOOLS OF TYPE '{tool_type}' ({len(tools)} total) ===")
+    print(simple_table(headers, rows))
+
+
+async def list_tools_by_capability(capability: str, format_type: str = "table") -> None:
+    """List tools with a specific capability"""
+    registry = get_tool_registry()
+    tools = await registry.list_tools(capability=capability)
+
+    if format_type == "json":
+        tool_data = [
+            {
+                "id": tool.id,
+                "name": tool.name,
+                "description": tool.description,
+                "type": tool.tool_type.value,
+            }
+            for tool in tools
+        ]
+        print(json.dumps(tool_data, indent=2))
+        return
+
+    # Table format
+    headers = ["Tool ID", "Type", "Description"]
+    rows = []
+
+    for tool in tools:
+        rows.append(
+            [
+                tool.id,
+                tool.tool_type.value,
+                (
+                    tool.description[:50] + "..."
+                    if len(tool.description) > 50
+                    else tool.description
+                ),
+            ]
+        )
+
     print(f"\n=== TOOLS WITH '{capability}' CAPABILITY ({len(tools)} total) ===")
     print(simple_table(headers, rows))
 
 
-def show_tool_details(tool_id: str) -> None:
+async def show_tool_details(tool_id: str) -> None:
     """Show detailed information about a specific tool"""
     registry = get_tool_registry()
-    tool = registry.get_tool(tool_id)
+    tool = await registry.get_tool(tool_id)
 
     if not tool:
         print(f"Tool '{tool_id}' not found")
@@ -203,6 +226,16 @@ def show_tool_details(tool_id: str) -> None:
     print(f"Enabled: {'Yes' if tool.enabled else 'No'}")
     print(f"Version: {tool.version}")
 
+    if tool.access_scopes:
+        print(f"\nAccess Scopes:")
+        for scope in tool.access_scopes:
+            print(f"  - {scope.value}")
+
+    if tool.capabilities:
+        print(f"\nCapabilities:")
+        for cap in tool.capabilities:
+            print(f"  - {cap}")
+
     if tool.inputs:
         print(f"\nInputs:")
         for arg, arg_type in tool.inputs.items():
@@ -213,63 +246,12 @@ def show_tool_details(tool_id: str) -> None:
         for event in tool.produces:
             print(f"  - {event}")
 
-    if tool.capabilities:
-        print(f"\nCapabilities:")
-        for cap in tool.capabilities:
-            print(f"  - {cap}")
-
-    if tool.endpoint:
-        print(f"\nEndpoint: {tool.endpoint}")
-
     if tool.config:
         print(f"\nConfiguration:")
         print(json.dumps(tool.config, indent=2))
 
-    # Check if available to planner
-    bridge = PlannerToolBridge()
-    planner_tools = bridge.load()
-    available_to_planner = tool_id in planner_tools
-    print(f"\nAvailable to Planner: {'Yes' if available_to_planner else 'No'}")
 
-
-def sync_planner_registry() -> None:
-    """Sync the planner registry JSON file with current filtered tools"""
-    bridge = PlannerToolBridge()
-    json_path = Path(__file__).parent.parent / "planner" / "registry.tools.json"
-    bridge.sync_to_json(json_path)
-    print(f"Synced planner registry to {json_path}")
-
-    # Show what was synced
-    tools = bridge.load()
-    print(f"Synced {len(tools)} tools to planner registry:")
-    for tool_id in sorted(tools.keys()):
-        print(f"  - {tool_id}")
-
-
-def compare_registries() -> None:
-    """Compare tools available in unified registry vs planner registry"""
-    registry = get_tool_registry()
-    bridge = PlannerToolBridge()
-
-    all_tools = set(registry.get_planner_registry().keys())
-    planner_tools = set(bridge.load().keys())
-
-    print(f"\n=== REGISTRY COMPARISON ===")
-    print(f"Total tools in system: {len(all_tools)}")
-    print(f"Tools available to planner: {len(planner_tools)}")
-    print(f"Tools excluded from planner: {len(all_tools - planner_tools)}")
-
-    if all_tools - planner_tools:
-        print(f"\nExcluded from planner:")
-        for tool_id in sorted(all_tools - planner_tools):
-            print(f"  - {tool_id}")
-
-    print(f"\nIncluded in planner:")
-    for tool_id in sorted(planner_tools):
-        print(f"  - {tool_id}")
-
-
-def main():
+async def main_async():
     parser = argparse.ArgumentParser(
         description="Lightning Core Tool Registry Manager",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -288,13 +270,7 @@ Examples:
   python -m lightning_core.tools.cli list-by-capability web_search
   
   # Show details of a specific tool
-  python -m lightning_core.tools.cli show-tool web.search
-  
-  # Compare registries
-  python -m lightning_core.tools.cli compare
-  
-  # Sync planner registry
-  python -m lightning_core.tools.cli sync-planner
+  python -m lightning_core.tools.cli show-tool agent.conseil
         """,
     )
 
@@ -308,7 +284,7 @@ Examples:
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # List all tools
-    subparsers.add_parser("list-all", help="List all tools in the unified registry")
+    subparsers.add_parser("list-all", help="List all tools in the registry")
 
     # List planner tools
     subparsers.add_parser("list-planner", help="List tools available to planner")
@@ -316,7 +292,7 @@ Examples:
     # List by type
     type_parser = subparsers.add_parser("list-by-type", help="List tools by type")
     type_parser.add_argument(
-        "type", help="Tool type (native, mcp_server, api, function, agent)"
+        "type", help="Tool type (native, mcp, api, llm, agent)"
     )
 
     # List by capability
@@ -333,14 +309,6 @@ Examples:
     )
     show_parser.add_argument("tool_id", help="Tool ID to show details for")
 
-    # Compare registries
-    subparsers.add_parser(
-        "compare", help="Compare unified registry vs planner registry"
-    )
-
-    # Sync planner registry
-    subparsers.add_parser("sync-planner", help="Sync planner registry JSON file")
-
     args = parser.parse_args()
 
     if not args.command:
@@ -349,24 +317,25 @@ Examples:
 
     try:
         if args.command == "list-all":
-            list_all_tools(args.format)
+            await list_all_tools(args.format)
         elif args.command == "list-planner":
-            list_planner_tools(args.format)
+            await list_planner_tools(args.format)
         elif args.command == "list-by-type":
-            list_tools_by_type(args.type, args.format)
+            await list_tools_by_type(args.type, args.format)
         elif args.command == "list-by-capability":
-            list_tools_by_capability(args.capability, args.format)
+            await list_tools_by_capability(args.capability, args.format)
         elif args.command == "show-tool":
-            show_tool_details(args.tool_id)
-        elif args.command == "compare":
-            compare_registries()
-        elif args.command == "sync-planner":
-            sync_planner_registry()
+            await show_tool_details(args.tool_id)
     except Exception as e:
         print(f"Error: {e}")
         return 1
 
     return 0
+
+
+def main():
+    """Main entry point that runs the async main function"""
+    return asyncio.run(main_async())
 
 
 if __name__ == "__main__":

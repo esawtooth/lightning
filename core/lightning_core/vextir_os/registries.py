@@ -203,130 +203,8 @@ class ModelRegistry:
         self.register_model(claude3_haiku)
 
 
-class ToolRegistry:
-    """Registry for managing tools and capabilities"""
-
-    def __init__(self):
-        self.tools: Dict[str, ToolSpec] = {}
-        self._load_default_tools()
-
-    def register_tool(self, tool: ToolSpec):
-        """Register a tool"""
-        self.tools[tool.id] = tool
-        logging.info(f"Registered tool: {tool.id} ({tool.tool_type})")
-
-    def get_tool(self, tool_id: str) -> Optional[ToolSpec]:
-        """Get tool by ID"""
-        return self.tools.get(tool_id)
-
-    def list_tools(
-        self, tool_type: Optional[str] = None, capability: Optional[str] = None
-    ) -> List[ToolSpec]:
-        """List tools with optional filtering"""
-        tools = list(self.tools.values())
-
-        if tool_type:
-            tools = [t for t in tools if t.tool_type == tool_type]
-
-        if capability:
-            tools = [t for t in tools if capability in t.capabilities]
-
-        return [t for t in tools if t.enabled]
-
-    def get_tools_by_capability(self, capability: str) -> List[ToolSpec]:
-        """Get tools that provide a specific capability"""
-        return [
-            t for t in self.tools.values() if capability in t.capabilities and t.enabled
-        ]
-
-    def _load_default_tools(self):
-        """Load default tool configurations"""
-        # Web search tool
-        web_search = ToolSpec(
-            id="web_search",
-            name="Web Search",
-            description="Search the web for information",
-            tool_type="mcp_server",
-            capabilities=["search", "scrape"],
-            endpoint="github.com/example/search-mcp",
-            config={"max_results": 10},
-        )
-        self.register_tool(web_search)
-
-        # Context hub tools
-        context_read = ToolSpec(
-            id="context_read",
-            name="Context Read",
-            description="Read from user's context hub",
-            tool_type="native",
-            capabilities=["context_read", "search"],
-            config={"handler": "context_hub.read"},
-        )
-        self.register_tool(context_read)
-
-        context_write = ToolSpec(
-            id="context_write",
-            name="Context Write",
-            description="Write to user's context hub",
-            tool_type="native",
-            capabilities=["context_write"],
-            config={"handler": "context_hub.write"},
-        )
-        self.register_tool(context_write)
-
-        # Email tools
-        email_read = ToolSpec(
-            id="email_read",
-            name="Email Read",
-            description="Read emails from connected providers",
-            tool_type="native",
-            capabilities=["email_read"],
-            config={"handler": "email_connector.read"},
-        )
-        self.register_tool(email_read)
-
-        email_send = ToolSpec(
-            id="email_send",
-            name="Email Send",
-            description="Send emails via connected providers",
-            tool_type="native",
-            capabilities=["email_send"],
-            config={"handler": "email_connector.send"},
-        )
-        self.register_tool(email_send)
-
-        # Calendar tools
-        calendar_read = ToolSpec(
-            id="calendar_read",
-            name="Calendar Read",
-            description="Read calendar events",
-            tool_type="native",
-            capabilities=["calendar_read"],
-            config={"handler": "calendar_connector.read"},
-        )
-        self.register_tool(calendar_read)
-
-        calendar_create = ToolSpec(
-            id="calendar_create",
-            name="Calendar Create",
-            description="Create calendar events",
-            tool_type="native",
-            capabilities=["calendar_create"],
-            config={"handler": "calendar_connector.create"},
-        )
-        self.register_tool(calendar_create)
-
-        # GitHub tool
-        github_tool = ToolSpec(
-            id="github_tool",
-            name="GitHub Integration",
-            description="GitHub repository management",
-            tool_type="mcp_server",
-            capabilities=["github_issue", "github_pr", "github_repo"],
-            endpoint="github.com/modelcontextprotocol/servers/github",
-            config={"requires_auth": True},
-        )
-        self.register_tool(github_tool)
+# Note: ToolRegistry has been moved to lightning_core.tools.simple_registry
+# This keeps the ToolSpec class for backward compatibility
 
 
 class PlanRegistry:
@@ -386,7 +264,6 @@ class PlanRegistry:
 
 # Global registries
 _global_model_registry: Optional[ModelRegistry] = None
-_global_tool_registry: Optional[ToolRegistry] = None
 _global_plan_registry: Optional[PlanRegistry] = None
 
 from .drivers import DriverRegistry
@@ -401,12 +278,11 @@ def get_model_registry() -> ModelRegistry:
     return _global_model_registry
 
 
-def get_tool_registry() -> ToolRegistry:
-    """Get global tool registry instance"""
-    global _global_tool_registry
-    if _global_tool_registry is None:
-        _global_tool_registry = ToolRegistry()
-    return _global_tool_registry
+def get_tool_registry():
+    """Get global tool registry instance (redirected to simplified registry)"""
+    # Redirect to the new simplified tool registry
+    from ..tools import get_tool_registry as get_simplified_registry
+    return get_simplified_registry()
 
 
 def get_plan_registry() -> PlanRegistry:

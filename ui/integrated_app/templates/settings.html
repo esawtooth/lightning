@@ -1,0 +1,558 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Vextir Dashboard{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block extra_head %}
+<style>
+    .setting-card {
+        transition: all 0.3s ease;
+    }
+    .setting-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 60px;
+        height: 34px;
+    }
+    .toggle-switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+    .toggle-slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #ccc;
+        transition: .4s;
+        border-radius: 34px;
+    }
+    .toggle-slider:before {
+        position: absolute;
+        content: "";
+        height: 26px;
+        width: 26px;
+        left: 4px;
+        bottom: 4px;
+        background-color: white;
+        transition: .4s;
+        border-radius: 50%;
+    }
+    input:checked + .toggle-slider {
+        background-color: #2196F3;
+    }
+    input:checked + .toggle-slider:before {
+        transform: translateX(26px);
+    }
+    .section-divider {
+        border-bottom: 1px solid #e5e7eb;
+        margin: 2rem 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="bg-white rounded-lg shadow-sm p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-2xl font-bold text-gray-900">Settings</h2>
+                <p class="text-gray-600 mt-1">Manage your Vextir dashboard preferences and configuration</p>
+            </div>
+            <div class="flex space-x-3">
+                <button onclick="saveSettings()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-save"></i>
+                    <span>Save Changes</span>
+                </button>
+                <button onclick="resetSettings()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
+                    <i class="fas fa-undo"></i>
+                    <span>Reset</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Preferences -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-user-cog mr-2 text-blue-600"></i>
+                User Preferences
+            </h3>
+            <p class="text-gray-600 text-sm mt-1">Customize your dashboard experience</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <!-- Theme Settings -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Dark Mode</label>
+                    <p class="text-xs text-gray-500">Switch between light and dark themes</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="dark-mode" onchange="toggleDarkMode()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Language Settings -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Language</label>
+                    <p class="text-xs text-gray-500">Select your preferred language</p>
+                </div>
+                <select id="language" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="en">English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="de">Deutsch</option>
+                </select>
+            </div>
+
+            <!-- Timezone Settings -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Timezone</label>
+                    <p class="text-xs text-gray-500">Your local timezone for date/time display</p>
+                </div>
+                <select id="timezone" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="UTC">UTC</option>
+                    <option value="America/New_York">Eastern Time</option>
+                    <option value="America/Chicago">Central Time</option>
+                    <option value="America/Denver">Mountain Time</option>
+                    <option value="America/Los_Angeles">Pacific Time</option>
+                    <option value="Europe/London">London</option>
+                    <option value="Europe/Paris">Paris</option>
+                    <option value="Asia/Tokyo">Tokyo</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Settings -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-bell mr-2 text-yellow-600"></i>
+                Notifications
+            </h3>
+            <p class="text-gray-600 text-sm mt-1">Configure when and how you receive notifications</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <!-- Email Notifications -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Email Notifications</label>
+                    <p class="text-xs text-gray-500">Receive email updates for important events</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="email-notifications" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Browser Notifications -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Browser Notifications</label>
+                    <p class="text-xs text-gray-500">Show desktop notifications in your browser</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="browser-notifications" onchange="requestNotificationPermission()">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Task Completion Notifications -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Task Completion</label>
+                    <p class="text-xs text-gray-500">Get notified when tasks are completed</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="task-notifications" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Error Notifications -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Error Alerts</label>
+                    <p class="text-xs text-gray-500">Receive notifications for system errors</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="error-notifications" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Settings -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-tachometer-alt mr-2 text-green-600"></i>
+                Dashboard
+            </h3>
+            <p class="text-gray-600 text-sm mt-1">Customize your dashboard layout and behavior</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <!-- Auto-refresh -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Auto-refresh</label>
+                    <p class="text-xs text-gray-500">Automatically refresh dashboard data</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="auto-refresh" checked>
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Refresh Interval -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Refresh Interval</label>
+                    <p class="text-xs text-gray-500">How often to refresh data (seconds)</p>
+                </div>
+                <select id="refresh-interval" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="30">30 seconds</option>
+                    <option value="60">1 minute</option>
+                    <option value="300">5 minutes</option>
+                    <option value="600">10 minutes</option>
+                </select>
+            </div>
+
+            <!-- Default Page -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Default Page</label>
+                    <p class="text-xs text-gray-500">Page to show when you first login</p>
+                </div>
+                <select id="default-page" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="dashboard">Dashboard</option>
+                    <option value="tasks">Tasks</option>
+                    <option value="chat">Chat</option>
+                    <option value="context">My Context</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy & Security -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-shield-alt mr-2 text-red-600"></i>
+                Privacy & Security
+            </h3>
+            <p class="text-gray-600 text-sm mt-1">Manage your privacy and security settings</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <!-- Session Timeout -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Session Timeout</label>
+                    <p class="text-xs text-gray-500">Automatically logout after inactivity</p>
+                </div>
+                <select id="session-timeout" class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                    <option value="240">4 hours</option>
+                    <option value="480">8 hours</option>
+                    <option value="0">Never</option>
+                </select>
+            </div>
+
+            <!-- Data Export -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Export Data</label>
+                    <p class="text-xs text-gray-500">Download your data for backup</p>
+                </div>
+                <button onclick="exportUserData()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded text-sm">
+                    Export
+                </button>
+            </div>
+
+            <!-- Clear Data -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Clear Local Data</label>
+                    <p class="text-xs text-gray-500">Remove cached data and preferences</p>
+                </div>
+                <button onclick="clearLocalData()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm">
+                    Clear
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Settings -->
+    <div class="bg-white rounded-lg shadow-sm">
+        <div class="p-6 border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+                <i class="fas fa-cogs mr-2 text-purple-600"></i>
+                Advanced
+            </h3>
+            <p class="text-gray-600 text-sm mt-1">Advanced configuration options</p>
+        </div>
+        <div class="p-6 space-y-6">
+            <!-- API Base URL -->
+            <div>
+                <label class="text-sm font-medium text-gray-900">API Base URL</label>
+                <p class="text-xs text-gray-500 mb-2">Override the default API endpoint</p>
+                <input type="url" id="api-base-url" placeholder="http://localhost:7071/api" 
+                       class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <!-- Debug Mode -->
+            <div class="flex items-center justify-between">
+                <div>
+                    <label class="text-sm font-medium text-gray-900">Debug Mode</label>
+                    <p class="text-xs text-gray-500">Enable verbose logging for troubleshooting</p>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="debug-mode">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <!-- Reset to Defaults -->
+            <div class="pt-4 border-t border-gray-200">
+                <button onclick="resetToDefaults()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded text-sm flex items-center space-x-2">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Reset All Settings to Defaults</span>
+                </button>
+                <p class="text-xs text-gray-500 mt-2">This will restore all settings to their default values</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Success/Error Messages -->
+<div id="message-container" class="fixed top-4 right-4 z-50"></div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+// Settings object to store current configuration
+let settings = {
+    darkMode: false,
+    language: 'en',
+    timezone: 'UTC',
+    emailNotifications: true,
+    browserNotifications: false,
+    taskNotifications: true,
+    errorNotifications: true,
+    autoRefresh: true,
+    refreshInterval: 30,
+    defaultPage: 'dashboard',
+    sessionTimeout: 60,
+    apiBaseUrl: '',
+    debugMode: false
+};
+
+// Load settings on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadSettings();
+    detectTimezone();
+});
+
+function loadSettings() {
+    // Load from localStorage
+    const saved = localStorage.getItem('vextir_settings');
+    if (saved) {
+        settings = { ...settings, ...JSON.parse(saved) };
+    }
+    
+    // Apply settings to UI
+    document.getElementById('dark-mode').checked = settings.darkMode;
+    document.getElementById('language').value = settings.language;
+    document.getElementById('timezone').value = settings.timezone;
+    document.getElementById('email-notifications').checked = settings.emailNotifications;
+    document.getElementById('browser-notifications').checked = settings.browserNotifications;
+    document.getElementById('task-notifications').checked = settings.taskNotifications;
+    document.getElementById('error-notifications').checked = settings.errorNotifications;
+    document.getElementById('auto-refresh').checked = settings.autoRefresh;
+    document.getElementById('refresh-interval').value = settings.refreshInterval;
+    document.getElementById('default-page').value = settings.defaultPage;
+    document.getElementById('session-timeout').value = settings.sessionTimeout;
+    document.getElementById('api-base-url').value = settings.apiBaseUrl;
+    document.getElementById('debug-mode').checked = settings.debugMode;
+    
+    // Apply dark mode if enabled
+    if (settings.darkMode) {
+        document.body.classList.add('dark');
+    }
+}
+
+function saveSettings() {
+    // Collect current values
+    settings.darkMode = document.getElementById('dark-mode').checked;
+    settings.language = document.getElementById('language').value;
+    settings.timezone = document.getElementById('timezone').value;
+    settings.emailNotifications = document.getElementById('email-notifications').checked;
+    settings.browserNotifications = document.getElementById('browser-notifications').checked;
+    settings.taskNotifications = document.getElementById('task-notifications').checked;
+    settings.errorNotifications = document.getElementById('error-notifications').checked;
+    settings.autoRefresh = document.getElementById('auto-refresh').checked;
+    settings.refreshInterval = parseInt(document.getElementById('refresh-interval').value);
+    settings.defaultPage = document.getElementById('default-page').value;
+    settings.sessionTimeout = parseInt(document.getElementById('session-timeout').value);
+    settings.apiBaseUrl = document.getElementById('api-base-url').value;
+    settings.debugMode = document.getElementById('debug-mode').checked;
+    
+    // Save to localStorage
+    localStorage.setItem('vextir_settings', JSON.stringify(settings));
+    
+    showMessage('Settings saved successfully!', 'success');
+}
+
+function resetSettings() {
+    if (confirm('Are you sure you want to reset all settings? This will reload the page.')) {
+        localStorage.removeItem('vextir_settings');
+        location.reload();
+    }
+}
+
+function resetToDefaults() {
+    if (confirm('Are you sure you want to reset ALL settings to their default values? This cannot be undone.')) {
+        localStorage.removeItem('vextir_settings');
+        settings = {
+            darkMode: false,
+            language: 'en',
+            timezone: 'UTC',
+            emailNotifications: true,
+            browserNotifications: false,
+            taskNotifications: true,
+            errorNotifications: true,
+            autoRefresh: true,
+            refreshInterval: 30,
+            defaultPage: 'dashboard',
+            sessionTimeout: 60,
+            apiBaseUrl: '',
+            debugMode: false
+        };
+        loadSettings();
+        showMessage('All settings reset to defaults', 'info');
+    }
+}
+
+function toggleDarkMode() {
+    const darkMode = document.getElementById('dark-mode').checked;
+    if (darkMode) {
+        document.body.classList.add('dark');
+    } else {
+        document.body.classList.remove('dark');
+    }
+}
+
+function requestNotificationPermission() {
+    if ('Notification' in window) {
+        Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+                showMessage('Browser notifications enabled', 'success');
+            } else {
+                document.getElementById('browser-notifications').checked = false;
+                showMessage('Browser notifications permission denied', 'error');
+            }
+        });
+    } else {
+        document.getElementById('browser-notifications').checked = false;
+        showMessage('Browser notifications not supported', 'error');
+    }
+}
+
+function detectTimezone() {
+    try {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const timezoneSelect = document.getElementById('timezone');
+        
+        // Check if detected timezone is in our list
+        for (let option of timezoneSelect.options) {
+            if (option.value === timezone) {
+                timezoneSelect.value = timezone;
+                break;
+            }
+        }
+    } catch (error) {
+        console.log('Could not detect timezone:', error);
+    }
+}
+
+function exportUserData() {
+    const data = {
+        settings: settings,
+        exportDate: new Date().toISOString(),
+        version: '1.0'
+    };
+    
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `vextir-settings-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    showMessage('Settings exported successfully', 'success');
+}
+
+function clearLocalData() {
+    if (confirm('Are you sure you want to clear all local data? This will remove all cached information.')) {
+        // Clear all localStorage except settings
+        const settings = localStorage.getItem('vextir_settings');
+        localStorage.clear();
+        if (settings) {
+            localStorage.setItem('vextir_settings', settings);
+        }
+        
+        // Clear sessionStorage
+        sessionStorage.clear();
+        
+        showMessage('Local data cleared successfully', 'success');
+    }
+}
+
+function showMessage(message, type = 'info') {
+    const container = document.getElementById('message-container');
+    const messageDiv = document.createElement('div');
+    
+    const colors = {
+        success: 'bg-green-100 border-green-400 text-green-700',
+        error: 'bg-red-100 border-red-400 text-red-700',
+        info: 'bg-blue-100 border-blue-400 text-blue-700',
+        warning: 'bg-yellow-100 border-yellow-400 text-yellow-700'
+    };
+    
+    messageDiv.className = `border-l-4 p-4 mb-4 rounded ${colors[type]} shadow-md`;
+    messageDiv.innerHTML = `
+        <div class="flex items-center justify-between">
+            <span>${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-lg">&times;</button>
+        </div>
+    `;
+    
+    container.appendChild(messageDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (messageDiv.parentElement) {
+            messageDiv.remove();
+        }
+    }, 5000);
+}
+</script>
+{% endblock %}

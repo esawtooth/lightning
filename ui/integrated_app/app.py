@@ -107,8 +107,19 @@ def _api_headers(token: str | None) -> dict:
     return headers
 
 
-# Main dashboard route
+# Landing page route (main entry point)
 @app.get("/", response_class=HTMLResponse)
+async def landing_page(request: Request):
+    """Landing page with workflow cards."""
+    username = getattr(request.state, "username", "User")
+    return templates.TemplateResponse("landing.html", {
+        "request": request,
+        "username": username,
+        "active_page": "home"
+    })
+
+# Dashboard route
+@app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Main dashboard page with integrated navigation."""
     username = getattr(request.state, "username", "User")
@@ -225,6 +236,11 @@ class EventIn(BaseModel):
     metadata: dict
 
 
+class WorkflowSetupIn(BaseModel):
+    type: str
+    config: dict
+
+
 @app.post("/api/events")
 async def create_event(event: EventIn, token: str = Depends(_get_token)):
     """Create a new event."""
@@ -242,6 +258,149 @@ async def create_event(event: EventIn, token: str = Depends(_get_token)):
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return {"status": "queued"}
+
+
+@app.post("/api/workflows")
+async def setup_workflow(workflow: WorkflowSetupIn, token: str = Depends(_get_token)):
+    """Set up a new workflow automation."""
+    if not token:
+        raise HTTPException(status_code=401, detail="missing token")
+    
+    # Map workflow types to event types and create appropriate events
+    workflow_configs = {
+        # Productivity
+        "chief-of-staff": {
+            "event_type": "workflow.chief_of_staff.setup",
+            "description": "Personal executive assistant for task and project management"
+        },
+        "news": {
+            "event_type": "workflow.news.setup",
+            "description": "Daily news intelligence briefing"
+        },
+        "research": {
+            "event_type": "workflow.research.setup", 
+            "description": "Automated research assistant"
+        },
+        "email-commander": {
+            "event_type": "workflow.email.setup",
+            "description": "Smart email automation and management"
+        },
+        "project": {
+            "event_type": "workflow.project.setup",
+            "description": "Project organization and tracking"
+        },
+        "calendar-optimizer": {
+            "event_type": "workflow.calendar.setup",
+            "description": "Smart calendar and time management"
+        },
+        "document-ai": {
+            "event_type": "workflow.document_ai.setup",
+            "description": "AI-powered document processing and intelligence"
+        },
+        
+        # Health & Fitness
+        "calorie-tracker": {
+            "event_type": "workflow.nutrition.setup",
+            "description": "Smart calorie and nutrition tracking"
+        },
+        "fitness-coach": {
+            "event_type": "workflow.fitness.setup",
+            "description": "AI fitness coach and workout planning"
+        },
+        "sleep-optimizer": {
+            "event_type": "workflow.sleep.setup",
+            "description": "Sleep tracking and optimization"
+        },
+        
+        # Lifestyle
+        "dream-trip": {
+            "event_type": "workflow.travel.setup",
+            "description": "Dream trip planning and travel intelligence"
+        },
+        "journal": {
+            "event_type": "workflow.journal.setup",
+            "description": "Daily journaling with smart prompts"
+        },
+        "home-automation": {
+            "event_type": "workflow.home_automation.setup",
+            "description": "Smart home automation and control"
+        },
+        
+        # Business
+        "market": {
+            "event_type": "workflow.market.setup",
+            "description": "Market and investment intelligence tracking"
+        },
+        "customer-success": {
+            "event_type": "workflow.customer_success.setup",
+            "description": "Automated customer success and satisfaction monitoring"
+        },
+        "sales-pipeline": {
+            "event_type": "workflow.sales.setup",
+            "description": "Sales pipeline automation and lead management"
+        },
+        
+        # Creative
+        "content-creator": {
+            "event_type": "workflow.content.setup",
+            "description": "Automated content creation and publishing pipeline"
+        },
+        "build-something": {
+            "event_type": "workflow.development.setup",
+            "description": "AI-powered development workflow from idea to deployment"
+        },
+        "learning": {
+            "event_type": "workflow.learning.setup",
+            "description": "Learning acceleration and skill development tracking"
+        },
+        "social-media": {
+            "event_type": "workflow.social_media.setup",
+            "description": "Social media automation and management"
+        }
+    }
+    
+    if workflow.type not in workflow_configs:
+        raise HTTPException(status_code=400, detail=f"Unknown workflow type: {workflow.type}")
+    
+    config = workflow_configs[workflow.type]
+    
+    # Create the workflow setup event
+    payload = {
+        "timestamp": datetime.utcnow().isoformat(),
+        "source": "workflow_setup",
+        "type": config["event_type"],
+        "metadata": {
+            "workflow_type": workflow.type,
+            "description": config["description"],
+            "config": workflow.config,
+            "user_email": workflow.config.get("email"),
+            "setup_source": "landing_page"
+        },
+    }
+    
+    headers = {"Authorization": f"Bearer {token}"}
+    resp = requests.post(f"{API_BASE}/events", json=payload, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    
+    # Also create a context hub space if needed
+    if workflow.type in ["research", "project"]:
+        try:
+            context_payload = {
+                "name": f"{workflow.type.title()} - {workflow.config.get('topics', workflow.config.get('description', 'New Space'))[:50]}",
+                "content": f"# {workflow.type.title()} Workspace\n\nCreated: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')}\n\n## Configuration\n\n{workflow.config}\n\n## Notes\n\nThis space was automatically created by Lightning workflow setup.",
+                "folder_id": None
+            }
+            context_resp = requests.post(f"{API_BASE}/context/documents", json=context_payload, headers=headers)
+        except Exception as e:
+            # Don't fail the workflow setup if context creation fails
+            logging.warning(f"Failed to create context space: {e}")
+    
+    return {
+        "status": "workflow_setup_initiated",
+        "workflow_type": workflow.type,
+        "message": f"{config['description']} setup has been initiated. You'll receive confirmation via email shortly."
+    }
 
 
 # Context Hub endpoints
@@ -286,6 +445,17 @@ async def providers_page(request: Request):
         "request": request,
         "username": username,
         "active_page": "providers"
+    })
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Settings and configuration page."""
+    username = getattr(request.state, "username", "User")
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "username": username,
+        "active_page": "settings"
     })
 
 
@@ -525,6 +695,15 @@ async def trigger_synthesis(summary_key: str, token: str = Depends(_get_token)):
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Logout endpoint - clears session and redirects to home."""
+    request.session.clear()
+    resp = RedirectResponse(url="/")
+    resp.delete_cookie("auth_token")
+    return resp
 
 
 @app.get("/health")

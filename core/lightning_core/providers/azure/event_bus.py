@@ -67,6 +67,7 @@ class ServiceBusEventBus(EventBus):
         self._running = False
         self._max_message_count = kwargs.get("max_message_count", 10)
         self._max_wait_time = kwargs.get("max_wait_time", 5)
+        self._orphaned_event_tracking = kwargs.get("track_orphaned", True)
 
     async def publish(self, event: EventMessage, topic: Optional[str] = None) -> None:
         """Publish an event to the event bus."""
@@ -362,18 +363,35 @@ class ServiceBusEventBus(EventBus):
                 if re.match(f"^{regex_pattern}$", event.event_type):
                     matching_subscriptions.extend(subscriptions)
 
+        # Check if event is orphaned (no matching subscriptions)
+        if not matching_subscriptions and self._orphaned_event_tracking:
+            logger.warning(f"Orphaned event detected in Azure Service Bus: {event.event_type} (ID: {event.id})")
+            # In Azure Service Bus, we can add metadata to indicate orphaned status
+            await receiver.dead_letter_message(
+                message, 
+                reason="NoSubscribers", 
+                error_description=f"No subscribers found for event type: {event.event_type}"
+            )
+            return
+
         # Process with each matching handler
         success = True
+        handled = False
         for subscription in matching_subscriptions:
             if self._matches_filter(event, subscription.filter_expression):
                 try:
                     await subscription.handler(event)
+                    handled = True
                 except Exception as e:
                     logger.error(f"Handler {subscription.subscription_id} failed: {e}")
                     success = False
 
         # Complete or abandon message based on processing result
-        if success:
+        if success and handled:
+            await receiver.complete_message(message)
+        elif not handled and self._orphaned_event_tracking:
+            # Event had subscribers but was filtered out
+            logger.info(f"Event {event.event_type} had subscribers but was filtered out")
             await receiver.complete_message(message)
         else:
             await receiver.abandon_message(message)
@@ -409,3 +427,38 @@ class ServiceBusEventBus(EventBus):
                     return False
 
         return True
+
+    async def has_subscribers(self, event_type: str, topic: Optional[str] = None) -> bool:
+        """Check if an event type has any active subscribers."""
+        # Check direct matches
+        if event_type in self._handlers and self._handlers[event_type]:
+            return True
+
+        # Check wildcard patterns
+        for pattern in self._handlers:
+            if "*" in pattern:
+                import re
+                regex_pattern = pattern.replace(".", r"\.").replace("*", ".*")
+                if re.match(f"^{regex_pattern}$", event_type):
+                    return True
+
+        return False
+
+    async def get_orphaned_events(
+        self, since: Optional[datetime] = None, max_items: Optional[int] = None
+    ) -> List[EventMessage]:
+        """Get events that were published but had no subscribers."""
+        # In Azure Service Bus, orphaned events are in dead letter queue with NoSubscribers reason
+        # This requires enhanced dead letter queue querying which is not available in basic SDK
+        # For now, return empty list - in production, use management API
+        logger.info("Orphaned event retrieval requires Azure Service Bus management API")
+        return []
+
+    async def drain_orphaned_events(
+        self, event_types: Optional[List[str]] = None, before: Optional[datetime] = None
+    ) -> int:
+        """Remove orphaned events from the system."""
+        # In Azure Service Bus, this would require management API to query and remove
+        # dead letter messages with specific reasons
+        logger.info("Orphaned event drainage requires Azure Service Bus management API")
+        return 0

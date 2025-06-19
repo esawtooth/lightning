@@ -1,0 +1,1242 @@
+{% extends "base.html" %}
+
+{% block title %}Lightning - Your Personal Automation Platform{% endblock %}
+{% block page_title %}Welcome to Lightning{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="text-center mb-8">
+    <div class="flex items-center justify-center mb-6">
+        <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mr-4">
+            <i class="fas fa-bolt text-white text-2xl"></i>
+        </div>
+        <h1 class="text-4xl font-bold text-gray-900">Lightning</h1>
+    </div>
+    <p class="text-xl text-gray-600 max-w-3xl mx-auto mb-4">
+        Your personal automation platform. Choose from dozens of intelligent workflows to automate every aspect of your life and work.
+    </p>
+    <p class="text-sm text-gray-500 max-w-2xl mx-auto">
+        Scroll through the cards below to explore what Lightning can automate for you, or jump straight to our chat assistant.
+    </p>
+</div>
+
+<!-- Workflow Categories and Scrollable Cards -->
+<div class="mb-8">
+    <!-- Category Filters -->
+    <div class="flex flex-wrap justify-center gap-3 mb-6">
+        <button class="category-filter active px-4 py-2 rounded-full text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors" data-category="all">
+            🌟 All Workflows
+        </button>
+        <button class="category-filter px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors" data-category="productivity">
+            ⚡ Productivity
+        </button>
+        <button class="category-filter px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors" data-category="health">
+            🏃 Health & Fitness
+        </button>
+        <button class="category-filter px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors" data-category="business">
+            💼 Business
+        </button>
+        <button class="category-filter px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors" data-category="creative">
+            🎨 Creative
+        </button>
+        <button class="category-filter px-4 py-2 rounded-full text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors" data-category="lifestyle">
+            🏠 Lifestyle
+        </button>
+    </div>
+
+    <!-- Scrollable Cards Container -->
+    <div class="relative">
+        <div class="workflow-cards-container overflow-x-auto scrollbar-hide">
+            <div class="flex gap-6 pb-4" style="width: max-content;">
+                <!-- PRODUCTIVITY WORKFLOWS -->
+                
+                <!-- Chief of Staff -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="chief-of-staff" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-user-tie text-purple-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Chief of Staff</h3>
+                                <p class="text-sm text-gray-500">Your personal executive assistant</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Manage tasks, projects, deadlines, and coordinate your entire workflow
+                        </p>
+                        <button class="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
+                            Hire Your Chief of Staff
+                        </button>
+                    </div>
+                </div>
+
+                <!-- News Intelligence Hub -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="news" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-newspaper text-blue-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">News Intelligence Hub</h3>
+                                <p class="text-sm text-gray-500">Daily personalized news briefs</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Get curated news digests tailored to your interests and industry
+                        </p>
+                        <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            Set Up News Hub
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Research Assistant -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="research" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-microscope text-green-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Research Assistant</h3>
+                                <p class="text-sm text-gray-500">Automated knowledge building</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Build comprehensive knowledge bases on any topic automatically
+                        </p>
+                        <button class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            Start Research Hub
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Email Commander -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="email-commander" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-envelope-open-text text-red-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Email Commander</h3>
+                                <p class="text-sm text-gray-500">Smart email automation</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Auto-sort, respond, and manage your inbox with AI precision
+                        </p>
+                        <button class="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
+                            Command Your Inbox
+                        </button>
+                    </div>
+                </div>
+
+                <!-- HEALTH & FITNESS WORKFLOWS -->
+
+                <!-- Calorie Tracker -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="calorie-tracker" data-category="health">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-apple-alt text-orange-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Smart Calorie Tracker</h3>
+                                <p class="text-sm text-gray-500">Effortless nutrition monitoring</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Photo your meals, get instant nutrition analysis and diet insights
+                        </p>
+                        <button class="w-full bg-orange-600 text-white py-2 px-4 rounded-lg hover:bg-orange-700 transition-colors">
+                            Track My Nutrition
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Fitness Coach -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="fitness-coach" data-category="health">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-dumbbell text-green-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">AI Fitness Coach</h3>
+                                <p class="text-sm text-gray-500">Personalized workout planning</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Custom workouts, progress tracking, and adaptive training plans
+                        </p>
+                        <button class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            Start Training
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sleep Optimizer -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="sleep-optimizer" data-category="health">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-moon text-indigo-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Sleep Optimizer</h3>
+                                <p class="text-sm text-gray-500">Better rest, better you</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Track sleep patterns, optimize environment, improve sleep quality
+                        </p>
+                        <button class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                            Optimize My Sleep
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LIFESTYLE WORKFLOWS -->
+
+                <!-- Dream Trip Planner -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="dream-trip" data-category="lifestyle">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-sky-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-globe-americas text-sky-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Dream Trip Planner</h3>
+                                <p class="text-sm text-gray-500">Your next adventure awaits</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Plan perfect trips with price alerts, itineraries, and local insights
+                        </p>
+                        <button class="w-full bg-sky-600 text-white py-2 px-4 rounded-lg hover:bg-sky-700 transition-colors">
+                            Plan My Dream Trip
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Daily Journal -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="journal" data-category="lifestyle">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-book text-yellow-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Daily Journal</h3>
+                                <p class="text-sm text-gray-500">Intelligent personal growth</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Smart prompts, mood tracking, and personal insights
+                        </p>
+                        <button class="w-full bg-yellow-600 text-white py-2 px-4 rounded-lg hover:bg-yellow-700 transition-colors">
+                            Start Journaling
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Home Automation -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="home-automation" data-category="lifestyle">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-home text-emerald-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Smart Home Hub</h3>
+                                <p class="text-sm text-gray-500">Automate your living space</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Control lights, temperature, security with intelligent automation
+                        </p>
+                        <button class="w-full bg-emerald-600 text-white py-2 px-4 rounded-lg hover:bg-emerald-700 transition-colors">
+                            Automate My Home
+                        </button>
+                    </div>
+                </div>
+
+                <!-- BUSINESS WORKFLOWS -->
+
+                <!-- Market Tracker -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="market" data-category="business">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-chart-line text-red-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Market Intelligence</h3>
+                                <p class="text-sm text-gray-500">Investment & market monitoring</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Track investments, competitors, and market trends automatically
+                        </p>
+                        <button class="w-full bg-red-600 text-white py-2 px-4 rounded-lg hover:bg-red-700 transition-colors">
+                            Start Tracking
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Customer Success -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="customer-success" data-category="business">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-users text-blue-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Customer Success AI</h3>
+                                <p class="text-sm text-gray-500">Automated customer care</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Monitor satisfaction, predict churn, automate outreach
+                        </p>
+                        <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
+                            Enhance Customer Success
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Sales Pipeline -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="sales-pipeline" data-category="business">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-funnel-dollar text-green-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Sales Pipeline AI</h3>
+                                <p class="text-sm text-gray-500">Intelligent lead management</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Automate lead scoring, follow-ups, and pipeline optimization
+                        </p>
+                        <button class="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            Supercharge Sales
+                        </button>
+                    </div>
+                </div>
+
+                <!-- CREATIVE WORKFLOWS -->
+
+                <!-- Content Creator -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="content-creator" data-category="creative">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-video text-purple-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Content Creator AI</h3>
+                                <p class="text-sm text-gray-500">Automated content pipeline</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Generate ideas, create content, and schedule across platforms
+                        </p>
+                        <button class="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
+                            Create Content
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Build Something New -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="build-something" data-category="creative">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-code text-slate-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Build Something New</h3>
+                                <p class="text-sm text-gray-500">From idea to deployment</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            AI-powered development workflow from concept to production
+                        </p>
+                        <button class="w-full bg-slate-600 text-white py-2 px-4 rounded-lg hover:bg-slate-700 transition-colors">
+                            Start Building
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Learning Accelerator -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="learning" data-category="creative">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-teal-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-graduation-cap text-teal-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Learning Accelerator</h3>
+                                <p class="text-sm text-gray-500">Master any skill faster</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Personalized learning paths, progress tracking, skill assessment
+                        </p>
+                        <button class="w-full bg-teal-600 text-white py-2 px-4 rounded-lg hover:bg-teal-700 transition-colors">
+                            Accelerate Learning
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Social Media Manager -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="social-media" data-category="creative">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-pink-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-hashtag text-pink-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Social Media AI</h3>
+                                <p class="text-sm text-gray-500">Automate your social presence</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Schedule posts, engage with followers, track performance
+                        </p>
+                        <button class="w-full bg-pink-600 text-white py-2 px-4 rounded-lg hover:bg-pink-700 transition-colors">
+                            Manage Social Media
+                        </button>
+                    </div>
+                </div>
+
+                <!-- MORE PRODUCTIVITY WORKFLOWS -->
+
+                <!-- Project Kickstarter -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="project" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-rocket text-purple-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Project Kickstarter</h3>
+                                <p class="text-sm text-gray-500">Instant project organization</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Get structured project plans with timelines and resources
+                        </p>
+                        <button class="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition-colors">
+                            Kickstart Project
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Calendar Optimizer -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="calendar-optimizer" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-cyan-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-calendar-check text-cyan-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Calendar Optimizer</h3>
+                                <p class="text-sm text-gray-500">Smart time management</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Optimize meetings, block focus time, prevent scheduling conflicts
+                        </p>
+                        <button class="w-full bg-cyan-600 text-white py-2 px-4 rounded-lg hover:bg-cyan-700 transition-colors">
+                            Optimize Calendar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Document Intelligence -->
+                <div class="workflow-card w-80 flex-shrink-0 bg-white rounded-lg shadow-lg border border-gray-200 hover:shadow-xl transition-shadow" data-workflow="document-ai" data-category="productivity">
+                    <div class="p-6">
+                        <div class="flex items-center mb-4">
+                            <div class="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center mr-3">
+                                <i class="fas fa-file-alt text-amber-600 text-xl"></i>
+                            </div>
+                            <div>
+                                <h3 class="text-lg font-semibold text-gray-900">Document Intelligence</h3>
+                                <p class="text-sm text-gray-500">AI-powered document processing</p>
+                            </div>
+                        </div>
+                        <p class="text-gray-600 text-sm mb-4">
+                            Extract insights, summarize, organize, and search documents
+                        </p>
+                        <button class="w-full bg-amber-600 text-white py-2 px-4 rounded-lg hover:bg-amber-700 transition-colors">
+                            Process Documents
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        
+        <!-- Scroll indicators -->
+        <div class="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-gray-50 to-transparent pointer-events-none"></div>
+        <div class="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-gray-50 to-transparent pointer-events-none"></div>
+    </div>
+</div>
+
+<!-- Alternative: Traditional Chat -->
+<div class="text-center">
+    <div class="bg-gray-50 rounded-lg p-8 border border-gray-200">
+        <h2 class="text-2xl font-semibold text-gray-900 mb-4">Or start with traditional chat</h2>
+        <p class="text-gray-600 mb-6">
+            Prefer to start with a conversation? Lightning can help you explore automation opportunities naturally.
+        </p>
+        <a href="/chat" class="inline-flex items-center px-6 py-3 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors">
+            <i class="fas fa-comments mr-2"></i>
+            Start Chat with Lightning
+        </a>
+    </div>
+</div>
+
+<!-- Workflow Setup Modals -->
+
+<!-- News Intelligence Hub Modal -->
+<div id="news-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">📰 Daily News Intelligence</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Get a personalized news brief every morning</p>
+                
+                <form id="news-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">What topics interest you? (optional)</label>
+                        <textarea id="news-topics" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="AI, climate tech, my local city politics, startup news..."></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">📧 Email for daily delivery:</label>
+                        <input type="email" id="news-email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="your.email@example.com" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">⏰ Delivery time:</label>
+                            <select id="news-time" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="07:00">7:00 AM</option>
+                                <option value="08:00">8:00 AM</option>
+                                <option value="09:00">9:00 AM</option>
+                                <option value="18:00">6:00 PM</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🌍 Timezone:</label>
+                            <select id="news-timezone" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                                <option value="Eastern">Eastern Time</option>
+                                <option value="Central">Central Time</option>
+                                <option value="Mountain">Mountain Time</option>
+                                <option value="Pacific">Pacific Time</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button type="button" class="px-4 py-2 text-blue-600 hover:text-blue-800">Preview Sample</button>
+                        <div class="space-x-3">
+                            <button type="button" class="modal-close px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                            <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">🚀 Start My Daily Intelligence</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-blue-50 rounded-lg">
+                    <p class="text-sm text-blue-800">
+                        ✨ Within 10 minutes, you'll get your first personalized brief with breaking news and insights on your topics
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Research Assistant Modal -->
+<div id="research-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">🔬 Personal Research Assistant</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Build a knowledge base on topics that matter to you</p>
+                
+                <form id="research-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">What should I research for you?</label>
+                        <textarea id="research-topics" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="quantum computing startups, sustainable fashion, real estate in Austin..." required></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">📧 Email:</label>
+                        <input type="email" id="research-email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent" placeholder="your.email@example.com" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">📊 Research frequency:</label>
+                            <select id="research-frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                                <option value="monthly">Monthly</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">📈 Depth level:</label>
+                            <select id="research-depth" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                                <option value="summary">Quick summaries</option>
+                                <option value="detailed">Detailed analysis</option>
+                                <option value="comprehensive">Comprehensive reports</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button type="button" class="px-4 py-2 text-green-600 hover:text-green-800">See Example Research</button>
+                        <div class="space-x-3">
+                            <button type="button" class="modal-close px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                            <button type="submit" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">🧠 Start Research Hub</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-green-50 rounded-lg">
+                    <p class="text-sm text-green-800">
+                        ✨ I'll create a Context Hub with research files, trend analysis, and weekly summaries
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Project Kickstarter Modal -->
+<div id="project-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">🚀 Project Kickstarter</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Get organized structure for any project instantly</p>
+                
+                <form id="project-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">What's your next project?</label>
+                        <textarea id="project-description" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="Launch a podcast, learn Spanish, plan wedding, build an app..." required></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">📧 Email:</label>
+                        <input type="email" id="project-email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent" placeholder="your.email@example.com" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Project type:</label>
+                            <select id="project-type" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <option value="personal">Personal</option>
+                                <option value="work">Work</option>
+                                <option value="creative">Creative</option>
+                                <option value="business">Business</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Timeline:</label>
+                            <select id="project-timeline" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-transparent">
+                                <option value="1-week">1 week</option>
+                                <option value="1-month">1 month</option>
+                                <option value="3-months">3 months</option>
+                                <option value="6-months">6 months</option>
+                                <option value="1-year">1 year</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button type="button" class="px-4 py-2 text-purple-600 hover:text-purple-800">Preview Project Structure</button>
+                        <div class="space-x-3">
+                            <button type="button" class="modal-close px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                            <button type="submit" class="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">🏗️ Build Project Space</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-purple-50 rounded-lg">
+                    <p class="text-sm text-purple-800">
+                        ✨ I'll create a Context Hub with project plan, timeline, resources, and next steps
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Daily Journal Modal -->
+<div id="journal-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">📔 Intelligent Daily Journal</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Smart prompts and insights for personal growth</p>
+                
+                <form id="journal-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Journal focus:</label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="focus" value="productivity" class="mr-2">
+                                <span>Productivity</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="focus" value="health" class="mr-2">
+                                <span>Health</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="focus" value="mood" class="mr-2">
+                                <span>Mood</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="focus" value="goals" class="mr-2">
+                                <span>Goals</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">📧 Email:</label>
+                        <input type="email" id="journal-email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent" placeholder="your.email@example.com" required>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">⏰ Morning prompt:</label>
+                            <select id="journal-morning" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                                <option value="08:00">8:00 AM</option>
+                                <option value="09:00">9:00 AM</option>
+                                <option value="10:00">10:00 AM</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">🌅 Evening prompt:</label>
+                            <select id="journal-evening" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                                <option value="18:00">6:00 PM</option>
+                                <option value="19:00">7:00 PM</option>
+                                <option value="20:00">8:00 PM</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button type="button" class="px-4 py-2 text-yellow-600 hover:text-yellow-800">See Sample Prompts</button>
+                        <div class="space-x-3">
+                            <button type="button" class="modal-close px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                            <button type="submit" class="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700">📝 Start Journaling</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-yellow-50 rounded-lg">
+                    <p class="text-sm text-yellow-800">
+                        ✨ Get personalized prompts, track patterns, and receive weekly insights about your progress
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Market Tracker Modal -->
+<div id="market-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <h3 class="text-lg font-medium text-gray-900">💰 Personal Market Intelligence</h3>
+                <button class="modal-close text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="p-6">
+                <p class="text-gray-600 mb-6">Track investments, companies, or markets you care about</p>
+                
+                <form id="market-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">What should I monitor?</label>
+                        <textarea id="market-items" rows="3" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="TSLA stock, real estate in NYC, crypto trends, Apple earnings..." required></textarea>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">📧 Email:</label>
+                        <input type="email" id="market-email" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent" placeholder="your.email@example.com" required>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Alert thresholds:</label>
+                        <div class="grid grid-cols-3 gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="alerts" value="price_changes" class="mr-2" checked>
+                                <span class="text-sm">Price changes</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="alerts" value="news" class="mr-2" checked>
+                                <span class="text-sm">News</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="alerts" value="volume" class="mr-2">
+                                <span class="text-sm">Volume spikes</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">📊 Report frequency:</label>
+                            <select id="market-frequency" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                                <option value="daily">Daily summary</option>
+                                <option value="weekly">Weekly digest</option>
+                                <option value="alerts_only">Alerts only</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">⚡ Alert urgency:</label>
+                            <select id="market-urgency" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent">
+                                <option value="immediate">Immediate</option>
+                                <option value="hourly">Hourly batches</option>
+                                <option value="daily">Daily batches</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-between">
+                        <button type="button" class="px-4 py-2 text-red-600 hover:text-red-800">Preview Market Brief</button>
+                        <div class="space-x-3">
+                            <button type="button" class="modal-close px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                            <button type="submit" class="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">📈 Start Tracking</button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div class="mt-4 p-3 bg-red-50 rounded-lg">
+                    <p class="text-sm text-red-800">
+                        ✨ Real-time alerts + weekly market analysis delivered to your inbox
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+<style>
+    .scrollbar-hide {
+        -ms-overflow-style: none;  /* Internet Explorer 10+ */
+        scrollbar-width: none;  /* Firefox */
+    }
+    .scrollbar-hide::-webkit-scrollbar { 
+        display: none;  /* Safari and Chrome */
+    }
+    
+    .workflow-cards-container {
+        padding-left: 1rem;
+        padding-right: 1rem;
+    }
+    
+    .category-filter.active {
+        background-color: rgb(59 130 246);
+        color: white;
+    }
+    
+    .workflow-card.hidden {
+        display: none;
+    }
+    
+    /* Mobile responsive adjustments */
+    @media (max-width: 768px) {
+        .workflow-card {
+            width: 16rem;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Modal handling
+    const modals = {
+        'news': document.getElementById('news-modal'),
+        'research': document.getElementById('research-modal'),
+        'project': document.getElementById('project-modal'),
+        'journal': document.getElementById('journal-modal'),
+        'market': document.getElementById('market-modal'),
+        // All other workflows will show "coming soon" for now
+    };
+
+    // Category filtering
+    const categoryFilters = document.querySelectorAll('.category-filter');
+    const workflowCards = document.querySelectorAll('.workflow-card');
+
+    categoryFilters.forEach(filter => {
+        filter.addEventListener('click', () => {
+            // Update active filter
+            categoryFilters.forEach(f => {
+                f.classList.remove('active');
+                f.classList.add('bg-gray-100', 'text-gray-700');
+                f.classList.remove('bg-blue-600', 'text-white');
+            });
+            
+            filter.classList.add('active');
+            filter.classList.remove('bg-gray-100', 'text-gray-700');
+            filter.classList.add('bg-blue-600', 'text-white');
+
+            // Filter cards
+            const selectedCategory = filter.dataset.category;
+            
+            workflowCards.forEach(card => {
+                if (selectedCategory === 'all' || card.dataset.category === selectedCategory) {
+                    card.classList.remove('hidden');
+                } else {
+                    card.classList.add('hidden');
+                }
+            });
+        });
+    });
+
+    // Open modal when workflow card is clicked
+    document.querySelectorAll('.workflow-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const workflow = card.dataset.workflow;
+            if (modals[workflow]) {
+                modals[workflow].classList.remove('hidden');
+            } else {
+                // For workflows without modals yet, show a coming soon message
+                showComingSoonMessage(workflow);
+            }
+        });
+    });
+
+    // Close modal functionality
+    document.querySelectorAll('.modal-close').forEach(button => {
+        button.addEventListener('click', () => {
+            Object.values(modals).forEach(modal => {
+                modal.classList.add('hidden');
+            });
+        });
+    });
+
+    // Close modal when clicking outside
+    Object.values(modals).forEach(modal => {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.classList.add('hidden');
+            }
+        });
+    });
+
+    // Form submissions
+    document.getElementById('news-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleWorkflowSetup('news', {
+            topics: document.getElementById('news-topics').value,
+            email: document.getElementById('news-email').value,
+            time: document.getElementById('news-time').value,
+            timezone: document.getElementById('news-timezone').value
+        });
+    });
+
+    document.getElementById('research-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleWorkflowSetup('research', {
+            topics: document.getElementById('research-topics').value,
+            email: document.getElementById('research-email').value,
+            frequency: document.getElementById('research-frequency').value,
+            depth: document.getElementById('research-depth').value
+        });
+    });
+
+    document.getElementById('project-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        await handleWorkflowSetup('project', {
+            description: document.getElementById('project-description').value,
+            email: document.getElementById('project-email').value,
+            type: document.getElementById('project-type').value,
+            timeline: document.getElementById('project-timeline').value
+        });
+    });
+
+    document.getElementById('journal-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const focusAreas = Array.from(document.querySelectorAll('input[name="focus"]:checked')).map(el => el.value);
+        await handleWorkflowSetup('journal', {
+            focus: focusAreas,
+            email: document.getElementById('journal-email').value,
+            morning_time: document.getElementById('journal-morning').value,
+            evening_time: document.getElementById('journal-evening').value
+        });
+    });
+
+    document.getElementById('market-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const alertTypes = Array.from(document.querySelectorAll('input[name="alerts"]:checked')).map(el => el.value);
+        await handleWorkflowSetup('market', {
+            items: document.getElementById('market-items').value,
+            email: document.getElementById('market-email').value,
+            alerts: alertTypes,
+            frequency: document.getElementById('market-frequency').value,
+            urgency: document.getElementById('market-urgency').value
+        });
+    });
+
+    async function handleWorkflowSetup(workflowType, data) {
+        try {
+            // Show loading state
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const originalText = submitButton.innerHTML;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Setting up...';
+            submitButton.disabled = true;
+
+            // Send workflow setup request
+            const response = await fetch('/api/workflows', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    type: workflowType,
+                    config: data
+                })
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                
+                // Close modal
+                modals[workflowType].classList.add('hidden');
+                
+                // Show success message
+                showSuccessMessage(workflowType, result);
+                
+                // Reset form
+                event.target.reset();
+            } else {
+                throw new Error('Failed to set up workflow');
+            }
+        } catch (error) {
+            console.error('Error setting up workflow:', error);
+            showErrorMessage('Failed to set up workflow. Please try again.');
+        } finally {
+            // Reset button state
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            submitButton.innerHTML = originalText;
+            submitButton.disabled = false;
+        }
+    }
+
+    function showSuccessMessage(workflowType, result) {
+        // Create and show success notification
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg z-50';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-check-circle mr-3"></i>
+                <div>
+                    <div class="font-medium">${getWorkflowSuccessTitle(workflowType)}</div>
+                    <div class="text-sm opacity-90">${getWorkflowSuccessMessage(workflowType)}</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(notification);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    function showErrorMessage(message) {
+        // Create and show error notification
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-4 rounded-lg shadow-lg z-50';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-exclamation-circle mr-3"></i>
+                <div>
+                    <div class="font-medium">Setup Failed</div>
+                    <div class="text-sm opacity-90">${message}</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(notification);
+
+        // Auto remove after 5 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 5000);
+    }
+
+    function getWorkflowSuccessTitle(workflowType) {
+        const titles = {
+            // Productivity
+            'chief-of-staff': 'Chief of Staff Hired! 👔',
+            'news': 'News Hub Activated! 📰',
+            'research': 'Research Assistant Ready! 🔬',
+            'email-commander': 'Email Commander Active! 📧',
+            'project': 'Project Space Created! 🚀',
+            'calendar-optimizer': 'Calendar Optimized! 📅',
+            'document-ai': 'Document AI Ready! 📄',
+            
+            // Health & Fitness
+            'calorie-tracker': 'Nutrition Tracker Active! 🍎',
+            'fitness-coach': 'AI Coach Ready! 💪',
+            'sleep-optimizer': 'Sleep Optimizer On! 😴',
+            
+            // Lifestyle
+            'dream-trip': 'Trip Planner Ready! ✈️',
+            'journal': 'Daily Journal Started! 📔',
+            'home-automation': 'Smart Home Active! 🏠',
+            
+            // Business
+            'market': 'Market Intelligence Active! 💰',
+            'customer-success': 'Customer Success AI Ready! 👥',
+            'sales-pipeline': 'Sales Pipeline Supercharged! 📈',
+            
+            // Creative
+            'content-creator': 'Content Creator Active! 🎥',
+            'build-something': 'Development Workflow Ready! 💻',
+            'learning': 'Learning Accelerator On! 🎓',
+            'social-media': 'Social Media Manager Active! 📱'
+        };
+        return titles[workflowType] || 'Workflow Activated!';
+    }
+
+    function getWorkflowSuccessMessage(workflowType) {
+        const messages = {
+            // Productivity  
+            'chief-of-staff': 'Your personal assistant is now managing your tasks and projects',
+            'news': 'Your first intelligence brief will arrive within 10 minutes',
+            'research': 'Research hub created in your Context space',
+            'email-commander': 'Email automation rules are now in place',
+            'project': 'Project structure ready with timeline and resources',
+            'calendar-optimizer': 'Calendar optimization rules are now active',
+            'document-ai': 'Document processing workflows are ready',
+            
+            // Health & Fitness
+            'calorie-tracker': 'Nutrition tracking is ready - photo your next meal!',
+            'fitness-coach': 'Personalized workout plans will arrive daily',
+            'sleep-optimizer': 'Sleep tracking and optimization tips activated',
+            
+            // Lifestyle
+            'dream-trip': 'Trip planning and price alerts are now monitoring',
+            'journal': 'Daily prompts will arrive at your chosen time',
+            'home-automation': 'Smart home controls and automation ready',
+            
+            // Business
+            'market': 'Market monitoring active with real-time alerts',
+            'customer-success': 'Customer satisfaction monitoring is now active',
+            'sales-pipeline': 'Lead scoring and follow-up automation ready',
+            
+            // Creative
+            'content-creator': 'Content generation pipeline is ready to go',
+            'build-something': 'Development workflow assistant is ready',
+            'learning': 'Curated learning content pipeline activated',
+            'social-media': 'Social media automation and scheduling active'
+        };
+        return messages[workflowType] || 'Check your email for next steps';
+    }
+
+    function showComingSoonMessage(workflowType) {
+        const workflowNames = {
+            // For workflows that don't have modals yet, show coming soon
+            'chief-of-staff': 'Chief of Staff',
+            'email-commander': 'Email Commander',
+            'calorie-tracker': 'Smart Calorie Tracker',
+            'fitness-coach': 'AI Fitness Coach',
+            'sleep-optimizer': 'Sleep Optimizer',
+            'dream-trip': 'Dream Trip Planner',
+            'home-automation': 'Smart Home Hub',
+            'customer-success': 'Customer Success AI',
+            'sales-pipeline': 'Sales Pipeline AI',
+            'content-creator': 'Content Creator AI',
+            'build-something': 'Build Something New',
+            'learning': 'Learning Accelerator',
+            'social-media': 'Social Media AI',
+            'calendar-optimizer': 'Calendar Optimizer',
+            'document-ai': 'Document Intelligence'
+        };
+        
+        const notification = document.createElement('div');
+        notification.className = 'fixed top-4 right-4 bg-blue-500 text-white px-6 py-4 rounded-lg shadow-lg z-50';
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas fa-rocket mr-3"></i>
+                <div>
+                    <div class="font-medium">${workflowNames[workflowType] || 'This Workflow'} Coming Soon!</div>
+                    <div class="text-sm opacity-90">This workflow is being built. Try our other automations for now!</div>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+        document.body.appendChild(notification);
+
+        // Auto remove after 4 seconds
+        setTimeout(() => {
+            if (notification.parentElement) {
+                notification.remove();
+            }
+        }, 4000);
+    }
+
+    // Auto-fill email if user is already logged in
+    document.addEventListener('DOMContentLoaded', () => {
+        // Try to get user email from session/auth state if available
+        const userEmail = '{{ user_email }}' || '';
+        if (userEmail) {
+            document.querySelectorAll('input[type="email"]').forEach(input => {
+                input.value = userEmail;
+            });
+        }
+    });
+</script>
+{% endblock %}

@@ -22,6 +22,14 @@ from .abstractions import (
     ServerlessRuntime,
     StorageProvider,
 )
+from .mcp import (
+    MCPRegistry,
+    MCPSandbox,
+    MCPSecurityProxy,
+    MCPDriver,
+)
+from .mcp.config import MCPConfigLoader
+from .vextir_os.security.manager import SecurityManager
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=Document)
@@ -53,8 +61,20 @@ class LightningRuntime:
         self._container_runtime: Optional[ContainerRuntime] = None
         self._serverless_runtime: Optional[ServerlessRuntime] = None
 
+        # MCP components
+        self._mcp_registry: Optional[MCPRegistry] = None
+        self._mcp_sandbox: Optional[MCPSandbox] = None
+        self._mcp_security_proxy: Optional[MCPSecurityProxy] = None
+        self._mcp_driver: Optional[MCPDriver] = None
+        self._security_manager: Optional[SecurityManager] = None
+
+        # Tool registry
+        self._tool_registry = None
+
         # Track initialization state
         self._initialized = False
+        self._mcp_initialized = False
+        self._tools_initialized = False
 
         logger.info(f"Lightning Runtime initialized in {self.config.mode.value} mode")
 
@@ -90,6 +110,49 @@ class LightningRuntime:
             )
         return self._serverless_runtime
 
+    @property
+    def mcp_registry(self) -> MCPRegistry:
+        """Get the MCP registry instance."""
+        if not self._mcp_registry:
+            self._mcp_registry = MCPRegistry(self.storage)
+        return self._mcp_registry
+
+    @property
+    def mcp_sandbox(self) -> MCPSandbox:
+        """Get the MCP sandbox instance."""
+        if not self._mcp_sandbox:
+            self._mcp_sandbox = MCPSandbox()
+        return self._mcp_sandbox
+
+    @property
+    def mcp_security_proxy(self) -> MCPSecurityProxy:
+        """Get the MCP security proxy instance."""
+        if not self._mcp_security_proxy:
+            if not self._security_manager:
+                from .vextir_os.security.manager import SecurityManager
+                self._security_manager = SecurityManager()
+            self._mcp_security_proxy = MCPSecurityProxy(self._security_manager)
+        return self._mcp_security_proxy
+
+    @property
+    def mcp_driver(self) -> MCPDriver:
+        """Get the MCP driver instance."""
+        if not self._mcp_driver:
+            self._mcp_driver = MCPDriver(
+                self.mcp_registry,
+                self.mcp_security_proxy,
+                self.mcp_sandbox
+            )
+        return self._mcp_driver
+
+    @property
+    def tool_registry(self):
+        """Get the simplified tool registry instance."""
+        if not self._tool_registry:
+            from .tools import get_tool_registry
+            self._tool_registry = get_tool_registry()
+        return self._tool_registry
+
     async def initialize(self) -> None:
         """Initialize all services."""
         if self._initialized:
@@ -108,9 +171,61 @@ class LightningRuntime:
         self._initialized = True
         logger.info("Lightning Runtime services initialized")
 
+    async def initialize_mcp(self, load_config: bool = True) -> None:
+        """Initialize MCP services."""
+        if self._mcp_initialized:
+            return
+
+        logger.info("Initializing MCP services...")
+
+        # Initialize MCP registry
+        await self.mcp_registry.initialize()
+
+        # Load configuration if requested
+        if load_config:
+            config_loader = MCPConfigLoader()
+            configs = config_loader.load_server_configs()
+            
+            for config in configs:
+                try:
+                    await self.mcp_registry.register_server(config)
+                    logger.info(f"Registered MCP server from config: {config.id}")
+                except Exception as e:
+                    logger.error(f"Failed to register MCP server {config.id}: {e}")
+
+        # Initialize MCP driver
+        await self.mcp_driver.initialize()
+
+        self._mcp_initialized = True
+        logger.info("MCP services initialized")
+
+    async def initialize_tools(self) -> None:
+        """Initialize the tool registry with all providers."""
+        if self._tools_initialized:
+            return
+
+        logger.info("Initializing tool registry...")
+
+        # Initialize with MCP registry if available
+        from .tools import initialize_tool_registry
+        self._tool_registry = await initialize_tool_registry(
+            mcp_registry=self._mcp_registry if self._mcp_initialized else None
+        )
+
+        self._tools_initialized = True
+        logger.info("Tool registry initialized")
+
     async def shutdown(self) -> None:
         """Shutdown all services."""
         logger.info("Shutting down Lightning Runtime services...")
+
+        # Shutdown MCP services
+        if self._mcp_initialized:
+            if self._mcp_driver:
+                await self._mcp_driver.shutdown()
+            if self._mcp_sandbox:
+                await self._mcp_sandbox.cleanup_all()
+            self._mcp_initialized = False
 
         # Stop event bus
         if self._event_bus:

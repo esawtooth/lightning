@@ -35,7 +35,15 @@ class EventMessage:
     priority: EventPriority = EventPriority.NORMAL
     correlation_id: Optional[str] = None
     reply_to: Optional[str] = None
-    ttl_seconds: Optional[int] = None
+    ttl_seconds: Optional[int] = None  # Default TTL can be set per provider
+
+    def is_expired(self) -> bool:
+        """Check if the event has expired based on TTL."""
+        if self.ttl_seconds is None:
+            return False
+        
+        age_seconds = (datetime.utcnow() - self.timestamp).total_seconds()
+        return age_seconds > self.ttl_seconds
 
     def to_json(self) -> str:
         """Convert event to JSON string."""
@@ -167,3 +175,49 @@ class EventBus(ABC):
     ) -> None:
         """Reprocess a dead letter event."""
         pass
+
+    async def has_subscribers(self, event_type: str, topic: Optional[str] = None) -> bool:
+        """
+        Check if an event type has any active subscribers.
+
+        Args:
+            event_type: Event type to check
+            topic: Optional topic to check
+
+        Returns:
+            True if there are active subscribers
+        """
+        # Default implementation - providers can override for efficiency
+        return True  # Conservative default to avoid dropping events
+
+    async def get_orphaned_events(
+        self, since: Optional[datetime] = None, max_items: Optional[int] = None
+    ) -> List[EventMessage]:
+        """
+        Get events that were published but had no subscribers.
+
+        Args:
+            since: Optional timestamp to filter events after
+            max_items: Maximum number of events to retrieve
+
+        Returns:
+            List of orphaned events
+        """
+        # Default implementation - providers should override
+        return []
+
+    async def drain_orphaned_events(
+        self, event_types: Optional[List[str]] = None, before: Optional[datetime] = None
+    ) -> int:
+        """
+        Remove orphaned events from the system.
+
+        Args:
+            event_types: Optional list of event types to drain (None = all)
+            before: Optional timestamp to drain events before
+
+        Returns:
+            Number of events drained
+        """
+        # Default implementation - providers should override
+        return 0

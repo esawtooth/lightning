@@ -14,10 +14,10 @@ from .event_bus import EventBus, get_event_bus
 from .events import Event
 from .registries import (
     ModelRegistry,
-    ToolRegistry,
     get_model_registry,
-    get_tool_registry,
 )
+# Use new simplified tool registry
+from ..tools import get_tool_registry
 from .security import SecurityManager, get_security_manager
 
 
@@ -52,7 +52,20 @@ class UniversalEventProcessor:
             if not await self.security_manager.authorize(event):
                 raise EventProcessingError(f"Unauthorized event: {event}")
 
-            # 3. Route to drivers
+            # 3. Check if event has any consumers (drivers or direct subscribers)
+            has_drivers = bool(self.driver_registry.get_drivers_by_capability(event.type))
+            has_subscribers = await self.event_bus.has_subscribers(event.type)
+            
+            if not has_drivers and not has_subscribers:
+                logging.warning(
+                    f"Event {event.type} has no consumers (no drivers or subscribers). "
+                    f"Event will be drained to prevent accumulation."
+                )
+                # Record as orphaned for monitoring
+                await self.metrics.record_orphaned_event(event)
+                return []  # Return empty list - event is effectively drained
+
+            # 4. Route to drivers
             driver_events = await self.driver_registry.route_event(event)
             output_events.extend(driver_events)
 
@@ -115,9 +128,11 @@ class EventMetrics:
     def __init__(self):
         self.total_events = 0
         self.total_errors = 0
+        self.total_orphaned = 0
         self.processing_times = []
         self.event_types = {}
         self.error_types = {}
+        self.orphaned_types = {}
         self.max_metrics = 10000
 
     async def record_event(
@@ -147,6 +162,15 @@ class EventMetrics:
             self.error_types[error_type] = 0
         self.error_types[error_type] += 1
 
+    async def record_orphaned_event(self, event: Event):
+        """Record an orphaned event that has no consumers"""
+        self.total_orphaned += 1
+        
+        # Track orphaned event types
+        if event.type not in self.orphaned_types:
+            self.orphaned_types[event.type] = 0
+        self.orphaned_types[event.type] += 1
+
     async def get_summary(self) -> Dict[str, Any]:
         """Get metrics summary"""
         avg_processing_time = (
@@ -158,10 +182,13 @@ class EventMetrics:
         return {
             "total_events": self.total_events,
             "total_errors": self.total_errors,
+            "total_orphaned": self.total_orphaned,
             "error_rate": self.total_errors / max(self.total_events, 1),
+            "orphan_rate": self.total_orphaned / max(self.total_events, 1),
             "avg_processing_time_ms": avg_processing_time * 1000,
             "event_types": self.event_types,
             "error_types": self.error_types,
+            "orphaned_types": self.orphaned_types,
         }
 
 
