@@ -727,7 +727,7 @@ pulumi.export("functionEndpoint", pulumi.Output.concat("https://", func_app.defa
 ui_cg = aci_group(
     "chatui",
     ui_image,
-    80,
+    8000,
     [
         containerinstance.EnvironmentVariableArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
         containerinstance.EnvironmentVariableArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
@@ -816,7 +816,7 @@ ui_og, ui_origin = origin_group(
     "ui",
     "/",
     ui_cg.ip_address.apply(lambda ip: ip.fqdn),
-    80,
+    8000,
     https=False,
     host_header=f"www.{domain}",
     enforce_cert=False,
