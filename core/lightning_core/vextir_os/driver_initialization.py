@@ -7,9 +7,9 @@ supporting both local and cloud deployment scenarios.
 
 import logging
 import os
-from typing import Any, List, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
 
-from .drivers import BaseDriver, DriverManifest
+from .drivers import Driver as BaseDriver, DriverManifest
 from .registries import get_driver_registry
 
 logger = logging.getLogger(__name__)

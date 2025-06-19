@@ -174,7 +174,7 @@ def get_provider_factory() -> ProviderFactory:
     if _global_config is None:
         # Create default local configuration for testing
         _global_config = RuntimeConfig(
-            execution_mode=ExecutionMode.LOCAL,
+            mode=ExecutionMode.LOCAL,
             storage_provider="local",
             event_bus_provider="local",
             container_runtime="docker",

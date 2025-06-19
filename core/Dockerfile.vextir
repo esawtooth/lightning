@@ -1,0 +1,29 @@
+FROM python:3.10-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy requirements first for better caching
+COPY pyproject.toml setup.py ./
+COPY lightning_core/__init__.py ./lightning_core/
+
+# Install dependencies
+RUN pip install --no-cache-dir -e .[local]
+
+# Copy the rest of the application
+COPY . .
+
+# Create data directory
+RUN mkdir -p /app/data
+
+# Set Python path
+ENV PYTHONPATH=/app:$PYTHONPATH
+
+# Default command
+CMD ["python", "run_vextir_os.py"]

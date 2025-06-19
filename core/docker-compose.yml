@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  # Vextir OS Event Processor
+  vextir-os:
+    build:
+      context: .
+      dockerfile: Dockerfile.vextir
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-3.5-turbo}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - ./lightning_core:/app/lightning_core
+      - ./examples:/app/examples
+    networks:
+      - vextir-network
+    ports:
+      - "8080:8080"  # For API if needed
+    command: python run_vextir_os.py
+
+  # Redis for event bus (optional - for distributed setup)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - vextir-network
+    volumes:
+      - redis-data:/data
+
+networks:
+  vextir-network:
+    driver: bridge
+
+volumes:
+  redis-data:

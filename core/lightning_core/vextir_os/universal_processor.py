@@ -207,18 +207,71 @@ def get_universal_processor() -> UniversalEventProcessor:
 async def process_event_message(event_data: Dict[str, Any]) -> Dict[str, Any]:
     """Process event from Azure Service Bus message"""
     try:
-        # Parse event
-        event = Event.from_dict(event_data)
+        # Import specific event types
+        from ..events.models import LLMChatEvent, EmailEvent, CalendarEvent
+        
+        logging.debug(f"Processing event data: {event_data}")
+        
+        # Convert EventMessage format to Event format if needed
+        if 'event_type' in event_data and 'type' not in event_data:
+            # This is an EventMessage, convert to Event format
+            event_data = {
+                'type': event_data.get('event_type', 'unknown'),
+                'data': event_data.get('data', {}),
+                'id': event_data.get('id'),
+                'timestamp': event_data.get('timestamp'),
+                'source': event_data.get('metadata', {}).get('source', 'unknown'),
+                'user_id': event_data.get('metadata', {}).get('user_id', 'unknown'),
+                'metadata': event_data.get('metadata', {})
+            }
+            
+            # Remove None values to avoid issues
+            event_data = {k: v for k, v in event_data.items() if v is not None}
+        
+        # Ensure required fields have defaults
+        if 'source' not in event_data:
+            event_data['source'] = 'unknown'
+        if 'user_id' not in event_data:
+            event_data['user_id'] = 'unknown'
+        
+        # Create appropriate typed event based on event type
+        event_type = event_data.get('type', 'unknown')
+        logging.debug(f"Creating event of type: {event_type}")
+        
+        try:
+            if event_type == 'llm.chat':
+                event = LLMChatEvent.from_dict(event_data)
+            elif event_type == 'email':
+                event = EmailEvent.from_dict(event_data)
+            elif event_type == 'calendar':
+                event = CalendarEvent.from_dict(event_data)
+            else:
+                # Default to generic event
+                event = Event.from_dict(event_data)
+        except Exception as e:
+            logging.error(f"Failed to create event from data: {e}")
+            logging.error(f"Event data was: {event_data}")
+            raise
 
         # Process through universal processor
         processor = get_universal_processor()
         output_events = await processor.process_event(event)
+        
+        # Get driver processing results
+        driver_results = {}
+        drivers = processor.driver_registry.get_drivers_by_capability(event.type)
+        for driver in drivers:
+            driver_results[driver.manifest.id] = {
+                "handled": True,  # If we got here, driver was called
+                "capabilities": driver.get_capabilities()
+            }
 
         return {
             "status": "success",
             "input_event": event.to_dict(),
             "output_events": [e.to_dict() for e in output_events],
             "output_count": len(output_events),
+            "driver_results": driver_results,
         }
 
     except Exception as e:

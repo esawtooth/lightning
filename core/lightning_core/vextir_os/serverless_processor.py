@@ -62,8 +62,15 @@ async def universal_event_processor_handler(
                 error_message="Missing event data",
             )
 
+        # Debug logging
+        logger.debug(f"Extracted event data: {event_data}")
+        
+        # Log event type - check both 'type' and 'event_type' fields
+        event_type = event_data.get('type') or event_data.get('event_type', 'unknown')
+        user_id = event_data.get('userID') or event_data.get('user_id', 'unknown')
+        
         logger.info(
-            f"Processing event: {event_data.get('type', 'unknown')} for user {event_data.get('userID', 'unknown')}"
+            f"Processing event: {event_type} for user {user_id}"
         )
 
         # Process through universal processor
@@ -125,6 +132,7 @@ def _extract_event_data(context: FunctionContext) -> Optional[Dict[str, Any]]:
         Event data dictionary or None if not found
     """
     trigger_data = context.trigger_data
+    logger.debug(f"Trigger type: {context.trigger_type}, Trigger data: {trigger_data}")
 
     if context.trigger_type == TriggerType.EVENT:
         # Direct event trigger - data should be in trigger_data
@@ -150,6 +158,14 @@ def _extract_event_data(context: FunctionContext) -> Optional[Dict[str, Any]]:
     elif context.trigger_type == TriggerType.TIMER:
         # Timer trigger - might have scheduled event data
         return trigger_data.get("scheduled_event") or trigger_data
+
+    elif context.trigger_type == TriggerType.MANUAL:
+        # Manual trigger - check if this is already a full event
+        if isinstance(trigger_data, dict) and 'event_type' in trigger_data:
+            # This is likely an EventMessage JSON
+            return trigger_data
+        # Otherwise look for nested event data
+        return trigger_data.get("event") or trigger_data.get("data") or trigger_data
 
     else:
         # Unknown trigger type - return raw data

@@ -6,7 +6,7 @@ enabling both local and cloud implementations.
 """
 
 from .configuration import ConfigProvider, ExecutionMode, RuntimeConfig
-from .container_runtime import Container, ContainerConfig, ContainerRuntime
+from .container_runtime import Container, ContainerConfig, ContainerRuntime, ResourceRequirements
 from .event_bus import EventBus, EventHandler, EventMessage
 from .factory import ProviderFactory, get_provider_factory, set_provider_factory
 from .serverless import FunctionConfig, FunctionHandler, ServerlessRuntime
@@ -25,6 +25,7 @@ __all__ = [
     "ContainerRuntime",
     "Container",
     "ContainerConfig",
+    "ResourceRequirements",
     # Serverless
     "ServerlessRuntime",
     "FunctionHandler",

@@ -29,7 +29,7 @@ from .mcp import (
     MCPDriver,
 )
 from .mcp.config import MCPConfigLoader
-from .vextir_os.security.manager import SecurityManager
+from .vextir_os.security import SecurityManager
 
 logger = logging.getLogger(__name__)
 T = TypeVar("T", bound=Document)
@@ -129,7 +129,7 @@ class LightningRuntime:
         """Get the MCP security proxy instance."""
         if not self._mcp_security_proxy:
             if not self._security_manager:
-                from .vextir_os.security.manager import SecurityManager
+                from .vextir_os.security import SecurityManager
                 self._security_manager = SecurityManager()
             self._mcp_security_proxy = MCPSecurityProxy(self._security_manager)
         return self._mcp_security_proxy

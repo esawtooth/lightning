@@ -315,9 +315,24 @@ class DriverRegistry:
 
         return result_events
 
-    def get_drivers_by_capability(self, capability: str) -> List[str]:
+    def get_drivers_by_capability(self, capability: str) -> List[Driver]:
+        """Get driver instances that provide a capability"""
+        driver_ids = self.capability_map.get(capability, [])
+        drivers = []
+        for driver_id in driver_ids:
+            if driver_id in self.instances and self.instances[driver_id].status == "running":
+                drivers.append(self.instances[driver_id].driver)
+        return drivers
+    
+    def get_driver_ids_by_capability(self, capability: str) -> List[str]:
         """Get driver IDs that provide a capability"""
         return self.capability_map.get(capability, [])
+    
+    def get_driver(self, driver_id: str) -> Optional[Driver]:
+        """Get a driver instance by ID"""
+        if driver_id in self.instances and self.instances[driver_id].status == "running":
+            return self.instances[driver_id].driver
+        return None
 
     def get_driver_status(self, driver_id: str) -> Optional[Dict[str, Any]]:
         """Get driver status information"""

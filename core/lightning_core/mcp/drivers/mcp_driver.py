@@ -5,8 +5,8 @@ import json
 from typing import Any, Dict, List, Optional
 import logging
 
-from ...vextir_os.drivers.tool_driver import ToolDriver
-from ...vextir_os.models import VextirEvent
+from ...vextir_os.drivers import ToolDriver
+from ...vextir_os.events import Event as VextirEvent
 from ..registry import MCPRegistry, MCPServerConfig
 from ..proxy import MCPSecurityProxy, ValidationResult
 from ..sandbox import MCPSandbox

@@ -153,6 +153,24 @@ class EventBus:
             events = [e for e in events if filter.matches(e)]
 
         return events[-limit:]
+    
+    async def has_subscribers(self, event_type: str) -> bool:
+        """Check if there are any subscribers for a given event type"""
+        # Check callback subscribers
+        for subscription in self.subscriptions.values():
+            if subscription.active:
+                # Check if this subscription would match the event type
+                if (subscription.filter.event_types is None or 
+                    event_type in subscription.filter.event_types):
+                    return True
+        
+        # Check stream subscribers
+        for stream in self.streams.values():
+            if (stream.filter.event_types is None or 
+                event_type in stream.filter.event_types):
+                return True
+        
+        return False
 
 
 # Global event bus instance

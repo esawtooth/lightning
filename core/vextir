@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""
+Vextir OS CLI - Main entry point
+"""
+
+from lightning_core.vextir_os.event_driven_cli import main_sync
+
+if __name__ == "__main__":
+    main_sync()

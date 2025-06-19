@@ -11,7 +11,8 @@ import logging
 from datetime import datetime
 
 from lightning_core.runtime import initialize_runtime
-from lightning_core.abstractions import RuntimeConfig, ExecutionMode, EventMessage
+from lightning_core.abstractions import RuntimeConfig, ExecutionMode, EventMessage, FunctionConfig
+from lightning_core.abstractions.serverless import RuntimeType
 from lightning_core.vextir_os.serverless_processor import universal_event_processor_handler
 from lightning_core.vextir_os.driver_initialization import (
     configure_drivers_for_environment,
@@ -52,14 +53,15 @@ async def run_local_event_processor():
     
     # Deploy the processor function
     print("\nDeploying event processor function...")
+    function_config = FunctionConfig(
+        name="event-processor",
+        handler="universal_event_processor_handler",
+        runtime=RuntimeType.PYTHON,
+        memory_mb=256,
+        timeout_seconds=60
+    )
     function_id = await runtime.serverless.deploy_function(
-        config={
-            "name": "event-processor",
-            "handler": "universal_event_processor_handler",
-            "runtime": "python",
-            "memory_mb": 256,
-            "timeout_seconds": 60
-        },
+        config=function_config,
         handler=universal_event_processor_handler
     )
     print(f"✓ Function deployed: {function_id}")

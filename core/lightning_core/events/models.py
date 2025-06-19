@@ -42,6 +42,40 @@ class BaseEvent:
             self.id = str(uuid.uuid4())
         if self.timestamp is None:
             self.timestamp = datetime.utcnow()
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "BaseEvent":
+        """Create event from dictionary."""
+        # Get valid field names for this class
+        import inspect
+        valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
+        
+        # Filter data to only include valid fields
+        filtered_data = {k: v for k, v in data.items() if k in valid_fields}
+        
+        # Handle timestamp conversion
+        if 'timestamp' in filtered_data and isinstance(filtered_data['timestamp'], str):
+            filtered_data['timestamp'] = datetime.fromisoformat(filtered_data['timestamp'].replace('Z', '+00:00'))
+        
+        # Handle category conversion
+        if 'category' in filtered_data and isinstance(filtered_data['category'], str):
+            filtered_data['category'] = EventCategory(filtered_data['category'])
+            
+        return cls(**filtered_data)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert event to dictionary."""
+        result = {
+            'id': self.id,
+            'type': self.type,
+            'data': self.data,
+            'timestamp': self.timestamp.isoformat() if self.timestamp else None,
+            'source': self.source,
+            'user_id': self.user_id,
+            'category': self.category.value if hasattr(self.category, 'value') else self.category,
+            'metadata': self.metadata
+        }
+        return {k: v for k, v in result.items() if v is not None}
 
 
 @dataclass

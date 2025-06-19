@@ -8,8 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Deque
 import logging
 
-from ..vextir_os.security.manager import SecurityManager
-from ..vextir_os.security.models import SecurityContext
+from ..vextir_os.security import SecurityManager, SecurityContext
 
 logger = logging.getLogger(__name__)
 

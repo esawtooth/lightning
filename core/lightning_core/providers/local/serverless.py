@@ -424,7 +424,7 @@ class LocalServerlessRuntime(ServerlessRuntime):
                     ),
                     "invocation_count": local_function.invocation_count,
                     "triggers": local_function.config.triggers,
-                    "labels": local_function.config.labels,
+                    "labels": getattr(local_function.config, 'labels', {}),
                 }
             )
 
@@ -451,7 +451,7 @@ class LocalServerlessRuntime(ServerlessRuntime):
             ),
             "invocation_count": local_function.invocation_count,
             "triggers": local_function.config.triggers,
-            "labels": local_function.config.labels,
+            "labels": getattr(local_function.config, 'labels', {}),
             "environment_variables": list(
                 local_function.config.environment_variables.keys()
             ),

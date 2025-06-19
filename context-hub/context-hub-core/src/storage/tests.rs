@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(all(test, feature = "distributed"))]
 mod tests {
     use crate::storage::distributed::*;
     use crate::shard::{ConsistentHashRouter, ShardId, ShardInfo, ShardStatus};

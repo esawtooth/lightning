@@ -412,7 +412,7 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
 
         if isinstance(event, LLMChatEvent):
             # Process chat request
-            messages = event.messages.copy()
+            messages = event.data.get("messages", []).copy()
 
             # Add system message about context search capability
             system_message = {"role": "system", "content": self.system_prompt}
@@ -459,16 +459,40 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                 # Check if the model wants to call a function
                 if message.tool_calls:
                     # Handle function calls
+                    # Convert tool_calls to dict format if needed
+                    tool_calls_dict = []
+                    for tc in message.tool_calls:
+                        if hasattr(tc, 'function'):
+                            tool_calls_dict.append({
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            })
+                        else:
+                            tool_calls_dict.append(tc)
+                    
                     messages.append({
-                        "role": message.role.value,
+                        "role": message.role.value if hasattr(message.role, 'value') else message.role,
                         "content": message.content,
-                        "tool_calls": message.tool_calls
+                        "tool_calls": tool_calls_dict
                     })
 
                     for tool_call in message.tool_calls:
-                        function_name = tool_call["function"]["name"]
+                        # Handle both dict and object formats
+                        if hasattr(tool_call, 'function'):
+                            function_name = tool_call.function.name
+                            arguments_str = tool_call.function.arguments
+                            tool_call_id = tool_call.id
+                        else:
+                            function_name = tool_call["function"]["name"]
+                            arguments_str = tool_call["function"]["arguments"]
+                            tool_call_id = tool_call.get("id", "unknown")
+                        
                         try:
-                            arguments = json.loads(tool_call["function"]["arguments"])
+                            arguments = json.loads(arguments_str)
                         except json.JSONDecodeError:
                             arguments = {}
 
@@ -479,7 +503,7 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                         # Add function result to messages
                         messages.append(
                             {
-                                "tool_call_id": tool_call["id"],
+                                "tool_call_id": tool_call_id,
                                 "role": "tool",
                                 "name": function_name,
                                 "content": function_result,
@@ -511,8 +535,14 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                     source="ChatAgentDriver",
                     type="llm.chat.response",
                     user_id=event.user_id,
-                    metadata={"reply": reply, "usage": usage},
-                    history=event.history + [event.to_dict()],
+                    data={"response": reply, "usage": usage},
+                    metadata={
+                        "request_id": event.metadata.get("request_id"),
+                        "chat_request_id": event.id,
+                        "session_id": event.metadata.get("session_id"),
+                        "turn_number": event.metadata.get("turn_number"),
+                        "response_timestamp": datetime.utcnow().isoformat()
+                    }
                 )
                 output_events.append(response_event)
 
@@ -525,8 +555,11 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
                     source="ChatAgentDriver",
                     type="llm.chat.error",
                     user_id=event.user_id,
-                    metadata={"error": str(e)},
-                    history=event.history + [event.to_dict()],
+                    data={"error": str(e)},
+                    metadata={
+                        "request_id": event.metadata.get("request_id"),
+                        "chat_request_id": event.id
+                    }
                 )
                 output_events.append(error_event)
 
@@ -604,13 +637,13 @@ You are a helpful AI assistant with access to the user's personal context hub. Y
             if response.status_code == 200:
                 return response.json().get("results", [])
             else:
-                logging.warning(
+                logging.error(
                     f"Context search failed for user {user_id}: {response.status_code}"
                 )
-                return []
+                raise RuntimeError(f"Context Hub returned error {response.status_code}")
         except Exception as e:
-            logging.error(f"Error searching context for user {user_id}: {e}")
-            return []
+            logging.error(f"Context Hub connection failed for user {user_id}: {e}")
+            raise RuntimeError(f"Context Hub required but unavailable: {e}") from e
 
 
 @driver(
