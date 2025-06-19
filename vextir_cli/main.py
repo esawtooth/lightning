@@ -20,25 +20,112 @@ from rich.prompt import Prompt, Confirm
 from rich.syntax import Syntax
 from rich.tree import Tree
 
-# Add the parent directory to the path to import vextir_os modules
+# Add the parent directory to the path to import lightning_core modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from vextir_cli.config import Config
 from vextir_cli.client import VextirClient
 from vextir_cli.utils import format_timestamp, format_json, handle_async, get_status_color
 
+# Import Lightning Core components
+try:
+    from core.lightning_core.runtime import get_runtime, initialize_runtime
+    from core.lightning_core.abstractions.configuration import RuntimeConfig, ExecutionMode
+    LIGHTNING_CORE_AVAILABLE = True
+except ImportError:
+    LIGHTNING_CORE_AVAILABLE = False
+    # Define dummy classes to avoid NameError
+    class ExecutionMode:
+        LOCAL = "local"
+        AZURE = "azure"
+        AWS = "aws"
+        GCP = "gcp"
+        
+        def __init__(self, value):
+            self.value = value
+    
+    class RuntimeConfig:
+        def __init__(self):
+            pass
+
 console = Console()
+
+
+def _create_runtime_config(config_obj: Config, mode: ExecutionMode) -> RuntimeConfig:
+    """Create Lightning Core runtime configuration from CLI config."""
+    if not LIGHTNING_CORE_AVAILABLE:
+        return None
+    
+    runtime_config = RuntimeConfig()
+    runtime_config.mode = mode
+    
+    # Configure providers based on mode
+    if mode == ExecutionMode.LOCAL:
+        runtime_config.storage_provider = "local"
+        runtime_config.event_bus_provider = "local"
+        runtime_config.container_runtime = "docker"
+        runtime_config.serverless_provider = "local"
+        runtime_config.storage_path = config_obj.get('runtime.storage_path', './data')
+    
+    elif mode == ExecutionMode.AZURE:
+        runtime_config.storage_provider = config_obj.get('runtime.storage_provider', 'azure_cosmos')
+        runtime_config.event_bus_provider = config_obj.get('runtime.event_bus_provider', 'azure_service_bus')
+        runtime_config.container_runtime = config_obj.get('runtime.container_runtime', 'azure_aci')
+        runtime_config.serverless_provider = config_obj.get('runtime.serverless_provider', 'azure_functions')
+        
+        # Azure-specific configuration
+        runtime_config.storage_connection_string = config_obj.get('azure.storage_connection_string')
+        runtime_config.event_bus_connection_string = config_obj.get('azure.service_bus_connection_string')
+        runtime_config.resource_group = config_obj.get('azure.resource_group')
+        runtime_config.region = config_obj.get('azure.region', 'eastus')
+    
+    elif mode == ExecutionMode.AWS:
+        runtime_config.storage_provider = config_obj.get('runtime.storage_provider', 'dynamodb')
+        runtime_config.event_bus_provider = config_obj.get('runtime.event_bus_provider', 'sqs')
+        runtime_config.container_runtime = config_obj.get('runtime.container_runtime', 'ecs')
+        runtime_config.serverless_provider = config_obj.get('runtime.serverless_provider', 'lambda')
+        runtime_config.region = config_obj.get('aws.region', 'us-east-1')
+        runtime_config.project_id = config_obj.get('aws.account_id')
+    
+    elif mode == ExecutionMode.GCP:
+        runtime_config.storage_provider = config_obj.get('runtime.storage_provider', 'firestore')
+        runtime_config.event_bus_provider = config_obj.get('runtime.event_bus_provider', 'pubsub')
+        runtime_config.container_runtime = config_obj.get('runtime.container_runtime', 'cloud_run')
+        runtime_config.serverless_provider = config_obj.get('runtime.serverless_provider', 'cloud_functions')
+        runtime_config.region = config_obj.get('gcp.region', 'us-central1')
+        runtime_config.project_id = config_obj.get('gcp.project_id')
+    
+    # General configuration
+    runtime_config.log_level = config_obj.get('runtime.log_level', 'INFO')
+    runtime_config.auth_enabled = config_obj.get('runtime.auth_enabled', True)
+    runtime_config.encryption_enabled = config_obj.get('runtime.encryption_enabled', True)
+    
+    return runtime_config
+
+
+async def _get_runtime(ctx):
+    """Get or create Lightning Core runtime from context."""
+    if not LIGHTNING_CORE_AVAILABLE:
+        raise click.ClickException("Lightning Core is not available. Some commands may not work.")
+    
+    runtime_config = ctx.obj.get('runtime_config')
+    if not runtime_config:
+        raise click.ClickException("Runtime configuration not available.")
+    
+    return await initialize_runtime(runtime_config)
 
 
 @click.group()
 @click.option('--config', '-c', help='Configuration file path')
 @click.option('--endpoint', '-e', help='Vextir OS endpoint URL')
+@click.option('--mode', '-m', type=click.Choice(['local', 'azure', 'aws', 'gcp']), help='Runtime execution mode')
 @click.option('--verbose', '-v', is_flag=True, help='Verbose output')
 @click.pass_context
-def cli(ctx, config, endpoint, verbose):
+def cli(ctx, config, endpoint, mode, verbose):
     """Vextir OS Command Line Interface
     
-    A comprehensive CLI for operating the Vextir AI Operating System.
+    A comprehensive CLI for operating the Lightning AI Operating System.
+    Supports both local and cloud environments (Azure, AWS, GCP).
     Provides access to events, drivers, models, context, and system management.
     """
     ctx.ensure_object(dict)
@@ -47,10 +134,21 @@ def cli(ctx, config, endpoint, verbose):
     config_obj = Config(config_file=config)
     if endpoint:
         config_obj.set('endpoint', endpoint)
+    if mode:
+        config_obj.set('runtime.mode', mode)
     
     ctx.obj['config'] = config_obj
     ctx.obj['verbose'] = verbose
     ctx.obj['client'] = VextirClient(config_obj)
+    
+    # Initialize Lightning Core runtime if available
+    if LIGHTNING_CORE_AVAILABLE:
+        runtime_mode = mode or config_obj.get('runtime.mode', 'local')
+        ctx.obj['runtime_mode'] = ExecutionMode(runtime_mode)
+        ctx.obj['runtime_config'] = _create_runtime_config(config_obj, ctx.obj['runtime_mode'])
+    else:
+        ctx.obj['runtime_mode'] = None
+        ctx.obj['runtime_config'] = None
 
 
 @cli.group()
@@ -66,14 +164,13 @@ def event(ctx):
 @click.option('--metadata', '-m', help='Event metadata as JSON string')
 @click.option('--file', '-f', help='Read metadata from file')
 @click.option('--user-id', '-u', help='User ID (defaults to current user)')
+@click.option('--use-runtime', is_flag=True, help='Use Lightning Core runtime instead of legacy client')
 @click.pass_context
-def emit_event(ctx, event_type, source, metadata, file, user_id):
-    """Emit an event to the Vextir OS event bus"""
+def emit_event(ctx, event_type, source, metadata, file, user_id, use_runtime):
+    """Emit an event to the Lightning AI OS event bus"""
     
     @handle_async
     async def _emit():
-        client = ctx.obj['client']
-        
         # Parse metadata
         event_metadata = {}
         if metadata:
@@ -91,20 +188,6 @@ def emit_event(ctx, event_type, source, metadata, file, user_id):
                 console.print(f"[red]Error reading metadata file: {e}[/red]")
                 return
         
-        # Get user ID
-        current_user_id = user_id
-        if not current_user_id:
-            current_user_id = await client.get_current_user_id()
-        
-        # Create and emit event
-        event_data = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'source': source,
-            'type': event_type,
-            'userID': current_user_id,
-            'metadata': event_metadata
-        }
-        
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
@@ -113,16 +196,58 @@ def emit_event(ctx, event_type, source, metadata, file, user_id):
             task = progress.add_task("Emitting event...", total=None)
             
             try:
-                result = await client.emit_event(event_data)
-                progress.update(task, completed=True)
-                
-                console.print(Panel(
-                    f"[green]Event emitted successfully[/green]\n"
-                    f"Event ID: {result.get('id', 'N/A')}\n"
-                    f"Type: {event_type}\n"
-                    f"Source: {source}",
-                    title="Event Emitted"
-                ))
+                if use_runtime and LIGHTNING_CORE_AVAILABLE:
+                    # Use Lightning Core runtime
+                    from core.lightning_core.abstractions.event_bus import EventMessage
+                    
+                    runtime = await _get_runtime(ctx)
+                    async with runtime.session():
+                        event = EventMessage(
+                            event_type=event_type,
+                            data=event_metadata,
+                            source=source,
+                            user_id=user_id or 'cli_user'
+                        )
+                        
+                        await runtime.event_bus.publish(event)
+                        progress.update(task, completed=True)
+                        
+                        console.print(Panel(
+                            f"[green]Event emitted via Lightning Core runtime[/green]\n"
+                            f"Type: {event_type}\n"
+                            f"Source: {source}\n"
+                            f"Runtime Mode: {ctx.obj.get('runtime_mode', 'unknown').value if ctx.obj.get('runtime_mode') else 'unknown'}",
+                            title="Event Emitted"
+                        ))
+                        
+                else:
+                    # Use legacy client
+                    client = ctx.obj['client']
+                    
+                    # Get user ID
+                    current_user_id = user_id
+                    if not current_user_id:
+                        current_user_id = await client.get_current_user_id()
+                    
+                    # Create and emit event
+                    event_data = {
+                        'timestamp': datetime.utcnow().isoformat(),
+                        'source': source,
+                        'type': event_type,
+                        'userID': current_user_id,
+                        'metadata': event_metadata
+                    }
+                    
+                    result = await client.emit_event(event_data)
+                    progress.update(task, completed=True)
+                    
+                    console.print(Panel(
+                        f"[green]Event emitted via legacy client[/green]\n"
+                        f"Event ID: {result.get('id', 'N/A')}\n"
+                        f"Type: {event_type}\n"
+                        f"Source: {source}",
+                        title="Event Emitted"
+                    ))
                 
             except Exception as e:
                 progress.update(task, completed=True)
@@ -1406,6 +1531,236 @@ def hub_config_set(ctx, setting, value):
 def hub_config_reset(ctx):
     """Reset Context Hub configuration"""
     execute_contexthub_cli(ctx, ['config', 'reset'])
+
+
+@cli.group()
+@click.pass_context
+def runtime(ctx):
+    """Lightning Core runtime management commands"""
+    pass
+
+
+@runtime.command('status')
+@click.pass_context
+def runtime_status(ctx):
+    """Show current runtime status and configuration"""
+    
+    @handle_async
+    async def _status():
+        config_obj = ctx.obj['config']
+        runtime_mode = ctx.obj.get('runtime_mode')
+        runtime_config = ctx.obj.get('runtime_config')
+        
+        if not LIGHTNING_CORE_AVAILABLE:
+            console.print("[red]Lightning Core is not available[/red]")
+            console.print("Operating in legacy Vextir OS mode only")
+            return
+        
+        mode_name = runtime_mode.value if runtime_mode else "unknown"
+        
+        status_panel = f"""[bold]Lightning Core Runtime Status[/bold]
+
+Execution Mode: [{('green' if runtime_mode else 'red')}]{mode_name}[/]
+Storage Provider: {runtime_config.storage_provider if runtime_config else 'N/A'}
+Event Bus Provider: {runtime_config.event_bus_provider if runtime_config else 'N/A'}
+Container Runtime: {runtime_config.container_runtime if runtime_config else 'N/A'}
+Serverless Provider: {runtime_config.serverless_provider if runtime_config else 'N/A'}
+
+Endpoint: {config_obj.get('endpoint', 'Not configured')}
+Auth Method: {config_obj.get('auth.method', 'azure_cli')}"""
+        
+        console.print(Panel(status_panel, title="Runtime Status"))
+        
+        # Test runtime connectivity if possible
+        if runtime_config:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task("Testing runtime connectivity...", total=None)
+                
+                try:
+                    runtime = await _get_runtime(ctx)
+                    async with runtime.session():
+                        # Test basic storage operation
+                        await runtime.storage.initialize()
+                        progress.update(task, completed=True)
+                        console.print("[green]✓ Runtime connectivity successful[/green]")
+                        
+                except Exception as e:
+                    progress.update(task, completed=True)
+                    console.print(f"[red]✗ Runtime connectivity failed: {e}[/red]")
+    
+    _status()
+
+
+@runtime.command('switch')
+@click.argument('mode', type=click.Choice(['local', 'azure', 'aws', 'gcp']))
+@click.pass_context
+def runtime_switch(ctx, mode):
+    """Switch runtime execution mode"""
+    config_obj = ctx.obj['config']
+    
+    if not LIGHTNING_CORE_AVAILABLE:
+        console.print("[red]Lightning Core is not available. Cannot switch runtime mode.[/red]")
+        return
+    
+    # Update configuration
+    config_obj.set('runtime.mode', mode)
+    
+    # Update context
+    ctx.obj['runtime_mode'] = ExecutionMode(mode)
+    ctx.obj['runtime_config'] = _create_runtime_config(config_obj, ctx.obj['runtime_mode'])
+    
+    console.print(Panel(
+        f"[green]Runtime mode switched to: {mode}[/green]\n"
+        f"Configuration saved to: {config_obj.config_file}",
+        title="Runtime Mode Changed"
+    ))
+
+
+@runtime.command('init')
+@click.option('--mode', '-m', type=click.Choice(['local', 'azure', 'aws', 'gcp']), 
+              help='Runtime mode to initialize')
+@click.option('--force', '-f', is_flag=True, help='Force initialization even if already configured')
+@click.pass_context
+def runtime_init(ctx, mode, force):
+    """Initialize runtime environment for specified mode"""
+    
+    @handle_async
+    async def _init():
+        config_obj = ctx.obj['config']
+        
+        if not LIGHTNING_CORE_AVAILABLE:
+            console.print("[red]Lightning Core is not available.[/red]")
+            return
+        
+        current_mode = mode or ctx.obj.get('runtime_mode')
+        if not current_mode:
+            current_mode = ExecutionMode.LOCAL
+        
+        if isinstance(current_mode, str):
+            current_mode = ExecutionMode(current_mode)
+        
+        console.print(f"Initializing runtime environment for [cyan]{current_mode.value}[/cyan] mode...")
+        
+        # Update configuration
+        runtime_config = _create_runtime_config(config_obj, current_mode)
+        
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console
+        ) as progress:
+            task = progress.add_task("Initializing runtime...", total=None)
+            
+            try:
+                runtime = await initialize_runtime(runtime_config)
+                
+                # Initialize all services
+                async with runtime.session():
+                    await runtime.storage.initialize()
+                    
+                    progress.update(task, completed=True)
+                    
+                    console.print(Panel(
+                        f"[green]Runtime initialized successfully[/green]\n"
+                        f"Mode: {current_mode.value}\n"
+                        f"Storage: {runtime_config.storage_provider}\n"
+                        f"Event Bus: {runtime_config.event_bus_provider}\n"
+                        f"Container Runtime: {runtime_config.container_runtime}\n"
+                        f"Serverless: {runtime_config.serverless_provider}",
+                        title="Runtime Initialized"
+                    ))
+                    
+                    # Save configuration
+                    config_obj.set('runtime.mode', current_mode.value)
+                    
+            except Exception as e:
+                progress.update(task, completed=True)
+                console.print(f"[red]Failed to initialize runtime: {e}[/red]")
+                
+                # Provide specific guidance based on mode
+                if current_mode == ExecutionMode.AZURE:
+                    console.print("\n[yellow]Azure initialization tips:[/yellow]")
+                    console.print("• Ensure you're logged in: az login")
+                    console.print("• Set connection strings: vextir config set azure.storage_connection_string <value>")
+                    console.print("• Set resource group: vextir config set azure.resource_group <value>")
+                elif current_mode == ExecutionMode.AWS:
+                    console.print("\n[yellow]AWS initialization tips:[/yellow]")
+                    console.print("• Configure AWS credentials: aws configure")
+                    console.print("• Set region: vextir config set aws.region <value>")
+                    console.print("• Set account ID: vextir config set aws.account_id <value>")
+                elif current_mode == ExecutionMode.GCP:
+                    console.print("\n[yellow]GCP initialization tips:[/yellow]")
+                    console.print("• Set up gcloud auth: gcloud auth login")
+                    console.print("• Set project: vextir config set gcp.project_id <value>")
+                    console.print("• Set region: vextir config set gcp.region <value>")
+    
+    _init()
+
+
+@runtime.command('test')
+@click.option('--component', '-c', type=click.Choice(['storage', 'event_bus', 'container', 'serverless', 'all']), 
+              default='all', help='Component to test')
+@click.pass_context
+def runtime_test(ctx, component):
+    """Test runtime components"""
+    
+    @handle_async
+    async def _test():
+        if not LIGHTNING_CORE_AVAILABLE:
+            console.print("[red]Lightning Core is not available.[/red]")
+            return
+        
+        try:
+            runtime = await _get_runtime(ctx)
+            
+            async with runtime.session():
+                results = {}
+                
+                if component in ['storage', 'all']:
+                    try:
+                        # Test storage
+                        store = runtime.storage.get_document_store('test', dict)
+                        test_doc = {'test': 'data', 'timestamp': datetime.utcnow().isoformat()}
+                        await store.save('test_doc', test_doc)
+                        retrieved = await store.get('test_doc')
+                        await store.delete('test_doc')
+                        results['storage'] = 'pass' if retrieved else 'fail'
+                    except Exception as e:
+                        results['storage'] = f'fail: {e}'
+                
+                if component in ['event_bus', 'all']:
+                    try:
+                        # Test event bus
+                        from core.lightning_core.abstractions.event_bus import EventMessage
+                        test_event = EventMessage(
+                            event_type='test.cli',
+                            data={'test': 'data'},
+                            source='vextir_cli'
+                        )
+                        await runtime.event_bus.publish(test_event)
+                        results['event_bus'] = 'pass'
+                    except Exception as e:
+                        results['event_bus'] = f'fail: {e}'
+                
+                # Display results
+                table = Table(title="Runtime Component Test Results")
+                table.add_column("Component", style="cyan")
+                table.add_column("Status", style="green")
+                
+                for comp, status in results.items():
+                    status_color = "green" if status == "pass" else "red"
+                    table.add_row(comp.title(), f"[{status_color}]{status}[/{status_color}]")
+                
+                console.print(table)
+                
+        except Exception as e:
+            console.print(f"[red]Runtime test failed: {e}[/red]")
+    
+    _test()
 
 
 @cli.group()

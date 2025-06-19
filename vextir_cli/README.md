@@ -1,17 +1,24 @@
-# Vextir CLI
+# Vextir CLI - Lightning AI Operating System
 
-A comprehensive command-line interface for operating the Vextir AI Operating System. This CLI provides full access to all Vextir OS functionality including event management, driver control, model operations, context hub access, and system administration.
+A comprehensive command-line interface for operating the Lightning AI Operating System. This CLI provides full access to all Lightning Core functionality with seamless switching between local development and cloud production environments (Azure, AWS, GCP).
 
 ## Features
 
-- **Event Management**: Emit, list, and stream events in real-time
-- **Driver Control**: Start, stop, and monitor Vextir OS drivers
-- **Model Operations**: List and manage AI models
-- **Tool Management**: Access and control available tools
-- **Context Hub**: Read, write, and query the context database
-- **Instruction Management**: Create and execute user instructions
-- **System Monitoring**: Check system status and metrics
-- **Configuration**: Manage CLI settings and authentication
+### Multi-Environment Support
+- **Local Mode**: Development with Docker containers and local storage
+- **Azure Mode**: Production deployment with Azure services (Cosmos DB, Service Bus, Container Instances, Functions)
+- **AWS Mode**: Production deployment with AWS services (DynamoDB, SQS, ECS, Lambda)
+- **GCP Mode**: Production deployment with Google Cloud services (Firestore, Pub/Sub, Cloud Run, Cloud Functions)
+
+### Core Capabilities
+- **Event Management**: Emit, list, and stream events with Lightning Core runtime support
+- **Driver Control**: Start, stop, and monitor Lightning OS drivers
+- **Model Operations**: List and manage AI models across providers
+- **Tool Management**: Access and control available tools and bridges
+- **Context Hub**: Read, write, and query the persistent context database
+- **Runtime Management**: Initialize, test, and switch between execution environments
+- **System Monitoring**: Check system status and metrics across all environments
+- **Configuration**: Manage CLI settings, authentication, and provider configurations
 
 ## Installation
 
@@ -78,11 +85,40 @@ The CLI stores configuration in `~/.vextir/config.json`. Key settings include:
 
 ## Usage
 
+### Runtime Management
+
+```bash
+# Check current runtime status
+vextir runtime status
+
+# Switch between environments
+vextir runtime switch local     # Local development
+vextir runtime switch azure     # Azure production
+vextir runtime switch aws       # AWS production
+vextir runtime switch gcp       # GCP production
+
+# Initialize runtime environment
+vextir runtime init --mode azure
+
+# Test runtime components
+vextir runtime test --component storage
+vextir runtime test --component all
+
+# Set provider-specific configuration
+vextir config set azure.resource_group "lightning-rg"
+vextir config set azure.storage_connection_string "AccountName=..."
+vextir config set aws.region "us-west-2"
+vextir config set gcp.project_id "my-project"
+```
+
 ### Event Management
 
 ```bash
-# Emit an event
+# Emit an event (legacy client)
 vextir event emit user.action --metadata '{"action": "login"}'
+
+# Emit an event (Lightning Core runtime)
+vextir event emit user.action --use-runtime --metadata '{"action": "login"}'
 
 # List recent events
 vextir event list --limit 20 --type user.action

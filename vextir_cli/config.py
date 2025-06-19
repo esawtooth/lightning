@@ -67,6 +67,31 @@ class Config:
                 "default_path": "/",
                 "max_query_results": 1000,
                 "endpoint": "https://hub.vextir.com"
+            },
+            "runtime": {
+                "mode": "local",
+                "storage_path": "./data",
+                "storage_provider": "local",
+                "event_bus_provider": "local",
+                "container_runtime": "docker",
+                "serverless_provider": "local",
+                "log_level": "INFO",
+                "auth_enabled": True,
+                "encryption_enabled": True
+            },
+            "azure": {
+                "region": "eastus",
+                "resource_group": None,
+                "storage_connection_string": None,
+                "service_bus_connection_string": None
+            },
+            "aws": {
+                "region": "us-east-1",
+                "account_id": None
+            },
+            "gcp": {
+                "project_id": None,
+                "region": "us-central1"
             }
         }
 
