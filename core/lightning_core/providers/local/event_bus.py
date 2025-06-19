@@ -18,6 +18,8 @@ from lightning_core.abstractions.event_bus import (
     EventHandler,
     EventMessage,
     EventSubscription,
+    DeduplicationConfig,
+    ReplayConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,11 @@ class LocalEventBus(EventBus):
     """In-memory event bus implementation using asyncio."""
 
     def __init__(self, **kwargs: Any):
+        # Initialize parent with dedup and replay configs
+        dedup_config = kwargs.pop("dedup_config", None)
+        replay_config = kwargs.pop("replay_config", None)
+        super().__init__(dedup_config, replay_config)
+        
         self._topics: Dict[str, asyncio.Queue] = {}
         self._subscriptions: Dict[str, EventSubscription] = {}
         self._handlers: Dict[str, List[EventSubscription]] = defaultdict(list)
@@ -40,6 +47,10 @@ class LocalEventBus(EventBus):
         self._max_history_size = kwargs.get("max_history_size", 10000)
         self._track_orphaned = kwargs.get("track_orphaned", True)
         self._default_ttl_seconds = kwargs.get("default_ttl_seconds", 3600)  # 1 hour default
+        
+        # Deduplication cache: fingerprint -> (event_id, timestamp)
+        self._dedup_cache: Dict[str, tuple[str, datetime]] = {}
+        self._dedup_lock = asyncio.Lock()
 
     async def publish(self, event: EventMessage, topic: Optional[str] = None) -> None:
         """Publish an event to the event bus."""
@@ -51,6 +62,38 @@ class LocalEventBus(EventBus):
         # Apply default TTL if not set
         if event.ttl_seconds is None:
             event.ttl_seconds = self._default_ttl_seconds
+
+        # Check for duplicate if deduplication is enabled
+        if self.dedup_config.enabled:
+            fingerprint = event.get_fingerprint()
+            
+            async with self._dedup_lock:
+                # Check if we've seen this event before
+                if fingerprint in self._dedup_cache:
+                    cached_id, cached_time = self._dedup_cache[fingerprint]
+                    age_seconds = (datetime.utcnow() - cached_time).total_seconds()
+                    
+                    # If within deduplication window, skip
+                    if age_seconds < self.dedup_config.window_seconds:
+                        logger.info(
+                            f"Duplicate event detected and skipped: {event.event_type} "
+                            f"(fingerprint: {fingerprint[:8]}..., original: {cached_id})"
+                        )
+                        return
+                
+                # Add to dedup cache
+                self._dedup_cache[fingerprint] = (event.id, datetime.utcnow())
+                
+                # Maintain cache size
+                if len(self._dedup_cache) > self.dedup_config.max_cache_size:
+                    # Remove oldest entries
+                    sorted_entries = sorted(
+                        self._dedup_cache.items(),
+                        key=lambda x: x[1][1]  # Sort by timestamp
+                    )
+                    to_remove = len(self._dedup_cache) - self.dedup_config.max_cache_size
+                    for fp, _ in sorted_entries[:to_remove]:
+                        del self._dedup_cache[fp]
 
         # Put event in the queue
         await self._topics[topic].put(event)
@@ -218,12 +261,21 @@ class LocalEventBus(EventBus):
             logger.warning(f"Expired event dropped: {event.event_type} (ID: {event.id})")
             return
 
-        # Track event in history
-        if self._track_orphaned:
+        # Track event in history for replay if enabled
+        if self.replay_config.enabled:
             self._event_history.append((event, topic, datetime.utcnow()))
+            
             # Maintain history size limit
-            if len(self._event_history) > self._max_history_size:
-                self._event_history = self._event_history[-self._max_history_size:]
+            if len(self._event_history) > self.replay_config.max_history_size:
+                # Remove oldest entries
+                self._event_history = self._event_history[-self.replay_config.max_history_size:]
+            
+            # Clean up old events based on retention
+            cutoff_time = datetime.utcnow() - timedelta(seconds=self.replay_config.retention_seconds)
+            self._event_history = [
+                (e, t, ts) for e, t, ts in self._event_history
+                if ts > cutoff_time
+            ]
 
         # Find matching subscriptions
         matching_subscriptions = []
@@ -407,6 +459,23 @@ class LocalEventBus(EventBus):
                 
                 if history_removed > 0:
                     logger.debug(f"Cleaned up {history_removed} expired events from history")
+                
+                # Clean up old deduplication cache entries
+                if self.dedup_config.enabled:
+                    async with self._dedup_lock:
+                        cutoff_time = datetime.utcnow() - timedelta(seconds=self.dedup_config.window_seconds)
+                        original_dedup = len(self._dedup_cache)
+                        
+                        # Remove entries older than dedup window
+                        self._dedup_cache = {
+                            fp: (event_id, ts)
+                            for fp, (event_id, ts) in self._dedup_cache.items()
+                            if ts > cutoff_time
+                        }
+                        
+                        dedup_removed = original_dedup - len(self._dedup_cache)
+                        if dedup_removed > 0:
+                            logger.debug(f"Cleaned up {dedup_removed} expired deduplication entries")
                     
             except asyncio.CancelledError:
                 break
@@ -414,3 +483,69 @@ class LocalEventBus(EventBus):
                 logger.error(f"Error in cleanup task: {e}")
                 
         logger.info("Cleanup task stopped")
+
+    async def replay_events(
+        self,
+        start_time: datetime,
+        end_time: Optional[datetime] = None,
+        event_types: Optional[List[str]] = None,
+        topic: Optional[str] = None,
+    ) -> List[EventMessage]:
+        """Replay events from history within a time range."""
+        if not self.replay_config.enabled:
+            logger.warning("Event replay is disabled")
+            return []
+        
+        end_time = end_time or datetime.utcnow()
+        replayed_events = []
+        
+        for event, event_topic, timestamp in self._event_history:
+            # Check time range
+            if timestamp < start_time or timestamp > end_time:
+                continue
+                
+            # Check topic filter
+            if topic and event_topic != topic:
+                continue
+                
+            # Check event type filter
+            if event_types and event.event_type not in event_types:
+                continue
+                
+            replayed_events.append(event)
+        
+        logger.info(
+            f"Replaying {len(replayed_events)} events from {start_time} to {end_time}"
+        )
+        
+        return replayed_events
+
+    async def get_event_history(
+        self,
+        event_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[EventMessage]:
+        """Get event history by ID or correlation ID."""
+        if not self.replay_config.enabled:
+            logger.warning("Event replay is disabled")
+            return []
+        
+        history = []
+        
+        for event, _, _ in reversed(self._event_history):
+            # Check event ID
+            if event_id and event.id == event_id:
+                history.append(event)
+                if not correlation_id:  # If only looking for specific event
+                    break
+                    
+            # Check correlation ID
+            if correlation_id and event.correlation_id == correlation_id:
+                history.append(event)
+                
+            # Check limit
+            if limit and len(history) >= limit:
+                break
+        
+        return history

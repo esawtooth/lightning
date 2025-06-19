@@ -1,4 +1,4 @@
-# Integrated App UI Dockerfile
+# Unified UI Dockerfile (Gateway + Auth + Integrated Apps)
 FROM python:3.10-slim
 
 WORKDIR /app
@@ -10,20 +10,26 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY ui/integrated_app/requirements.txt .
+# Copy requirements from both apps
+COPY ui/chat_client/requirements.txt chat_client_requirements.txt
+COPY ui/integrated_app/requirements.txt integrated_app_requirements.txt
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -U pip setuptools wheel
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r chat_client_requirements.txt
+RUN pip install --no-cache-dir -r integrated_app_requirements.txt
 
-# Copy application code and common module
-COPY ui/integrated_app/ .
-# Ensure common directory is properly copied
-RUN if [ ! -d "common" ]; then echo "ERROR: common directory not found!"; exit 1; fi
+# Copy all application code
+COPY ui/chat_client/*.py .
+COPY ui/chat_client/static ./static
+COPY ui/chat_client/templates ./templates
+COPY ui/integrated_app/ ./integrated_app
+
+# Ensure common directory is properly copied within integrated_app
+RUN if [ ! -d "integrated_app/common" ]; then echo "ERROR: integrated_app/common directory not found!"; exit 1; fi
 
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["python", "app.py"]
+# Run the gateway application which mounts both auth and integrated apps
+CMD ["uvicorn", "gateway_app:app", "--host", "0.0.0.0", "--port", "8000"]

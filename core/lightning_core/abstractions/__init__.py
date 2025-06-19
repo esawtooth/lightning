@@ -7,8 +7,24 @@ enabling both local and cloud implementations.
 
 from .configuration import ConfigProvider, ExecutionMode, RuntimeConfig
 from .container_runtime import Container, ContainerConfig, ContainerRuntime, ResourceRequirements
-from .event_bus import EventBus, EventHandler, EventMessage
+from .event_bus import (
+    EventBus,
+    EventHandler,
+    EventMessage,
+    DeduplicationConfig,
+    ReplayConfig,
+)
 from .factory import ProviderFactory, get_provider_factory, set_provider_factory
+from .health import (
+    HealthCheckable,
+    HealthCheckResult,
+    HealthStatus,
+    CircuitBreaker,
+    CircuitBreakerConfig,
+    CircuitBreakerOpenError,
+    CircuitState,
+    HealthMonitor,
+)
 from .serverless import FunctionConfig, FunctionHandler, ServerlessRuntime
 from .storage import Document, DocumentStore, StorageProvider
 
@@ -21,6 +37,8 @@ __all__ = [
     "EventBus",
     "EventMessage",
     "EventHandler",
+    "DeduplicationConfig",
+    "ReplayConfig",
     # Container Runtime
     "ContainerRuntime",
     "Container",
@@ -38,4 +56,13 @@ __all__ = [
     "ProviderFactory",
     "get_provider_factory",
     "set_provider_factory",
+    # Health
+    "HealthCheckable",
+    "HealthCheckResult",
+    "HealthStatus",
+    "CircuitBreaker",
+    "CircuitBreakerConfig",
+    "CircuitBreakerOpenError",
+    "CircuitState",
+    "HealthMonitor",
 ]

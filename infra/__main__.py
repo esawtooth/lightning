@@ -49,7 +49,6 @@ domain            = cfg.get("domain")   or "vextir.com"
 worker_image      = cfg.get("workerImage")  or f"vextiracr{stack_suffix}.azurecr.io/lightning-worker:latest"
 conseil_image     = cfg.get("conseilImage") or f"vextiracr{stack_suffix}.azurecr.io/conseil-agent:latest"
 voice_ws_image    = cfg.get("voiceWsImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-ws:latest"
-voice_webapp_image = cfg.get("voiceWebappImage") or f"vextiracr{stack_suffix}.azurecr.io/voice-webapp:latest"
 # Image for the context hub container.
 hub_image_cfg     = cfg.get("hubImage") or f"vextiracr{stack_suffix}.azurecr.io/context-hub:latest"
 ui_image          = cfg.get("uiImage") or f"vextiracr{stack_suffix}.azurecr.io/integrated-ui:latest"

@@ -132,22 +132,57 @@ class ModelRegistry:
 
     def _initialize_providers(self):
         """Initialize LLM providers"""
-        # Initialize OpenAI provider if API key is available
-        import os
-        if os.getenv("OPENAI_API_KEY"):
-            openai_config = LLMProviderConfig(
-                provider_type="openai",
-                api_key=os.getenv("OPENAI_API_KEY"),
-            )
-            self.providers["openai"] = OpenAIProvider(openai_config)
+        # Initialize providers asynchronously when first needed
+        # This allows the key manager to be properly initialized
+        self._providers_initialized = False
+        
+    async def _ensure_providers_initialized(self):
+        """Ensure providers are initialized with proper API keys."""
+        if self._providers_initialized:
+            return
             
-        # Initialize OpenRouter provider if API key is available
-        if os.getenv("OPENROUTER_API_KEY"):
-            openrouter_config = LLMProviderConfig(
-                provider_type="openrouter",
-                api_key=os.getenv("OPENROUTER_API_KEY"),
-            )
-            self.providers["openrouter"] = OpenRouterProvider(openrouter_config)
+        try:
+            from ..security.key_manager import get_key_manager
+            key_manager = await get_key_manager()
+            
+            # Initialize OpenAI provider
+            openai_key = await key_manager.get_key("openai")
+            if openai_key:
+                openai_config = LLMProviderConfig(
+                    provider_type="openai",
+                    api_key=openai_key,
+                )
+                self.providers["openai"] = OpenAIProvider(openai_config)
+                
+            # Initialize OpenRouter provider
+            openrouter_key = await key_manager.get_key("openrouter")
+            if openrouter_key:
+                openrouter_config = LLMProviderConfig(
+                    provider_type="openrouter",
+                    api_key=openrouter_key,
+                )
+                self.providers["openrouter"] = OpenRouterProvider(openrouter_config)
+                
+            self._providers_initialized = True
+            
+        except ImportError:
+            # Fallback to environment variables if key manager not available
+            import os
+            if os.getenv("OPENAI_API_KEY"):
+                openai_config = LLMProviderConfig(
+                    provider_type="openai",
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                )
+                self.providers["openai"] = OpenAIProvider(openai_config)
+                
+            if os.getenv("OPENROUTER_API_KEY"):
+                openrouter_config = LLMProviderConfig(
+                    provider_type="openrouter",
+                    api_key=os.getenv("OPENROUTER_API_KEY"),
+                )
+                self.providers["openrouter"] = OpenRouterProvider(openrouter_config)
+                
+            self._providers_initialized = True
 
     def register_provider(self, provider_id: str, provider: LLMProvider):
         """Register an LLM provider"""
@@ -211,6 +246,9 @@ class ModelRegistry:
         **kwargs
     ) -> CompletionResponse:
         """Complete a request using the specified model"""
+        # Ensure providers are initialized
+        await self._ensure_providers_initialized()
+        
         model = self.get_model(model_id)
         if not model:
             raise ValueError(f"Model {model_id} not found")
@@ -257,6 +295,9 @@ class ModelRegistry:
         **kwargs
     ) -> AsyncIterator[StreamResponse]:
         """Stream a completion using the specified model"""
+        # Ensure providers are initialized
+        await self._ensure_providers_initialized()
+        
         model = self.get_model(model_id)
         if not model:
             raise ValueError(f"Model {model_id} not found")

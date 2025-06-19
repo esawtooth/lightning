@@ -3,7 +3,7 @@
 import asyncio
 import json
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Deque
 import logging

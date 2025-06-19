@@ -5,13 +5,17 @@ Provides abstract base classes for event-driven communication,
 supporting both cloud (e.g., Azure Service Bus) and local implementations.
 """
 
+import hashlib
 import json
+import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Awaitable, Callable, Dict, List, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Optional, Set
+
+from .health import HealthCheckable, HealthCheckResult, HealthStatus
 
 
 class EventPriority(Enum):
@@ -36,6 +40,8 @@ class EventMessage:
     correlation_id: Optional[str] = None
     reply_to: Optional[str] = None
     ttl_seconds: Optional[int] = None  # Default TTL can be set per provider
+    idempotency_key: Optional[str] = None  # For explicit deduplication
+    _fingerprint: Optional[str] = field(default=None, init=False, repr=False)
 
     def is_expired(self) -> bool:
         """Check if the event has expired based on TTL."""
@@ -44,6 +50,29 @@ class EventMessage:
         
         age_seconds = (datetime.utcnow() - self.timestamp).total_seconds()
         return age_seconds > self.ttl_seconds
+
+    def get_fingerprint(self) -> str:
+        """Generate a fingerprint for deduplication."""
+        if self._fingerprint:
+            return self._fingerprint
+        
+        # Use idempotency key if provided
+        if self.idempotency_key:
+            self._fingerprint = self.idempotency_key
+            return self._fingerprint
+        
+        # Generate fingerprint from event content
+        fingerprint_data = {
+            "event_type": self.event_type,
+            "data": self.data,
+            "correlation_id": self.correlation_id,
+        }
+        
+        # Create deterministic JSON string
+        json_str = json.dumps(fingerprint_data, sort_keys=True, default=str)
+        self._fingerprint = hashlib.sha256(json_str.encode()).hexdigest()
+        
+        return self._fingerprint
 
     def to_json(self) -> str:
         """Convert event to JSON string."""
@@ -103,8 +132,30 @@ class EventSubscription:
         self.filter_expression = filter_expression or {}
 
 
-class EventBus(ABC):
+@dataclass
+class DeduplicationConfig:
+    """Configuration for event deduplication."""
+    enabled: bool = True
+    window_seconds: int = 300  # 5 minutes default
+    max_cache_size: int = 10000
+    
+    
+@dataclass 
+class ReplayConfig:
+    """Configuration for event replay."""
+    enabled: bool = True
+    max_history_size: int = 100000
+    retention_seconds: int = 86400  # 24 hours default
+
+
+class EventBus(ABC, HealthCheckable):
     """Abstract base class for event bus implementations."""
+    
+    def __init__(self, dedup_config: Optional[DeduplicationConfig] = None,
+                 replay_config: Optional[ReplayConfig] = None):
+        """Initialize event bus with optional deduplication and replay configs."""
+        self.dedup_config = dedup_config or DeduplicationConfig()
+        self.replay_config = replay_config or ReplayConfig()
 
     @abstractmethod
     async def publish(self, event: EventMessage, topic: Optional[str] = None) -> None:
@@ -221,3 +272,69 @@ class EventBus(ABC):
         """
         # Default implementation - providers should override
         return 0
+
+    @abstractmethod
+    async def replay_events(
+        self,
+        start_time: datetime,
+        end_time: Optional[datetime] = None,
+        event_types: Optional[List[str]] = None,
+        topic: Optional[str] = None,
+    ) -> List[EventMessage]:
+        """
+        Replay events from history within a time range.
+
+        Args:
+            start_time: Start of the replay window
+            end_time: End of the replay window (None = now)
+            event_types: Optional list of event types to replay
+            topic: Optional topic to filter by
+
+        Returns:
+            List of events to replay
+        """
+        pass
+
+    @abstractmethod
+    async def get_event_history(
+        self,
+        event_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[EventMessage]:
+        """
+        Get event history by ID or correlation ID.
+
+        Args:
+            event_id: Optional specific event ID
+            correlation_id: Optional correlation ID to track related events
+            limit: Maximum number of events to return
+
+        Returns:
+            List of historical events
+        """
+        pass
+    
+    async def health_check(self) -> HealthCheckResult:
+        """
+        Default health check implementation for event bus providers.
+        Providers should override this for specific health checks.
+        """
+        start_time = time.time()
+        try:
+            # Try to check if default topic exists
+            exists = await self.topic_exists("default")
+            latency_ms = (time.time() - start_time) * 1000
+            
+            return HealthCheckResult(
+                status=HealthStatus.HEALTHY if exists else HealthStatus.DEGRADED,
+                latency_ms=latency_ms,
+                details={"default_topic_exists": exists}
+            )
+        except Exception as e:
+            latency_ms = (time.time() - start_time) * 1000
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                latency_ms=latency_ms,
+                error=str(e)
+            )

@@ -74,9 +74,6 @@ jobs:
           - image_tag: voice-ws
             context: ./agents/voice-agent/websocket-server
             file: ./agents/voice-agent/websocket-server/Dockerfile
-          - image_tag: voice-webapp
-            context: ./agents/voice-agent/webapp
-            file: ./agents/voice-agent/webapp/Dockerfile
           - image_tag: context-hub
             context: ./context-hub
             file: ./context-hub/Dockerfile
@@ -165,7 +162,6 @@ jobs:
           pulumi config set conseilImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           pulumi config set uiImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"  
           pulumi config set voiceWsImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
-          pulumi config set voiceWebappImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           pulumi config set hubImage "mcr.microsoft.com/azuredocs/aci-helloworld:latest"
           
           echo "configured=true" >> $GITHUB_OUTPUT
@@ -227,7 +223,6 @@ jobs:
           pulumi config set conseilImage "vextiracrdev.azurecr.io/conseil-agent:${{ github.sha }}"
           pulumi config set uiImage "vextiracrdev.azurecr.io/integrated-ui:${{ github.sha }}"
           pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:${{ github.sha }}"
-          pulumi config set voiceWebappImage "vextiracrdev.azurecr.io/voice-webapp:${{ github.sha }}"
           pulumi config set hubImage "vextiracrdev.azurecr.io/context-hub:${{ github.sha }}"
 
           # Deploy with real images

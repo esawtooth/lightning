@@ -21,7 +21,9 @@ from .abstractions import (
     RuntimeConfig,
     ServerlessRuntime,
     StorageProvider,
+    CircuitBreakerConfig,
 )
+from .abstractions.resilient_factory import ResilientProviderFactory
 from .mcp import (
     MCPRegistry,
     MCPSandbox,
@@ -46,14 +48,23 @@ class LightningRuntime:
     - Serverless function execution
     """
 
-    def __init__(self, config: Optional[RuntimeConfig] = None):
+    def __init__(self, config: Optional[RuntimeConfig] = None, use_resilient_providers: bool = True):
         """
         Initialize the Lightning runtime.
 
         Args:
             config: Runtime configuration. If not provided, will load from environment.
+            use_resilient_providers: Whether to use resilient providers with health checks
         """
         self.config = config or RuntimeConfig.from_env()
+        self.use_resilient_providers = use_resilient_providers
+
+        # Provider factory
+        if use_resilient_providers:
+            self._factory = ResilientProviderFactory()
+            self._setup_resilient_factory()
+        else:
+            self._factory = ProviderFactory
 
         # Provider instances
         self._storage: Optional[StorageProvider] = None
@@ -78,25 +89,57 @@ class LightningRuntime:
 
         logger.info(f"Lightning Runtime initialized in {self.config.mode.value} mode")
 
+    def _setup_resilient_factory(self):
+        """Configure the resilient factory with circuit breakers."""
+        # Configure storage circuit breaker
+        self._factory.set_circuit_config(
+            "storage",
+            CircuitBreakerConfig(
+                failure_threshold=3,
+                success_threshold=2,
+                timeout_seconds=60
+            )
+        )
+        
+        # Configure event bus circuit breaker
+        self._factory.set_circuit_config(
+            "event_bus",
+            CircuitBreakerConfig(
+                failure_threshold=5,
+                success_threshold=3,
+                timeout_seconds=30
+            )
+        )
+        
+        # Configure container runtime circuit breaker
+        self._factory.set_circuit_config(
+            "container",
+            CircuitBreakerConfig(
+                failure_threshold=2,
+                success_threshold=1,
+                timeout_seconds=120
+            )
+        )
+
     @property
     def storage(self) -> StorageProvider:
         """Get the storage provider instance."""
         if not self._storage:
-            self._storage = ProviderFactory.create_storage_provider(self.config)
+            self._storage = self._factory.create_storage_provider(self.config)
         return self._storage
 
     @property
     def event_bus(self) -> EventBus:
         """Get the event bus instance."""
         if not self._event_bus:
-            self._event_bus = ProviderFactory.create_event_bus(self.config)
+            self._event_bus = self._factory.create_event_bus(self.config)
         return self._event_bus
 
     @property
     def container_runtime(self) -> ContainerRuntime:
         """Get the container runtime instance."""
         if not self._container_runtime:
-            self._container_runtime = ProviderFactory.create_container_runtime(
+            self._container_runtime = self._factory.create_container_runtime(
                 self.config
             )
         return self._container_runtime
@@ -105,7 +148,7 @@ class LightningRuntime:
     def serverless(self) -> ServerlessRuntime:
         """Get the serverless runtime instance."""
         if not self._serverless_runtime:
-            self._serverless_runtime = ProviderFactory.create_serverless_runtime(
+            self._serverless_runtime = self._factory.create_serverless_runtime(
                 self.config
             )
         return self._serverless_runtime
@@ -159,6 +202,11 @@ class LightningRuntime:
             return
 
         logger.info("Initializing Lightning Runtime services...")
+
+        # Start health monitoring if using resilient providers
+        if self.use_resilient_providers and isinstance(self._factory, ResilientProviderFactory):
+            await self._factory.start_health_monitoring()
+            logger.info("Started health monitoring for providers")
 
         # Initialize storage
         if self._storage:
@@ -235,6 +283,11 @@ class LightningRuntime:
         if self._storage:
             await self._storage.close()
 
+        # Stop health monitoring if using resilient providers
+        if self.use_resilient_providers and isinstance(self._factory, ResilientProviderFactory):
+            await self._factory.stop_health_monitoring()
+            logger.info("Stopped health monitoring")
+
         self._initialized = False
         logger.info("Lightning Runtime services shut down")
 
@@ -276,6 +329,20 @@ class LightningRuntime:
             ExecutionMode.AWS,
             ExecutionMode.GCP,
         ]
+    
+    async def get_health_status(self) -> Dict[str, Any]:
+        """Get health status of all providers."""
+        if not self.use_resilient_providers or not isinstance(self._factory, ResilientProviderFactory):
+            return {"status": "health monitoring not enabled"}
+        
+        return self._factory.get_all_health()
+    
+    async def check_provider_health(self, provider_name: str) -> Dict[str, Any]:
+        """Check health of a specific provider."""
+        if not self.use_resilient_providers or not isinstance(self._factory, ResilientProviderFactory):
+            return {"status": "health monitoring not enabled"}
+        
+        return self._factory.get_provider_health(provider_name)
 
 
 # Global runtime instance
