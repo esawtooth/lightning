@@ -233,7 +233,7 @@ async def auth_callback(request: Request):
 @app.get("/logout")
 async def logout(request: Request):
     request.session.clear()
-    resp = RedirectResponse(url="/")
+    resp = RedirectResponse(url="/login")
     resp.delete_cookie("auth_token")
     return resp
 

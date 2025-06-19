@@ -67,7 +67,8 @@ def _resolve_gateway_url(request: Request) -> str:
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
     host = host.split(":")[0]
-    return f"{scheme}://{host}"
+    # Default to /auth path when AUTH_GATEWAY_URL is not set
+    return f"{scheme}://{host}/auth"
 
 
 @app.middleware("http")
@@ -699,9 +700,13 @@ async def trigger_synthesis(summary_key: str, token: str = Depends(_get_token)):
 
 @app.get("/logout")
 async def logout(request: Request):
-    """Logout endpoint - clears session and redirects to home."""
+    """Logout endpoint - clears session and redirects to auth gateway."""
     request.session.clear()
-    resp = RedirectResponse(url="/")
+    
+    # Redirect to auth gateway logout
+    gateway_base = _resolve_gateway_url(request)
+    logout_url = f"{gateway_base}/logout"
+    resp = RedirectResponse(url=logout_url)
     resp.delete_cookie("auth_token")
     return resp
 
