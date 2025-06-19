@@ -5,11 +5,14 @@ Provides abstract base classes for storage operations,
 supporting both cloud (e.g., Cosmos DB) and local implementations.
 """
 
+import time
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, Generic, List, Optional, TypeVar
+
+from .health import HealthCheckable, HealthCheckResult, HealthStatus
 
 
 @dataclass
@@ -95,7 +98,7 @@ class DocumentStore(ABC, Generic[T]):
         pass
 
 
-class StorageProvider(ABC):
+class StorageProvider(ABC, HealthCheckable):
     """Abstract base class for storage provider implementations."""
 
     @abstractmethod
@@ -131,3 +134,27 @@ class StorageProvider(ABC):
     async def container_exists(self, container_name: str) -> bool:
         """Check if a container/collection exists."""
         pass
+    
+    async def health_check(self) -> HealthCheckResult:
+        """
+        Default health check implementation for storage providers.
+        Providers should override this for specific health checks.
+        """
+        start_time = time.time()
+        try:
+            # Try to check if a system container exists as a basic health check
+            await self.container_exists("_health_check")
+            latency_ms = (time.time() - start_time) * 1000
+            
+            return HealthCheckResult(
+                status=HealthStatus.HEALTHY,
+                latency_ms=latency_ms,
+                details={"check_type": "container_exists"}
+            )
+        except Exception as e:
+            latency_ms = (time.time() - start_time) * 1000
+            return HealthCheckResult(
+                status=HealthStatus.UNHEALTHY,
+                latency_ms=latency_ms,
+                error=str(e)
+            )

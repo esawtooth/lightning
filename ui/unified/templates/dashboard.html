@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ settings.app_name }}{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Active Tasks -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Active Tasks</p>
+                    <p class="text-3xl font-bold text-gray-900">24</p>
+                    <p class="text-sm text-green-600 mt-1">
+                        <i class="fas fa-arrow-up"></i> 12% from yesterday
+                    </p>
+                </div>
+                <div class="bg-blue-100 p-3 rounded-lg">
+                    <i class="fas fa-tasks text-2xl text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Events Today -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Events Today</p>
+                    <p class="text-3xl font-bold text-gray-900">1,429</p>
+                    <p class="text-sm text-green-600 mt-1">
+                        <i class="fas fa-arrow-up"></i> 8% from yesterday
+                    </p>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-stream text-2xl text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- System Health -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">System Health</p>
+                    <p class="text-3xl font-bold text-gray-900">98.5%</p>
+                    <p class="text-sm text-gray-600 mt-1">
+                        All systems operational
+                    </p>
+                </div>
+                <div class="bg-green-100 p-3 rounded-lg">
+                    <i class="fas fa-heart text-2xl text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Active Users -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Active Users</p>
+                    <p class="text-3xl font-bold text-gray-900">{{ user.username if user else 'Guest' }}</p>
+                    <p class="text-sm text-gray-600 mt-1">
+                        Online now
+                    </p>
+                </div>
+                <div class="bg-purple-100 p-3 rounded-lg">
+                    <i class="fas fa-users text-2xl text-purple-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Actions -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4">Quick Actions</h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <button class="p-4 bg-blue-50 rounded-lg hover:bg-blue-100 transition text-center">
+                <i class="fas fa-plus-circle text-2xl text-blue-600 mb-2"></i>
+                <p class="text-sm font-medium">New Task</p>
+            </button>
+            <button class="p-4 bg-green-50 rounded-lg hover:bg-green-100 transition text-center">
+                <i class="fas fa-robot text-2xl text-green-600 mb-2"></i>
+                <p class="text-sm font-medium">Start Chat</p>
+            </button>
+            <button class="p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition text-center">
+                <i class="fas fa-calendar-plus text-2xl text-purple-600 mb-2"></i>
+                <p class="text-sm font-medium">Schedule Event</p>
+            </button>
+            <button class="p-4 bg-orange-50 rounded-lg hover:bg-orange-100 transition text-center">
+                <i class="fas fa-file-alt text-2xl text-orange-600 mb-2"></i>
+                <p class="text-sm font-medium">View Reports</p>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Activity Feed & Charts -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recent Activity -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">Recent Activity</h2>
+            <div class="space-y-4">
+                <div class="flex items-start space-x-3">
+                    <div class="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">Task #1234 completed</p>
+                        <p class="text-xs text-gray-500">2 minutes ago</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3">
+                    <div class="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">New workflow deployed</p>
+                        <p class="text-xs text-gray-500">15 minutes ago</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3">
+                    <div class="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">System maintenance scheduled</p>
+                        <p class="text-xs text-gray-500">1 hour ago</p>
+                    </div>
+                </div>
+                <div class="flex items-start space-x-3">
+                    <div class="w-2 h-2 bg-purple-500 rounded-full mt-2"></div>
+                    <div class="flex-1">
+                        <p class="text-sm font-medium">Chat session started</p>
+                        <p class="text-xs text-gray-500">2 hours ago</p>
+                    </div>
+                </div>
+            </div>
+            <button class="mt-4 text-sm text-blue-600 hover:text-blue-800">View all activity →</button>
+        </div>
+        
+        <!-- Performance Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-lg font-semibold mb-4">System Performance</h2>
+            <div class="h-64 flex items-center justify-center bg-gray-50 rounded">
+                <p class="text-gray-500">Chart placeholder - integrate Chart.js</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Provider Status -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold mb-4">Provider Status</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-medium">Storage Provider</h3>
+                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Healthy</span>
+                </div>
+                <p class="text-sm text-gray-600">Azure Cosmos DB</p>
+                <p class="text-xs text-gray-500 mt-1">Latency: 12ms</p>
+            </div>
+            <div class="border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-medium">Event Bus</h3>
+                    <span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Healthy</span>
+                </div>
+                <p class="text-sm text-gray-600">Azure Service Bus</p>
+                <p class="text-xs text-gray-500 mt-1">Queue depth: 42</p>
+            </div>
+            <div class="border rounded-lg p-4">
+                <div class="flex items-center justify-between mb-2">
+                    <h3 class="font-medium">Container Runtime</h3>
+                    <span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Degraded</span>
+                </div>
+                <p class="text-sm text-gray-600">Docker</p>
+                <p class="text-xs text-gray-500 mt-1">1 container unhealthy</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Refresh dashboard data periodically
+    setInterval(async () => {
+        try {
+            const response = await fetch('/api/dashboard/stats');
+            const data = await response.json();
+            // Update dashboard with new data
+            console.log('Dashboard data updated:', data);
+        } catch (error) {
+            console.error('Failed to refresh dashboard:', error);
+        }
+    }, 30000); // Every 30 seconds
+</script>
+{% endblock %}

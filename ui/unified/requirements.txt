@@ -1,0 +1,50 @@
+# Lightning Unified UI Requirements
+
+# Core Framework
+fastapi==0.115.0
+uvicorn[standard]==0.34.0
+python-multipart==0.0.17
+
+# Authentication & Security
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+authlib==1.3.2
+itsdangerous==2.2.0
+
+# Templates & Static Files
+jinja2==3.1.4
+aiofiles==24.1.0
+
+# Session Management
+starlette==0.41.3
+
+# API Clients
+httpx==0.28.0
+aiohttp==3.11.10
+
+# WebSocket Support
+websockets==14.1
+python-socketio==5.12.0
+
+# Database & Storage
+redis==5.2.1
+motor==3.7.0  # Async MongoDB driver
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.10.3
+pydantic-settings==2.6.1
+
+# Monitoring & Logging
+structlog==24.4.0
+prometheus-client==0.21.0
+
+# Development & Testing
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-cov==6.0.0
+httpx-ws==0.6.2  # WebSocket testing
+faker==33.1.0
+
+# Optional: Production Server
+gunicorn==23.0.0

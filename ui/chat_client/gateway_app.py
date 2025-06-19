@@ -4,8 +4,15 @@ from fastapi.responses import RedirectResponse
 from auth_app import app as auth_app
 import sys, os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "integrated_app"))
-from app import app as integrated_ui_app
+# Add integrated_app to Python path
+integrated_app_path = os.path.join(os.path.dirname(__file__), "integrated_app")
+if os.path.exists(integrated_app_path):
+    sys.path.insert(0, integrated_app_path)
+    from app import app as integrated_ui_app
+else:
+    # Fallback for development
+    sys.path.append(os.path.join(os.path.dirname(__file__), "..", "integrated_app"))
+    from app import app as integrated_ui_app
 
 app = FastAPI(title="Vextir Chat Gateway")
 

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ settings.app_name }}{% endblock %}</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Custom Styles -->
+    <style>
+        .sidebar-collapsed {
+            width: 4rem;
+        }
+        .sidebar-expanded {
+            width: 16rem;
+        }
+        .sidebar-transition {
+            transition: width 0.3s ease-in-out;
+        }
+    </style>
+    
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <nav id="sidebar" class="sidebar-expanded sidebar-transition bg-gray-900 text-white flex flex-col">
+            <!-- Logo/Header -->
+            <div class="p-4 border-b border-gray-800">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-bolt text-2xl text-blue-400"></i>
+                        <span class="sidebar-text font-semibold text-lg">Lightning AI</span>
+                    </div>
+                    <button id="sidebar-toggle" class="text-gray-400 hover:text-white">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- User Info -->
+            {% if user %}
+            <div class="p-4 border-b border-gray-800">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <div class="sidebar-text">
+                        <div class="text-sm font-medium">{{ user.username }}</div>
+                        <div class="text-xs text-gray-400">{{ user.role }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Navigation -->
+            <nav class="flex-1 p-4">
+                <ul class="space-y-2">
+                    <li>
+                        <a href="/" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-dashboard w-5"></i>
+                            <span class="sidebar-text">Dashboard</span>
+                        </a>
+                    </li>
+                    {% if settings.enable_chat %}
+                    <li>
+                        <a href="/chat" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/chat' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-comments w-5"></i>
+                            <span class="sidebar-text">AI Chat</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if settings.enable_tasks %}
+                    <li>
+                        <a href="/tasks" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/tasks' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-tasks w-5"></i>
+                            <span class="sidebar-text">Tasks</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li>
+                        <a href="/events" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/events' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-stream w-5"></i>
+                            <span class="sidebar-text">Events</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/plans" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/plans' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-project-diagram w-5"></i>
+                            <span class="sidebar-text">Workflows</span>
+                        </a>
+                    </li>
+                    {% if settings.enable_notifications %}
+                    <li>
+                        <a href="/notifications" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800 {% if request.url.path == '/notifications' %}bg-gray-800{% endif %}">
+                            <i class="fas fa-bell w-5"></i>
+                            <span class="sidebar-text">Notifications</span>
+                            <span class="sidebar-text ml-auto bg-red-500 text-xs px-2 py-1 rounded-full">3</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+            
+            <!-- Bottom Menu -->
+            <div class="p-4 border-t border-gray-800">
+                <ul class="space-y-2">
+                    <li>
+                        <a href="/settings" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800">
+                            <i class="fas fa-cog w-5"></i>
+                            <span class="sidebar-text">Settings</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/auth/logout" class="nav-link flex items-center space-x-3 p-3 rounded hover:bg-gray-800">
+                            <i class="fas fa-sign-out-alt w-5"></i>
+                            <span class="sidebar-text">Logout</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        
+        <!-- Main Content -->
+        <main class="flex-1 overflow-auto">
+            <!-- Top Bar -->
+            <header class="bg-white shadow-sm border-b">
+                <div class="px-6 py-4 flex items-center justify-between">
+                    <h1 class="text-2xl font-semibold text-gray-800">
+                        {% block page_title %}Dashboard{% endblock %}
+                    </h1>
+                    <div class="flex items-center space-x-4">
+                        <!-- Search -->
+                        <div class="relative">
+                            <input type="text" 
+                                   placeholder="Search..." 
+                                   class="pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:border-blue-500">
+                            <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                        </div>
+                        
+                        <!-- Notifications -->
+                        <button class="relative p-2 text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-bell text-xl"></i>
+                            <span class="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+                        
+                        <!-- Help -->
+                        <button class="p-2 text-gray-600 hover:text-gray-800">
+                            <i class="fas fa-question-circle text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            </header>
+            
+            <!-- Page Content -->
+            <div class="p-6">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    
+    <!-- Global Scripts -->
+    <script>
+        // Sidebar toggle
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebarTexts = document.querySelectorAll('.sidebar-text');
+        
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            
+            // Toggle text visibility
+            sidebarTexts.forEach(text => {
+                if (sidebar.classList.contains('sidebar-collapsed')) {
+                    text.classList.add('hidden');
+                } else {
+                    setTimeout(() => text.classList.remove('hidden'), 100);
+                }
+            });
+        });
+        
+        // WebSocket connection (if needed)
+        {% if ws_url %}
+        const ws = new WebSocket('{{ ws_url }}');
+        
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+        };
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleWebSocketMessage(data);
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error:', error);
+        };
+        
+        function handleWebSocketMessage(data) {
+            // Handle different message types
+            switch(data.type) {
+                case 'notification':
+                    showNotification(data.payload);
+                    break;
+                case 'task_update':
+                    updateTaskStatus(data.payload);
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        }
+        {% endif %}
+    </script>
+    
+    {% block scripts %}{% endblock %}
+</body>
+</html>

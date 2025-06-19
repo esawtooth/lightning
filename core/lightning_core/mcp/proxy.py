@@ -3,13 +3,19 @@
 import asyncio
 import json
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Deque
 import logging
 
-from ..vextir_os.security.manager import SecurityManager
-from ..vextir_os.security.models import SecurityContext
+from ..vextir_os.security import SecurityManager
+
+@dataclass
+class SecurityContext:
+    """Security context for MCP operations."""
+    user_id: str
+    permissions: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 logger = logging.getLogger(__name__)
 
