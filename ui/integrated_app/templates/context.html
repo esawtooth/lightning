@@ -476,17 +476,17 @@
         }
     }
     
-    function switchToEditorLayout(document) {
+    function switchToEditorLayout(docData) {
         // Hide full browser and sidebar
-        document.getElementById('full-browser').classList.add('hidden');
-        document.getElementById('sidebar').classList.add('hidden');
+        window.document.getElementById('full-browser').classList.add('hidden');
+        window.document.getElementById('sidebar').classList.add('hidden');
         
         // Show split view
-        document.getElementById('split-view').classList.remove('hidden');
+        window.document.getElementById('split-view').classList.remove('hidden');
         
         // Update document editor
-        document.getElementById('doc-title').textContent = document.name;
-        document.getElementById('doc-editor').value = document.content || '';
+        window.document.getElementById('doc-title').textContent = docData.name;
+        window.document.getElementById('doc-editor').value = docData.content || '';
         
         // Clone the tree to the mini browser
         cloneTreeToMini();
@@ -539,15 +539,15 @@
         contextData.selectedDocument = null;
         
         // Show full browser and sidebar
-        document.getElementById('full-browser').classList.remove('hidden');
-        document.getElementById('sidebar').classList.remove('hidden');
+        window.document.getElementById('full-browser').classList.remove('hidden');
+        window.document.getElementById('sidebar').classList.remove('hidden');
         
         // Hide split view
-        document.getElementById('split-view').classList.add('hidden');
+        window.document.getElementById('split-view').classList.add('hidden');
         
         // Clear editor
-        document.getElementById('doc-editor').value = '';
-        document.getElementById('doc-title').textContent = 'Document';
+        window.document.getElementById('doc-editor').value = '';
+        window.document.getElementById('doc-title').textContent = 'Document';
     }
     
     async function saveDocument() {
