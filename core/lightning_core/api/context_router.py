@@ -123,31 +123,81 @@ async def initialize_context():
 
 @router.get("/folders")
 async def get_folders():
-    """Get all folders in the user's context hub."""
-    # Get all documents with type "Folder"
+    """Get all folders and root-level documents in the user's context hub with hierarchical structure."""
     try:
         result = await proxy_to_context_hub("GET", "/docs")
         # Context-hub returns a list directly, not wrapped in an object
         docs = result if isinstance(result, list) else result.get("docs", [])
         
         # Filter for folders and build hierarchy
-        folders = [doc for doc in docs if doc.get("doc_type") == "Folder"]
+        all_folders = [doc for doc in docs if doc.get("doc_type") == "Folder"]
         
-        # Add document count to each folder and normalize fields
-        for folder in folders:
-            folder_id = folder.get("id")
-            # Map parent_folder_id to parent_id for frontend compatibility
-            if "parent_folder_id" in folder:
-                folder["parent_id"] = folder["parent_folder_id"]
-            folder["documents"] = [
-                doc for doc in docs 
-                if doc.get("parent_folder_id") == folder_id and doc.get("doc_type") != "Folder"
-            ]
-            folder["document_count"] = len(folder["documents"])
+        # Get root-level documents (documents without a parent folder)
+        root_documents = [
+            doc for doc in docs 
+            if doc.get("doc_type") != "Folder" and not doc.get("parent_folder_id")
+        ]
         
-        return {"folders": folders}
+        # Build folder hierarchy with document counts
+        def build_folder_tree(parent_id=None, level=0):
+            tree = []
+            for folder in all_folders:
+                folder_parent_id = folder.get("parent_folder_id")
+                if folder_parent_id == parent_id:
+                    folder_id = folder.get("id")
+                    
+                    # Map parent_folder_id to parent_id for frontend compatibility
+                    if "parent_folder_id" in folder:
+                        folder["parent_id"] = folder["parent_folder_id"]
+                    
+                    # Get documents in this folder
+                    folder["documents"] = [
+                        doc for doc in docs 
+                        if doc.get("parent_folder_id") == folder_id and doc.get("doc_type") != "Folder"
+                    ]
+                    folder["document_count"] = len(folder["documents"])
+                    folder["level"] = level
+                    
+                    # Get subfolders recursively
+                    folder["subfolders"] = build_folder_tree(folder_id, level + 1)
+                    
+                    tree.append(folder)
+            return tree
+        
+        # Build the hierarchical tree starting from root folders (no parent)
+        folder_tree = build_folder_tree()
+        
+        # Add a virtual "root" folder for root-level documents if there are any
+        if root_documents:
+            root_folder = {
+                "id": "root",
+                "name": "Root Documents", 
+                "doc_type": "Folder",
+                "parent_id": None,
+                "documents": root_documents,
+                "document_count": len(root_documents),
+                "level": 0,
+                "subfolders": []
+            }
+            folder_tree.append(root_folder)
+        
+        # Flatten the tree for easier frontend consumption while preserving hierarchy info
+        def flatten_tree(tree, flat_list=None):
+            if flat_list is None:
+                flat_list = []
+            
+            for folder in tree:
+                flat_list.append(folder)
+                if folder.get("subfolders"):
+                    flatten_tree(folder["subfolders"], flat_list)
+            
+            return flat_list
+        
+        flattened_folders = flatten_tree(folder_tree)
+        
+        return {"folders": flattened_folders, "tree": folder_tree}
     except Exception as e:
-        return {"folders": [], "error": str(e)}
+        return {"folders": [], "tree": [], "error": str(e)}
 
 
 @router.post("/folders", status_code=201)

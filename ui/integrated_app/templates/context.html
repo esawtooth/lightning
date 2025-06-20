@@ -3,6 +3,11 @@
 {% block title %}My Context Hub - Vextir{% endblock %}
 {% block page_title %}My Context Hub{% endblock %}
 
+{% block extra_head %}
+<!-- JSTree CSS -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/themes/default/style.min.css" />
+{% endblock %}
+
 {% block content %}
 <!-- Context Hub Status -->
 <div class="mb-8">
@@ -54,39 +59,86 @@
     </div>
 </div>
 
-<!-- Main Content Grid -->
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <!-- Folder Browser -->
-    <div class="lg:col-span-2">
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 class="text-lg font-medium text-gray-900">My Documents</h3>
-                <div class="flex space-x-2">
-                    <button onclick="showCreateFolderModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                        <i class="fas fa-folder-plus mr-2"></i>
-                        New Folder
+<!-- Dynamic Content Layout -->
+<div id="main-content" class="transition-all duration-300">
+    <!-- Full Width File Browser (default state) -->
+    <div id="full-browser" class="bg-white rounded-lg shadow">
+        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">My Documents</h3>
+            <div class="flex space-x-2">
+                <button onclick="showCreateFolderModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                    <i class="fas fa-folder-plus mr-2"></i>
+                    New Folder
+                </button>
+                <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                    <i class="fas fa-plus mr-2"></i>
+                    New Document
+                </button>
+            </div>
+        </div>
+        <div class="p-6">
+            <div id="folder-browser" class="min-h-96">
+                <!-- JSTree will be initialized here -->
+            </div>
+            <div id="no-context" class="text-center py-8 text-gray-500 hidden">
+                <i class="fas fa-folder-open text-4xl mb-4"></i>
+                <p>Your context hub is not initialized yet.</p>
+                <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split View Layout (when document is selected) -->
+    <div id="split-view" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Minimized Folder Browser -->
+        <div class="lg:col-span-1">
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <h3 class="text-base font-medium text-gray-900">Files</h3>
+                    <button onclick="closeDocumentEditor()" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times"></i>
                     </button>
-                    <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                        <i class="fas fa-plus mr-2"></i>
-                        New Document
-                    </button>
+                </div>
+                <div class="p-4">
+                    <div id="folder-browser-mini" class="min-h-64">
+                        <!-- JSTree will be cloned here -->
+                    </div>
                 </div>
             </div>
-            <div class="p-6">
-                <div id="folder-browser" class="space-y-4">
-                    <!-- Folder structure will be loaded here -->
+        </div>
+
+        <!-- Document Editor -->
+        <div class="lg:col-span-2">
+            <div class="bg-white rounded-lg shadow">
+                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <i id="doc-icon" class="fas fa-file-alt text-gray-500"></i>
+                        <h3 id="doc-title" class="text-lg font-medium text-gray-900">Document</h3>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="saveDocument()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                            <i class="fas fa-save mr-2"></i>
+                            Save
+                        </button>
+                        <button onclick="closeDocumentEditor()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm">
+                            <i class="fas fa-times mr-2"></i>
+                            Close
+                        </button>
+                    </div>
                 </div>
-                <div id="no-context" class="text-center py-8 text-gray-500 hidden">
-                    <i class="fas fa-folder-open text-4xl mb-4"></i>
-                    <p>Your context hub is not initialized yet.</p>
-                    <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+                <div class="p-6">
+                    <textarea 
+                        id="doc-editor" 
+                        class="w-full h-96 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                        placeholder="Document content...">
+                    </textarea>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Quick Actions & Info -->
-    <div class="space-y-6">
+    <!-- Sidebar (only visible in full browser mode) -->
+    <div id="sidebar" class="mt-6 space-y-6">
         <!-- Quick Actions -->
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-gray-200">
@@ -178,6 +230,35 @@
     </div>
 </div>
 
+<!-- Create Folder Modal -->
+<div id="create-folder-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Create New Folder</h3>
+            </div>
+            <div class="p-6">
+                <form id="create-folder-form">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Folder Name</label>
+                        <input type="text" id="folder-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter folder name..." required>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Parent Folder</label>
+                        <select id="folder-parent" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                            <option value="">Root Level</option>
+                        </select>
+                    </div>
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" onclick="closeCreateFolderModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Folder</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Upload Modal -->
 <div id="upload-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
     <div class="flex items-center justify-center min-h-screen p-4">
@@ -201,11 +282,17 @@
 {% endblock %}
 
 {% block extra_scripts %}
+<!-- jQuery (required for JSTree) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<!-- JSTree JavaScript -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"></script>
 <script>
     // Context hub functionality
     let contextData = {
         status: null,
-        folders: null
+        folders: null,
+        selectedDocument: null,
+        editorMode: false
     };
 
     async function loadContextStatus() {
@@ -275,39 +362,240 @@
         }
     }
 
+    function buildJSTreeData(folders) {
+        if (!folders || !folders.tree) {
+            return [];
+        }
+        
+        function convertFolderToJSTreeNode(folder) {
+            const node = {
+                id: folder.id,
+                text: `${folder.name} (${folder.document_count || 0} documents)`,
+                icon: folder.id === 'root' ? 'fas fa-home' : 'fas fa-folder',
+                state: { opened: true },
+                data: folder,
+                children: []
+            };
+            
+            // Add documents as child nodes
+            if (folder.documents && folder.documents.length > 0) {
+                folder.documents.forEach(doc => {
+                    node.children.push({
+                        id: `doc_${doc.id}`,
+                        text: doc.name,
+                        icon: 'fas fa-file-alt',
+                        type: 'document',
+                        data: doc
+                    });
+                });
+            }
+            
+            // Add subfolders recursively
+            if (folder.subfolders && folder.subfolders.length > 0) {
+                folder.subfolders.forEach(subfolder => {
+                    node.children.push(convertFolderToJSTreeNode(subfolder));
+                });
+            }
+            
+            return node;
+        }
+        
+        return folders.tree.map(convertFolderToJSTreeNode);
+    }
+    
     function updateFolderDisplay(folders) {
         const browserEl = document.getElementById('folder-browser');
-        browserEl.innerHTML = '';
-
+        
         if (!folders || !folders.folders) {
             browserEl.innerHTML = '<p class="text-gray-500">No folders found</p>';
             return;
         }
-
-        folders.folders.forEach(folder => {
-            const folderEl = document.createElement('div');
-            folderEl.className = 'border border-gray-200 rounded-lg p-4';
-            folderEl.innerHTML = `
-                <div class="flex items-center justify-between">
-                    <div class="flex items-center">
-                        <i class="fas fa-folder text-blue-500 mr-3"></i>
-                        <span class="font-medium">${folder.name}</span>
-                    </div>
-                    <span class="text-sm text-gray-500">${folder.document_count || 0} documents</span>
-                </div>
-                ${folder.documents ? `
-                    <div class="mt-3 ml-6 space-y-2">
-                        ${folder.documents.map(doc => `
-                            <div class="flex items-center text-sm text-gray-600">
-                                <i class="fas fa-file-alt mr-2"></i>
-                                <span>${doc.name}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-                ` : ''}
-            `;
-            browserEl.appendChild(folderEl);
+        
+        // Destroy existing JSTree if it exists
+        if ($.jstree && $('#folder-browser').jstree(true)) {
+            $('#folder-browser').jstree('destroy');
+        }
+        
+        const treeData = buildJSTreeData(folders);
+        
+        // Initialize JSTree
+        $('#folder-browser').jstree({
+            'core': {
+                'data': treeData,
+                'check_callback': true,
+                'themes': {
+                    'name': 'default',
+                    'responsive': true
+                }
+            },
+            'plugins': ['wholerow', 'types'],
+            'types': {
+                'default': {
+                    'icon': 'fas fa-folder'
+                },
+                'document': {
+                    'icon': 'fas fa-file-alt'
+                }
+            }
+        }).on('select_node.jstree', function (e, data) {
+            // Handle folder or document selection
+            if (data.node.type === 'document') {
+                // Document selected - open editor
+                openDocumentEditor(data.node.data);
+            } else {
+                // Folder selected - store for creating subfolders
+                contextData.selectedFolder = data.node.data;
+                console.log('Selected folder:', contextData.selectedFolder);
+            }
+        }).on('ready.jstree', function() {
+            // Tree is ready
+            console.log('JSTree initialized successfully');
         });
+    }
+    
+    async function openDocumentEditor(document) {
+        console.log('Opening document editor for:', document);
+        
+        try {
+            // Fetch the full document content
+            const response = await fetch(`/api/context/documents/${document.id}`);
+            if (!response.ok) {
+                throw new Error('Failed to load document');
+            }
+            
+            const docData = await response.json();
+            contextData.selectedDocument = docData;
+            contextData.editorMode = true;
+            
+            // Switch to editor layout
+            switchToEditorLayout(docData);
+            
+        } catch (error) {
+            console.error('Error loading document:', error);
+            alert('Failed to load document: ' + error.message);
+        }
+    }
+    
+    function switchToEditorLayout(document) {
+        // Hide full browser and sidebar
+        document.getElementById('full-browser').classList.add('hidden');
+        document.getElementById('sidebar').classList.add('hidden');
+        
+        // Show split view
+        document.getElementById('split-view').classList.remove('hidden');
+        
+        // Update document editor
+        document.getElementById('doc-title').textContent = document.name;
+        document.getElementById('doc-editor').value = document.content || '';
+        
+        // Clone the tree to the mini browser
+        cloneTreeToMini();
+    }
+    
+    function cloneTreeToMini() {
+        const originalTree = $('#folder-browser');
+        const miniTree = $('#folder-browser-mini');
+        
+        // Clear mini tree
+        if (miniTree.jstree(true)) {
+            miniTree.jstree('destroy');
+        }
+        
+        // Get the current tree data
+        if (originalTree.jstree(true)) {
+            const treeData = originalTree.jstree(true).get_json('#', {flat: false});
+            
+            // Initialize mini tree with same data
+            miniTree.jstree({
+                'core': {
+                    'data': treeData,
+                    'check_callback': true,
+                    'themes': {
+                        'name': 'default',
+                        'responsive': true
+                    }
+                },
+                'plugins': ['wholerow', 'types'],
+                'types': {
+                    'default': {
+                        'icon': 'fas fa-folder'
+                    },
+                    'document': {
+                        'icon': 'fas fa-file-alt'
+                    }
+                }
+            }).on('select_node.jstree', function (e, data) {
+                if (data.node.type === 'document') {
+                    openDocumentEditor(data.node.data);
+                } else {
+                    contextData.selectedFolder = data.node.data;
+                }
+            });
+        }
+    }
+    
+    function closeDocumentEditor() {
+        contextData.editorMode = false;
+        contextData.selectedDocument = null;
+        
+        // Show full browser and sidebar
+        document.getElementById('full-browser').classList.remove('hidden');
+        document.getElementById('sidebar').classList.remove('hidden');
+        
+        // Hide split view
+        document.getElementById('split-view').classList.add('hidden');
+        
+        // Clear editor
+        document.getElementById('doc-editor').value = '';
+        document.getElementById('doc-title').textContent = 'Document';
+    }
+    
+    async function saveDocument() {
+        if (!contextData.selectedDocument) {
+            alert('No document selected');
+            return;
+        }
+        
+        const content = document.getElementById('doc-editor').value;
+        
+        try {
+            const response = await fetch(`/api/context/documents/${contextData.selectedDocument.id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: contextData.selectedDocument.name,
+                    content: content
+                })
+            });
+            
+            if (response.ok) {
+                // Update local document data
+                contextData.selectedDocument.content = content;
+                
+                // Show success feedback
+                const saveBtn = document.querySelector('button[onclick="saveDocument()"]');
+                const originalText = saveBtn.innerHTML;
+                saveBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Saved';
+                saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                saveBtn.classList.add('bg-green-700');
+                
+                setTimeout(() => {
+                    saveBtn.innerHTML = originalText;
+                    saveBtn.classList.remove('bg-green-700');
+                    saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                }, 2000);
+                
+                // Refresh folder data to update any counts
+                loadFolders();
+            } else {
+                alert('Failed to save document');
+            }
+        } catch (error) {
+            console.error('Error saving document:', error);
+            alert('Error saving document');
+        }
     }
 
     function updateStats() {
@@ -453,6 +741,38 @@
         }
     });
 
+    function showCreateFolderModal() {
+        document.getElementById('create-folder-modal').classList.remove('hidden');
+        populateFolderParentSelect();
+    }
+
+    function closeCreateFolderModal() {
+        document.getElementById('create-folder-modal').classList.add('hidden');
+        document.getElementById('create-folder-form').reset();
+    }
+
+    function populateFolderParentSelect() {
+        const select = document.getElementById('folder-parent');
+        select.innerHTML = '<option value="">Root Level</option>';
+        
+        if (contextData.folders && contextData.folders.folders) {
+            contextData.folders.folders.forEach(folder => {
+                if (folder.id !== 'root') {
+                    const option = document.createElement('option');
+                    option.value = folder.id;
+                    const indentPrefix = '  '.repeat(folder.level || 0);
+                    option.textContent = indentPrefix + folder.name;
+                    select.appendChild(option);
+                }
+            });
+        }
+        
+        // Pre-select the currently selected folder as the parent
+        if (contextData.selectedFolder && contextData.selectedFolder.id !== 'root') {
+            select.value = contextData.selectedFolder.id;
+        }
+    }
+
     // Initialize page
     document.addEventListener('DOMContentLoaded', () => {
         loadContextStatus();
@@ -468,6 +788,49 @@
     document.getElementById('upload-modal').addEventListener('click', (e) => {
         if (e.target.id === 'upload-modal') {
             closeUploadModal();
+        }
+    });
+
+    document.getElementById('create-folder-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'create-folder-modal') {
+            closeCreateFolderModal();
+        }
+    });
+
+    // Handle create folder form submission
+    document.getElementById('create-folder-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const name = document.getElementById('folder-name').value;
+        const parentId = document.getElementById('folder-parent').value || null;
+        
+        if (!name.trim()) {
+            alert('Please enter a folder name');
+            return;
+        }
+        
+        try {
+            const response = await fetch('/api/context/folders', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: name,
+                    parent_id: parentId
+                })
+            });
+            
+            if (response.ok) {
+                closeCreateFolderModal();
+                loadFolders();
+                alert('Folder created successfully!');
+            } else {
+                alert('Failed to create folder');
+            }
+        } catch (error) {
+            console.error('Error creating folder:', error);
+            alert('Error creating folder');
         }
     });
 </script>

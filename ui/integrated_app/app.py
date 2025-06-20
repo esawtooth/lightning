@@ -239,13 +239,20 @@ async def notifications(token: str = Depends(_get_token)):
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     
-    tasks = resp.json()
-    tasks.sort(key=lambda t: t.get("updated_at", t.get("created_at", "")), reverse=True)
+    result = resp.json()
+    tasks = result.get("tasks", []) if isinstance(result, dict) else result
+    
+    # Sort by updated_at or created_at, handling missing fields
+    def get_sort_key(task):
+        return task.get("updated_at") or task.get("updatedAt") or task.get("created_at") or task.get("createdAt") or ""
+    
+    tasks.sort(key=get_sort_key, reverse=True)
+    
     notifs = [
         {
             "id": t.get("id"),
             "status": t.get("status"),
-            "updated_at": t.get("updated_at"),
+            "updated_at": t.get("updated_at") or t.get("updatedAt") or t.get("created_at") or t.get("createdAt"),
         }
         for t in tasks[:20]
     ]
@@ -430,7 +437,7 @@ async def context_page(request: Request):
     """Context hub management page."""
     username = getattr(request.state, "username", "User")
     # Check if enhanced view is requested
-    enhanced = request.query_params.get("enhanced", "true") == "true"
+    enhanced = request.query_params.get("enhanced", "false") == "true"
     template = "context_enhanced.html" if enhanced else "context.html"
     return templates.TemplateResponse(template, {
         "request": request,

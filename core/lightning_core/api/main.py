@@ -261,8 +261,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-app.include_router(context_router)
+# Include routers with API prefix
+app.include_router(context_router, prefix="/api")
 
 
 # Health check endpoint
@@ -703,6 +703,45 @@ async def get_tasks(request: Request):
 
     except Exception as e:
         logger.error(f"Failed to get tasks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/notifications")
+async def get_notifications(request: Request):
+    """Get notifications for the current user."""
+    try:
+        # Get user ID from header or use default
+        user_id = request.headers.get("X-User-ID", "local-user")
+
+        # In production, this would be derived from actual task/event data
+        # For now, return mock notifications based on recent tasks
+        return {
+            "notifications": [
+                {
+                    "id": "notif-1",
+                    "type": "task_created",
+                    "title": "New Task Assigned",
+                    "message": "Sample Task has been assigned to you",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "read": False,
+                    "priority": "medium"
+                },
+                {
+                    "id": "notif-2", 
+                    "type": "system",
+                    "title": "Welcome to Lightning",
+                    "message": "Your context hub is ready to use",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "read": True,
+                    "priority": "low"
+                }
+            ],
+            "unread_count": 1,
+            "total": 2
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get notifications: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
