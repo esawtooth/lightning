@@ -43,3 +43,7 @@ tokio-tungstenite = "0.26"
 [[bench]]
 name = "search_bench"
 harness = false
+
+[[bench]]
+name = "timeline_bench"
+harness = false

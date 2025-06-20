@@ -1,0 +1,29 @@
+<!-- Restore Version Modal -->
+<div id="restore-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+    <div class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Restore Historical Version</h3>
+            </div>
+            <div class="p-6">
+                <div class="mb-4">
+                    <p class="text-gray-600 mb-4">Restore the selected document/folder to its state at:</p>
+                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                        <p class="font-medium text-purple-900" id="restore-timestamp">Loading...</p>
+                        <p class="text-sm text-purple-700" id="restore-details">Selected: None</p>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="restore-overwrite" class="mr-2">
+                        <span class="text-sm text-gray-700">Overwrite current version (creates backup)</span>
+                    </label>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeRestoreModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
+                    <button onclick="executeRestore()" class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">Restore Version</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

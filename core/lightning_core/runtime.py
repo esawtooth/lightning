@@ -213,8 +213,12 @@ class LightningRuntime:
             await self._storage.initialize()
 
         # Start event bus
-        if self._event_bus:
-            await self._event_bus.start()
+        try:
+            logger.info("Starting event bus...")
+            await self.event_bus.start()  # Use property to ensure it's created
+            logger.info("Event bus started successfully")
+        except Exception as e:
+            logger.error(f"Failed to start event bus: {e}")
 
         self._initialized = True
         logger.info("Lightning Runtime services initialized")

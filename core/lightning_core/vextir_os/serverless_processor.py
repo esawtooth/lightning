@@ -161,11 +161,11 @@ def _extract_event_data(context: FunctionContext) -> Optional[Dict[str, Any]]:
 
     elif context.trigger_type == TriggerType.MANUAL:
         # Manual trigger - check if this is already a full event
-        if isinstance(trigger_data, dict) and 'event_type' in trigger_data:
-            # This is likely an EventMessage JSON
+        if isinstance(trigger_data, dict) and ('event_type' in trigger_data or 'type' in trigger_data):
+            # This is likely an event - return as is
             return trigger_data
         # Otherwise look for nested event data
-        return trigger_data.get("event") or trigger_data.get("data") or trigger_data
+        return trigger_data.get("event") or trigger_data
 
     else:
         # Unknown trigger type - return raw data

@@ -10,7 +10,8 @@ import logging
 import os
 import signal
 import sys
-from typing import Optional
+from datetime import datetime
+from typing import Any, Optional
 
 from lightning_core.abstractions import EventMessage, ExecutionMode, RuntimeConfig
 from lightning_core.runtime import get_runtime, initialize_runtime
@@ -59,17 +60,21 @@ class LocalEventProcessorService:
 
         # Deploy the event processor function
         logger.info("Deploying event processor function...")
+        from lightning_core.abstractions.serverless import FunctionConfig, RuntimeType
+        
+        function_config = FunctionConfig(
+            name="universal-event-processor",
+            handler="universal_event_processor_handler",
+            runtime=RuntimeType.PYTHON,
+            memory_mb=512,
+            timeout_seconds=300,
+            environment_variables={
+                "LOGGING_LEVEL": os.getenv("LOG_LEVEL", "INFO")
+            }
+        )
+        
         self.function_id = await self.runtime.serverless.deploy_function(
-            config={
-                "name": "universal-event-processor",
-                "handler": "universal_event_processor_handler",
-                "runtime": "python",
-                "memory_mb": 512,
-                "timeout_seconds": 300,
-                "environment_variables": {
-                    "LOGGING_LEVEL": os.getenv("LOG_LEVEL", "INFO")
-                },
-            },
+            config=function_config,
             handler=universal_event_processor_handler,
         )
         logger.info(f"Event processor function deployed: {self.function_id}")
@@ -78,6 +83,7 @@ class LocalEventProcessorService:
         async def process_event(event: EventMessage):
             """Process incoming events."""
             try:
+                logger.info(f"Received event from bus: {event.event_type} (ID: {event.id})")
                 logger.info(f"Processing event: {event.event_type} (ID: {event.id})")
 
                 # Invoke the serverless function
@@ -103,6 +109,23 @@ class LocalEventProcessorService:
                         logger.info(
                             f"Event processed successfully, generated {output_count} output events"
                         )
+                        
+                        # Publish output events to the event bus
+                        output_events = result.get("output_events", [])
+                        for output_event_data in output_events:
+                            try:
+                                # Convert back to EventMessage and publish
+                                output_event = EventMessage(
+                                    id=output_event_data.get("id"),
+                                    event_type=output_event_data.get("type", "unknown"),
+                                    data=output_event_data.get("data", {}),
+                                    metadata=output_event_data.get("metadata", {}),
+                                    timestamp=datetime.fromisoformat(output_event_data.get("timestamp", datetime.utcnow().isoformat()))
+                                )
+                                await self.runtime.publish_event(output_event)
+                                logger.info(f"Published output event: {output_event.event_type} (ID: {output_event.id})")
+                            except Exception as e:
+                                logger.error(f"Failed to publish output event: {e}")
                     else:
                         logger.info("Event processed successfully")
 
@@ -111,7 +134,7 @@ class LocalEventProcessorService:
 
         # Subscribe to all event types
         self.subscription_id = await self.runtime.event_bus.subscribe(
-            "*", process_event, topic="vextir-events"  # Subscribe to all events
+            "*", process_event  # Subscribe to all events on default topic
         )
         logger.info(f"Subscribed to events with ID: {self.subscription_id}")
 
@@ -134,7 +157,7 @@ class LocalEventProcessorService:
             metadata={"source": "event-processor", "userID": "system"},
         )
 
-        await self.runtime.publish_event(startup_event, topic="vextir-events")
+        await self.runtime.publish_event(startup_event)
         logger.info("Startup event published")
 
     async def stop(self):

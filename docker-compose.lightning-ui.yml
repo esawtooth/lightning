@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # Lightning UI - Clean, functional interface
+  lightning-ui:
+    build:
+      context: .
+      dockerfile: ui/integrated_app/Dockerfile
+    container_name: lightning-ui
+    environment:
+      - LIGHTNING_UI=false
+      - API_BASE=http://lightning-api:8000/api
+      - CONTEXT_HUB_URL=http://context-hub:3000
+    ports:
+      - "8080:8080"
+    depends_on:
+      - lightning-api
+      - context-hub
+    networks:
+      - lightning-network
+    restart: unless-stopped
+
+  # Lightning API
+  lightning-api:
+    build:
+      context: .
+      dockerfile: core/Dockerfile
+    container_name: lightning-api
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROVIDER_TYPE=local
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/lightning
+      - LIGHTNING_EVENT_BUS_PROVIDER=redis
+      - LIGHTNING_EVENT_BUS_ENDPOINT=redis://redis:6379
+    ports:
+      - "7071:8000"
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - lightning-network
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Event Processor
+  event-processor:
+    build:
+      context: .
+      dockerfile: core/Dockerfile.processor
+    container_name: event-processor
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PROVIDER_TYPE=local
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/lightning
+      - LIGHTNING_EVENT_BUS_PROVIDER=redis
+      - LIGHTNING_EVENT_BUS_ENDPOINT=redis://redis:6379
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - lightning-network
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+
+  # Context Hub
+  context-hub:
+    build:
+      context: context-hub
+      dockerfile: Dockerfile
+    container_name: context-hub
+    ports:
+      - "3000:3000"
+    environment:
+      - RUST_LOG=info
+    volumes:
+      - ./context-hub/data:/app/data
+      - ./context-hub/index:/app/index
+      - ./context-hub/snapshots:/app/snapshots
+    networks:
+      - lightning-network
+    restart: unless-stopped
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: lightning-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - lightning-network
+    restart: unless-stopped
+
+  # PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: lightning-postgres
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=lightning
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - lightning-network
+    restart: unless-stopped
+
+networks:
+  lightning-network:
+    driver: bridge
+
+volumes:
+  redis-data:
+  postgres-data:

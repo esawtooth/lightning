@@ -1,0 +1,226 @@
+version: '3.8'
+
+# Docker Compose configuration for testing Azure mode locally
+# This uses Azure Storage Emulator (Azurite) and other emulators
+
+services:
+  # Azurite - Azure Storage Emulator
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:latest
+    ports:
+      - "10000:10000"  # Blob service
+      - "10001:10001"  # Queue service
+      - "10002:10002"  # Table service
+    volumes:
+      - azurite_data:/data
+    command: azurite --blobHost 0.0.0.0 --queueHost 0.0.0.0 --tableHost 0.0.0.0 --loose
+
+  # CosmosDB Emulator (Linux version)
+  # Note: The official emulator has limitations on Linux
+  # For full testing, consider using a real Cosmos DB instance
+  cosmosdb:
+    image: mcr.microsoft.com/cosmosdb/linux/azure-cosmos-emulator:latest
+    ports:
+      - "8081:8081"
+      - "10251:10251"
+      - "10252:10252"
+      - "10253:10253"
+      - "10254:10254"
+    environment:
+      AZURE_COSMOS_EMULATOR_PARTITION_COUNT: 10
+      AZURE_COSMOS_EMULATOR_ENABLE_DATA_PERSISTENCE: "true"
+      AZURE_COSMOS_EMULATOR_IP_ADDRESS_OVERRIDE: 127.0.0.1
+    volumes:
+      - cosmos_data:/data
+
+  # PostgreSQL as fallback (Cosmos DB emulator can be unstable)
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: lightning
+      POSTGRES_PASSWORD: lightning123
+      POSTGRES_DB: lightning_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lightning"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis (can be used as cache in Azure mode)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Context Hub (same for both modes)
+  context-hub:
+    build:
+      context: ./context-hub
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      JWT_SECRET: azure-development-secret-key
+      PORT: 3000
+      RUST_LOG: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Lightning API in Azure mode
+  lightning-api:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+      args:
+        LIGHTNING_MODE: azure
+        SERVICE_TYPE: api
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: azure
+      SERVICE_TYPE: api
+      LIGHTNING_STORAGE_PROVIDER: cosmos
+      LIGHTNING_EVENT_BUS_PROVIDER: servicebus
+      LIGHTNING_CONTAINER_RUNTIME: azure
+      LIGHTNING_SERVERLESS_PROVIDER: azure
+      
+      # Azure Storage (using Azurite)
+      AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;"
+      
+      # Cosmos DB (emulator or real connection string)
+      COSMOS_CONNECTION_STRING: "AccountEndpoint=https://cosmosdb:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+      
+      # For testing, use Redis as Service Bus substitute
+      SERVICE_BUS_CONNECTION_STRING: "redis://redis:6379"
+      REDIS_URL: redis://redis:6379
+      
+      # Database (fallback)
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      
+      # Context Hub
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Authentication (simplified for testing)
+      JWT_SECRET: azure-development-secret-key
+      AUTH_ENABLED: "false"
+      
+      # Azure AD simulation
+      AAD_CLIENT_ID: "test-client-id"
+      AAD_CLIENT_SECRET: "test-client-secret"
+      AAD_TENANT_ID: "test-tenant-id"
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: INFO
+      
+      # Port configuration
+      PORT: 8000
+      HOST: 0.0.0.0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./core:/app
+      - lightning_data:/app/data
+    depends_on:
+      - azurite
+      - postgres
+      - redis
+      - context-hub
+    command: |
+      sh -c "
+        pip install -e .[azure] &&
+        python -m lightning_core.service_launcher
+      "
+
+  # Event Processor in Azure mode
+  event-processor:
+    build:
+      context: ./core
+      dockerfile: Dockerfile.processor
+      args:
+        LIGHTNING_MODE: azure
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: azure
+      SERVICE_TYPE: event_processor
+      AZURE_DEPLOYMENT_TYPE: container
+      LIGHTNING_STORAGE_PROVIDER: cosmos
+      LIGHTNING_EVENT_BUS_PROVIDER: servicebus
+      
+      # Use same connection strings as API
+      AZURE_STORAGE_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;QueueEndpoint=http://azurite:10001/devstoreaccount1;TableEndpoint=http://azurite:10002/devstoreaccount1;"
+      COSMOS_CONNECTION_STRING: "AccountEndpoint=https://cosmosdb:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw=="
+      SERVICE_BUS_CONNECTION_STRING: "redis://redis:6379"
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: INFO
+    volumes:
+      - ./core:/app
+      - lightning_data:/app/data
+    depends_on:
+      - lightning-api
+      - azurite
+      - redis
+
+  # Integrated App UI in Azure mode
+  integrated-app:
+    build:
+      context: .
+      dockerfile: ui/integrated_app/Dockerfile
+      args:
+        LIGHTNING_MODE: azure
+    environment:
+      # Backend APIs
+      API_BASE: http://lightning-api:8000
+      EVENT_API_URL: http://lightning-api:8000/api/events
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Azure AD simulation
+      AAD_CLIENT_ID: "test-client-id"
+      AAD_CLIENT_SECRET: "test-client-secret"
+      AAD_TENANT_ID: "test-tenant-id"
+      
+      # App Configuration
+      APP_HOST: 0.0.0.0
+      APP_PORT: 8080
+      LOG_LEVEL: INFO
+      
+      # Azure Application Insights (optional)
+      APPINSIGHTS_INSTRUMENTATIONKEY: "test-instrumentation-key"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - lightning-api
+      - context-hub
+    volumes:
+      - ./ui/integrated_app:/app
+
+volumes:
+  azurite_data:
+  cosmos_data:
+  postgres_data:
+  redis_data:
+  lightning_data:
+
+networks:
+  default:
+    name: lightning-azure-network

@@ -144,12 +144,15 @@ class OpenAIProvider(LLMProvider):
             openai_request = {
                 "model": request.model,
                 "messages": self._convert_messages(request.messages),
-                "temperature": request.temperature,
                 "top_p": request.top_p,
                 "frequency_penalty": request.frequency_penalty,
                 "presence_penalty": request.presence_penalty,
                 "stream": False,
             }
+            
+            # Only add temperature for models that support it
+            if request.model != "o3-mini":
+                openai_request["temperature"] = request.temperature
             
             if request.max_tokens:
                 openai_request["max_tokens"] = request.max_tokens

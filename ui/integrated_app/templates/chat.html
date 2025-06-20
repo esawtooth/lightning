@@ -112,6 +112,57 @@
 <script>
     let chatHistory = [];
     let isProcessing = false;
+    window.sessionId = 'session-' + Date.now();
+    
+    // WebSocket connection function
+    function connectWebSocket() {
+        // Get API base URL from the page or use default
+        const apiBase = '{{ api_base }}' || 'http://localhost:7071';
+        const wsUrl = apiBase.replace('http://', 'ws://').replace('https://', 'wss://');
+        const userId = '{{ user_id }}' || 'local-user';
+        
+        window.chatWebSocket = new WebSocket(`${wsUrl}/ws/chat/${userId}`);
+        
+        window.chatWebSocket.onopen = () => {
+            console.log('WebSocket connected');
+            // Update connection status
+            const statusElement = document.querySelector('.text-green-800');
+            if (statusElement) {
+                statusElement.innerHTML = '<i class="fas fa-circle mr-1"></i>Connected';
+            }
+        };
+        
+        window.chatWebSocket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            
+            if (data.type === 'chat_response') {
+                // Add the AI response to chat
+                addMessage(data.response, 'assistant');
+                setProcessing(false);
+            } else if (data.type === 'ack') {
+                console.log('Message acknowledged:', data.request_id);
+            }
+        };
+        
+        window.chatWebSocket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            addMessage('Connection error. Reconnecting...', 'assistant', 'error');
+        };
+        
+        window.chatWebSocket.onclose = () => {
+            console.log('WebSocket disconnected');
+            const statusElement = document.querySelector('.text-green-800');
+            if (statusElement) {
+                statusElement.innerHTML = '<i class="fas fa-circle mr-1"></i>Disconnected';
+                statusElement.className = 'px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full';
+            }
+            // Attempt to reconnect after 5 seconds
+            setTimeout(connectWebSocket, 5000);
+        };
+    }
+    
+    // Connect WebSocket on page load
+    connectWebSocket();
 
     // Auto-resize textarea
     const chatInput = document.getElementById('chat-input');
@@ -147,30 +198,20 @@
         
         try {
             // Send message to backend
-            const response = await fetch('/api/events', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    type: 'llm.chat',
-                    metadata: {
-                        messages: [{ role: 'user', content: message }],
-                        source: 'integrated_chat'
-                    }
-                })
-            });
+            // Use WebSocket for real-time communication
+            if (!window.chatWebSocket || window.chatWebSocket.readyState !== WebSocket.OPEN) {
+                connectWebSocket();
+            }
             
-            if (response.ok) {
-                // Add success message
-                addMessage('Message queued successfully! 🚀', 'assistant');
-                
-                // Simulate typing and response (in real implementation, this would come from WebSocket)
-                setTimeout(() => {
-                    addMessage('I\'ve received your message and it\'s being processed. In a full implementation, this would connect to the actual Chainlit backend for real-time responses.', 'assistant');
-                }, 1500);
+            // Send message via WebSocket
+            if (window.chatWebSocket && window.chatWebSocket.readyState === WebSocket.OPEN) {
+                window.chatWebSocket.send(JSON.stringify({
+                    type: 'chat_message',
+                    message: message,
+                    session_id: window.sessionId || 'default-session'
+                }));
             } else {
-                addMessage('Sorry, there was an error sending your message. Please try again.', 'assistant', 'error');
+                addMessage('Connection error. Please check if the Lightning API is running.', 'assistant', 'error');
             }
         } catch (error) {
             console.error('Error sending message:', error);

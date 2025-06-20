@@ -12,7 +12,7 @@ from common.jwt_utils import verify_token
 from typing import Optional
 
 # Configuration
-API_BASE = os.environ.get("API_BASE", "http://localhost:7071/api")
+API_BASE = os.environ.get("API_BASE", "http://localhost:8000/api")
 AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "change-me")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
@@ -98,13 +98,18 @@ async def auth_middleware(request: Request, call_next):
     return response
 
 
-def _api_headers(token: str | None) -> dict:
+def _api_headers(token: str | None, username: str | None = None) -> dict:
     """Generate API headers with authorization."""
     headers = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
     elif AUTH_TOKEN:
         headers["Authorization"] = f"Bearer {AUTH_TOKEN}"
+    
+    # Add user ID header for user-specific resources
+    if username:
+        headers["X-User-ID"] = username
+    
     return headers
 
 
@@ -146,10 +151,25 @@ async def tasks_page(request: Request):
 async def chat_page(request: Request):
     """Chat interface page."""
     username = getattr(request.state, "username", "User")
+    
+    # Determine the appropriate API base URL based on the request
+    # Use the actual host from the request to support external access
+    host_header = request.headers.get("host", "")
+    if host_header:
+        # Extract just the hostname/IP without port
+        host = host_header.split(":")[0]
+        # Use the same host but with API port 8000
+        api_base = f"http://{host}:8000"
+    else:
+        # Fallback to localhost
+        api_base = "http://localhost:8000"
+    
     return templates.TemplateResponse("chat.html", {
         "request": request,
         "username": username,
-        "active_page": "chat"
+        "active_page": "chat",
+        "api_base": api_base,
+        "user_id": username
     })
 
 
@@ -409,7 +429,10 @@ async def setup_workflow(workflow: WorkflowSetupIn, token: str = Depends(_get_to
 async def context_page(request: Request):
     """Context hub management page."""
     username = getattr(request.state, "username", "User")
-    return templates.TemplateResponse("context.html", {
+    # Check if enhanced view is requested
+    enhanced = request.query_params.get("enhanced", "true") == "true"
+    template = "context_enhanced.html" if enhanced else "context.html"
+    return templates.TemplateResponse(template, {
         "request": request,
         "username": username,
         "active_page": "context"
@@ -522,11 +545,159 @@ async def create_document(doc: DocumentIn, token: str = Depends(_get_token)):
     return resp.json()
 
 
+@app.get("/api/context/documents/{document_id}")
+async def get_document(document_id: str, token: str = Depends(_get_token)):
+    """Get a specific document from user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/documents/{document_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.put("/api/context/documents/{document_id}")
+async def update_document(document_id: str, doc: DocumentIn, token: str = Depends(_get_token)):
+    """Update a document in user's context hub."""
+    headers = _api_headers(token)
+    payload = {
+        "name": doc.name,
+        "content": doc.content
+    }
+    resp = requests.put(f"{API_BASE}/context/documents/{document_id}", json=payload, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.delete("/api/context/documents/{document_id}")
+async def delete_document(document_id: str, token: str = Depends(_get_token)):
+    """Delete a document from user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.delete(f"{API_BASE}/context/documents/{document_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return {"status": "deleted"}
+
+
+@app.patch("/api/context/documents/{document_id}")
+async def rename_document(document_id: str, name: dict, token: str = Depends(_get_token)):
+    """Rename a document in user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.patch(f"{API_BASE}/context/documents/{document_id}", json=name, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+class FolderIn(BaseModel):
+    name: str
+    parent_id: Optional[str] = None
+
+
+@app.post("/api/context/folders")
+async def create_folder(folder: FolderIn, token: str = Depends(_get_token)):
+    """Create a new folder in user's context hub."""
+    headers = _api_headers(token)
+    payload = {
+        "name": folder.name,
+        "parent_id": folder.parent_id
+    }
+    resp = requests.post(f"{API_BASE}/context/folders", json=payload, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.delete("/api/context/folders/{folder_id}")
+async def delete_folder(folder_id: str, token: str = Depends(_get_token)):
+    """Delete a folder from user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.delete(f"{API_BASE}/context/folders/{folder_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return {"status": "deleted"}
+
+
+@app.patch("/api/context/folders/{folder_id}")
+async def rename_folder(folder_id: str, name: dict, token: str = Depends(_get_token)):
+    """Rename a folder in user's context hub."""
+    headers = _api_headers(token)
+    resp = requests.patch(f"{API_BASE}/context/folders/{folder_id}", json=name, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/context/guide")
+async def get_guide_file(token: str = Depends(_get_token)):
+    """Get the INDEX_GUIDE.md file content."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/guide", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.put("/api/context/guide")
+async def update_guide_file(content: dict, token: str = Depends(_get_token)):
+    """Update the INDEX_GUIDE.md file content."""
+    headers = _api_headers(token)
+    resp = requests.put(f"{API_BASE}/context/guide", json=content, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+# Timeline API endpoints
+@app.get("/api/context/timeline/snapshots")
+async def get_timeline_snapshots(token: str = Depends(_get_token)):
+    """Get timeline snapshots for context hub history."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/timeline/snapshots", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/context/timeline/state/{snapshot_id}")
+async def get_timeline_state(snapshot_id: str, token: str = Depends(_get_token)):
+    """Get historical state for a specific snapshot."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/timeline/state/{snapshot_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+class RestoreRequest(BaseModel):
+    item_id: str
+    item_type: str  # 'document' or 'folder'
+    snapshot_id: str
+    overwrite: bool = False
+
+
+@app.post("/api/context/timeline/restore")
+async def restore_timeline_item(restore_req: RestoreRequest, token: str = Depends(_get_token)):
+    """Restore an item from timeline to current state."""
+    headers = _api_headers(token)
+    payload = {
+        "item_id": restore_req.item_id,
+        "item_type": restore_req.item_type,
+        "snapshot_id": restore_req.snapshot_id,
+        "overwrite": restore_req.overwrite
+    }
+    resp = requests.post(f"{API_BASE}/context/timeline/restore", json=payload, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
 # Instructions API endpoints
 @app.get("/api/instructions")
-async def list_instructions(token: str = Depends(_get_token)):
+async def list_instructions(request: Request, token: str = Depends(_get_token)):
     """Get list of user instructions."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
     resp = requests.get(f"{API_BASE}/instructions", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -542,9 +713,10 @@ class InstructionIn(BaseModel):
 
 
 @app.post("/api/instructions")
-async def create_instruction(instruction: InstructionIn, token: str = Depends(_get_token)):
+async def create_instruction(instruction: InstructionIn, request: Request, token: str = Depends(_get_token)):
     """Create a new instruction."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
     payload = instruction.dict()
     resp = requests.post(f"{API_BASE}/instructions", json=payload, headers=headers)
     if resp.status_code >= 300:
@@ -553,9 +725,10 @@ async def create_instruction(instruction: InstructionIn, token: str = Depends(_g
 
 
 @app.put("/api/instructions/{instruction_id}")
-async def update_instruction(instruction_id: str, instruction: InstructionIn, token: str = Depends(_get_token)):
+async def update_instruction(instruction_id: str, instruction: InstructionIn, request: Request, token: str = Depends(_get_token)):
     """Update an existing instruction."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
     payload = instruction.dict()
     resp = requests.put(f"{API_BASE}/instructions/{instruction_id}", json=payload, headers=headers)
     if resp.status_code >= 300:
@@ -564,9 +737,10 @@ async def update_instruction(instruction_id: str, instruction: InstructionIn, to
 
 
 @app.delete("/api/instructions/{instruction_id}")
-async def delete_instruction(instruction_id: str, token: str = Depends(_get_token)):
+async def delete_instruction(instruction_id: str, request: Request, token: str = Depends(_get_token)):
     """Delete an instruction."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
     resp = requests.delete(f"{API_BASE}/instructions/{instruction_id}", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -574,16 +748,50 @@ async def delete_instruction(instruction_id: str, token: str = Depends(_get_toke
 
 
 @app.patch("/api/instructions/{instruction_id}/toggle")
-async def toggle_instruction(instruction_id: str, token: str = Depends(_get_token)):
+async def toggle_instruction(instruction_id: str, request: Request, token: str = Depends(_get_token)):
     """Toggle instruction enabled/disabled status."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
     resp = requests.patch(f"{API_BASE}/instructions/{instruction_id}/toggle", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
 
 
+# Plan API endpoints
+@app.get("/api/plans/instruction/{instruction_id}")
+async def get_plan_by_instruction(instruction_id: str, request: Request, token: str = Depends(_get_token)):
+    """Get the latest plan for a specific instruction."""
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
+    resp = requests.get(f"{API_BASE}/plans/instruction/{instruction_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.post("/api/plans/{plan_id}/critique")
+async def critique_plan(plan_id: str, critique: dict, request: Request, token: str = Depends(_get_token)):
+    """Submit a critique for a plan and generate a revised plan."""
+    username = getattr(request.state, "username", None)
+    headers = _api_headers(token, username)
+    resp = requests.post(f"{API_BASE}/plans/{plan_id}/critique", json=critique, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
 # Events API endpoints
+@app.get("/api/events/types")
+async def get_event_types(token: str = Depends(_get_token)):
+    """Get available event types."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/events/types", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
 @app.get("/api/events/stream")
 async def get_events(limit: int = 50, event_type: str = None, provider: str = None, token: str = Depends(_get_token)):
     """Get recent events with optional filtering."""

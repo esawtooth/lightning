@@ -1,362 +1,190 @@
-# vextir
+# Lightning OS
 
-Event based AI
+Lightning is an event-driven AI operating system that orchestrates autonomous and reactive AI workflows.
 
-## Event API
+## Overview
 
-Deploying the infrastructure will create an Azure Function that exposes an HTTP endpoint for queuing events.
-The HTTP triggers use anonymous authorization so no Function key is required. Authenticate only with a bearer token.
+Lightning provides a unified platform for building AI-powered applications that can:
+- **Plan and execute complex workflows** using Petri net-based planning
+- **Process events in real-time** through an event-driven architecture
+- **Integrate with multiple AI providers** (OpenAI, Azure OpenAI, etc.)
+- **Deploy anywhere** - same code runs locally and in the cloud
+- **Persist and synchronize state** with CRDT-based storage
 
-### POST /api/events
+## Quick Start
 
-Authenticate requests with a bearer token in the `Authorization` header.
-The bearer token should be issued by Azure Entra ID and identifies the user.
-Send a JSON body describing the event:
+### Local Development
+```bash
+# Clone the repository
+git clone https://github.com/your-org/lightning.git
+cd lightning
 
-```json
-{
-  "timestamp": "2023-01-01T00:00:00Z",
-  "source": "sensor-1",
-  "type": "movement",
-  "userID": "abc123",
-  "metadata": {"x": 1, "y": 2}
-}
+# Start the full stack locally
+./scripts/deploy-test.sh -m local
+
+# Or run a simple Python demo
+python examples/local_demo.py
 ```
 
-The function validates the data and publishes it to the Service Bus queue. The `type` field is used as the topic of the message.
+### Docker Compose
+```bash
+# Start all services with Docker Compose
+docker-compose up -d
 
-### POST /api/schedule
-
-Schedule an event for future delivery. Provide the same bearer token in the
-`Authorization` header and a JSON body containing the event payload and either
-a one-time `timestamp` or a `cron` expression:
-
-```json
-{
-  "event": { "type": "user.message", "source": "client", "metadata": {"message": "hi"} },
-  "timestamp": "2023-01-01T01:00:00Z"
-}
+# Check service status
+docker-compose ps
 ```
 
-or
+### Access Points
+- **Lightning UI**: http://localhost:8080
+- **Lightning API**: http://localhost:8000
+- **Context Hub**: http://localhost:3000
 
-```json
-{
-  "event": { "type": "user.message", "source": "client", "metadata": {"message": "hi"} },
-  "cron": "0 * * * *"
-}
+## Architecture
+
+Lightning uses a **provider-agnostic abstraction layer** that enables the same code to run in multiple environments:
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                         APPLICATION CODE                             │
+│  (Planner, Event Processor, Drivers, UI - Same for Local & Cloud)   │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        ABSTRACTION LAYER                             │
+├─────────────────┬──────────────────┬──────────────────┬────────────┤
+│ StorageProvider │    EventBus      │ ContainerRuntime │ Serverless │
+│   (Abstract)    │    (Abstract)    │   (Abstract)     │ (Abstract) │
+└─────────────────┴──────────────────┴──────────────────┴────────────┘
+         │                   │                  │                │
+         ▼                   ▼                  ▼                ▼
+┌─────────────────┬──────────────────┬──────────────────┬────────────┐
+│      LOCAL      │      AZURE       │   KUBERNETES     │     AWS    │
+├─────────────────┼──────────────────┼──────────────────┼────────────┤
+│ SQLite/Postgres │   Cosmos DB      │   PostgreSQL     │  DynamoDB  │
+│ Redis/RabbitMQ  │  Service Bus     │   Redis/Kafka    │    SQS     │
+│     Docker      │ Container Inst.  │   Kubernetes     │    ECS     │
+│ Python Process  │ Azure Functions  │   Kubernetes     │  Lambda    │
+└─────────────────┴──────────────────┴──────────────────┴────────────┘
 ```
 
-The function stores the schedule in durable storage and returns a schedule ID.
+## Core Components
 
-## Authentication
+### Lightning Core (`/core/`)
+- **Planner**: Petri net-based workflow planning and execution
+- **Vextir OS**: Event-driven operating system with universal event processor
+- **Abstractions**: Provider-agnostic interfaces for storage, messaging, and compute
+- **Tools**: Registry and bridges for external integrations
 
-Authentication is handled by **Azure Entra ID**. Users authenticate via the
-Microsoft identity platform and receive an access token which must be supplied
-in the `Authorization` header when calling the API endpoints.
+### Context Hub (`/context-hub/`)
+- **Persistent Storage**: CRDT-based document storage with conflict resolution
+- **Timeline System**: Event timeline with scrubbing and replay capabilities
+- **Search Engine**: Full-text search with Tantivy
+- **Snapshots**: Point-in-time backups and recovery
 
-The Function App and chat client are configured with the Entra ID tenant and
-application ID. No custom registration or password handling logic remains in the
-repository.
+### AI Agents (`/agents/`)
+- **Conseil**: Research and analysis agent (TypeScript/Node.js)
+- **Voice Agent**: Real-time voice interaction (Next.js/React)
+- **Agent Framework**: Flexible system for building custom AI agents
 
-## Python library
+### User Interfaces (`/ui/`)
+- **Integrated App**: Unified web interface for all Lightning features
+- **Chat Interface**: Real-time conversation with AI agents
+- **Dashboard**: System monitoring and management
 
-The `events` package provides a dataclass `Event` that can be used to structure events before they are sent to the API or processed downstream.
+## Key Features
 
-### LLMChatEvent
+### 🔄 Event-Driven Architecture
+All system communication flows through events, enabling loose coupling and scalability.
 
-`LLMChatEvent` extends `Event` and expects a list of chat messages stored under
-`metadata.messages`. Each message should be a mapping with at least `role` and
-`content` keys. When `LLMChatEvent.to_dict()` is called, the messages are
-ensured to appear under the `metadata` key.
+### 🧠 AI-Powered Planning
+Petri net-based planning system validates and executes complex multi-agent workflows.
 
-### UserMessenger function
+### 🔗 Universal Abstractions
+Same codebase runs locally (SQLite, Redis, Docker) and in cloud (Cosmos DB, Service Bus, Functions).
 
-The `UserMessenger` Azure Function listens to the Service Bus queue for events of type `user.message` and `llm.chat.response`. When such an event is processed it forwards the text to the user. If no notification endpoint is configured (via the `NOTIFY_URL` environment variable) the text is logged instead.
+### 📊 Persistent State
+CRDT-based storage ensures consistency across distributed deployments.
 
-This allows the platform to acknowledge incoming chat messages before the LLM generates a response and then deliver the assistant's reply once it is available.
+### 🛠️ Extensible Tools
+Rich ecosystem of tool integrations (email, calendar, GitHub, etc.).
 
-## ChatResponder function
+## Configuration
 
-`ChatResponder` is an Azure Function that listens to the Service Bus queue and
-uses OpenAI's chat API to generate replies to incoming `LLMChatEvent` messages.
-
-### Configuration
-
-- The function requires the following application settings:
-
-- `SERVICEBUS_CONNECTION` – connection string for the Service Bus namespace
-  (do **not** include the `EntityPath` property).
-- `SERVICEBUS_QUEUE` – name of the queue containing chat events.
-- `OPENAI_API_KEY` – API key used by the `openai` library.
-- `OPENAI_MODEL` – model name passed to OpenAI. Defaults to `gpt-3.5-turbo`.
-
-### Expected event
-
-Events must include a `metadata.messages` list of chat messages:
-
-```json
-{
-  "timestamp": "2023-01-01T00:00:00Z",
-  "source": "client",
-  "type": "llm.chat",
-  "userID": "abc123",
-  "metadata": {
-    "messages": [
-      {"role": "user", "content": "Hello!"}
-    ]
-  }
-}
-```
-
-### Example usage
-
-Send a chat event via the HTTP endpoint:
+Lightning adapts to different environments through configuration:
 
 ```bash
-curl -X POST \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d @event.json \
-  https://<function-app>.azurewebsites.net/api/events
+# Local Development
+export LIGHTNING_MODE=local
+export LIGHTNING_STORAGE_PROVIDER=local
+export LIGHTNING_EVENT_BUS_PROVIDER=redis
+
+# Azure Production
+export LIGHTNING_MODE=azure
+export LIGHTNING_STORAGE_PROVIDER=cosmos
+export LIGHTNING_EVENT_BUS_PROVIDER=servicebus
 ```
 
-`ChatResponder` publishes a new event of type `llm.chat.response` containing the
-assistant reply:
+## Development
 
-```json
-{
-  "timestamp": "2023-01-01T00:00:01Z",
-  "source": "ChatResponder",
-  "type": "llm.chat.response",
-  "userID": "abc123",
-  "metadata": {"reply": "..."}
-}
-```
+### Prerequisites
+- Python 3.10+
+- Docker and Docker Compose
+- Node.js 18+ (for agents)
+- Rust 1.70+ (for Context Hub)
 
-### Deployment
-
-Deploy the entire infrastructure and application code with Pulumi. Set the required configuration
-values for the OpenAI key, JWT signing key and container images:
-
+### Common Commands
 ```bash
-cd infra
-pip install -r requirements.txt
-pulumi config set openaiApiKey <key> --secret
-pulumi config set jwtSigningKey <secret> --secret
-pulumi config set uiImage vextiracr.azurecr.io/chainlit-client:<tag>
-pulumi config set workerImage vextiracr.azurecr.io/worker-task:<tag>
-pulumi config set domain vextir.com
-pulumi up
-```
-
- Pulumi automatically:
- - Creates all Azure resources (Function App, Cosmos DB, Service Bus, Communication Service, Email Service, etc.)
-- Packages the Azure Functions code
-- Deploys the function code to the Function App
-- Grants the Function App's managed identity read access to the deployment
-  package and sets `WEBSITE_RUN_FROM_PACKAGE` to the package URL
-- Builds and deploys the UI containers
-- Configures all environment variables and connections
-- Creates an Azure DNS zone with records for the chat UI and API.
-  Update your domain registrar to use the zone's name servers manually
-  (defaults to `vextir.com` if no domain is configured).
-  Pulumi exports these servers as `dnsZoneNameServers`.
-
-After `pulumi up` completes copy the values from `dnsZoneNameServers` and
-update the nameserver records for your domain in GoDaddy.
-
-The Function App uses the **Python 3.10** runtime. If you deployed an older
-stack running Python 3.9 you may see a deprecation warning in the Azure portal.
-Redeploy with the updated Pulumi script to upgrade the runtime.
-
-The stack also provisions a container instance running the Chainlit UI and
-dashboard. Pulumi exports the container's public URL as `uiUrl`.
-
-## Function Configuration
-
-The Azure Functions rely on several environment variables for authentication and
-messaging:
-
-- `OPENAI_API_KEY` &mdash; API key used by the `ChatResponder` function when
-  calling OpenAI.
-  When deploying with GitHub Actions, set this as the `OPENAI_API_KEY` secret
-  so the workflow can configure the Function App.
-- `OPENAI_MODEL` &mdash; model name for ChatResponder when calling OpenAI
-  (defaults to `gpt-3.5-turbo`).
-- `SERVICEBUS_CONNECTION` &mdash; connection string for the Service Bus
-  namespace.
-- `SERVICEBUS_QUEUE` &mdash; queue name for publishing and receiving events.
- - `NOTIFY_URL` &mdash; endpoint that `UserMessenger` calls to deliver messages
-   to the chat client. Pulumi sets this automatically based on the Chainlit
-   container address.
- - `AAD_CLIENT_ID` &mdash; application ID issued by Azure Entra ID.
- - `AAD_CLIENT_SECRET` &mdash; client secret for the Entra ID application.
- - `AAD_TENANT_ID` &mdash; tenant ID where the application is registered.
-- `COSMOS_CONNECTION` &mdash; connection string for the Cosmos DB account.
-- `COSMOS_DATABASE` &mdash; database name (defaults to `vextir`).
-- `USER_CONTAINER` &mdash; container storing user accounts. Defaults to `users`.
-- `REPO_CONTAINER` &mdash; container storing repository URLs. Defaults to `repos`.
-- `SCHEDULE_CONTAINER` &mdash; container used by the scheduler. Defaults to `schedules`.
-- `TASK_CONTAINER` &mdash; container storing worker task records. Defaults to `tasks`.
-- `ACS_CONNECTION` &mdash; connection string for Azure Communication Services email.
-- This connection string is retrieved from the Communication Service, while an additional Email Service resource handles domains.
-- `ACS_SENDER` &mdash; default sender email address for verification messages. Defaults to `no-reply@<domain>` where `<domain>` comes from the Pulumi `domain` config (set in the GitHub workflow).
-- `VERIFY_BASE_URL` &mdash; base URL used to generate verification links.
-- `APPINSIGHTS_INSTRUMENTATIONKEY` &mdash; instrumentation key for Application Insights. Pulumi sets this automatically.
-- `WEBSITE_RUN_FROM_PACKAGE` &mdash; URL of the function package. Pulumi grants
-  the Function App's managed identity read access so the app can download the
-  package automatically.
-
-Set these values in your deployment environment or in a local `.env` file when
-testing the functions locally.
-
-## Local Testing
-
-When running the project on your machine you can provide the environment
-settings either through `azure-function/local.settings.json` (used by Azure
-Functions Core Tools) or through a `.env` file in the repository root.
-
-### Sample `local.settings.json`
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
-    "FUNCTIONS_WORKER_RUNTIME": "python",
-    "OPENAI_API_KEY": "sk-...",
-    "OPENAI_MODEL": "gpt-3.5-turbo",
-    "SERVICEBUS_CONNECTION": "<namespace-connection-string>",
-    "SERVICEBUS_QUEUE": "chat-events",
-    "NOTIFY_URL": "https://localhost/chat/notify",
-    "AAD_CLIENT_ID": "<app-id>",
-    "AAD_CLIENT_SECRET": "<client-secret>",
-    "AAD_TENANT_ID": "<tenant-id>",
-    "COSMOS_CONNECTION": "<cosmos-connection-string>",
-    "COSMOS_DATABASE": "vextir",
-    "USER_CONTAINER": "users",
-    "REPO_CONTAINER": "repos",
-    "SCHEDULE_CONTAINER": "schedules",
-    "TASK_CONTAINER": "tasks",
-    "HUB_URL": "http://localhost:3000"
-  }
-}
-```
-
-### Sample `.env`
-
-```env
-OPENAI_API_KEY=sk-...
-OPENAI_MODEL=gpt-3.5-turbo
-SERVICEBUS_CONNECTION=<namespace-connection-string>
-SERVICEBUS_QUEUE=chat-events
-NOTIFY_URL=https://localhost/chat/notify
-AAD_CLIENT_ID=<app-id>
-AAD_CLIENT_SECRET=<client-secret>
-AAD_TENANT_ID=<tenant-id>
-COSMOS_CONNECTION=<cosmos-connection-string>
-COSMOS_DATABASE=vextir
-USER_CONTAINER=users
-REPO_CONTAINER=repos
-SCHEDULE_CONTAINER=schedules
-TASK_CONTAINER=tasks
-HUB_URL=http://localhost:3000
-ACS_CONNECTION=<acs-connection>
-ACS_SENDER=no-reply@example.com
-VERIFY_BASE_URL=https://localhost
-AUTH_TOKEN=<jwt-token>
-```
-
-Start the functions locally from the `azure-function` directory:
-
-```bash
-cd azure-function
-func start
-```
-
-In another terminal, run the chat client:
-
-```bash
-chainlit run chat_client/chainlit_app.py
-```
-
-Set `EVENT_API_URL` to `http://localhost:7071/api/events` so the client sends
-events to your local Function App. Provide your bearer token in the
-`AUTH_TOKEN` environment variable so the client can authenticate with the Event
-API.
-
-### Azure CLI function test
-
-Use `scripts/test_azure_functions.sh` to verify that your Function App is
-running and that the `UserAuth` endpoints respond correctly. The script requires
-the Azure CLI to be installed and authenticated.
-
-```bash
-bash scripts/test_azure_functions.sh <resource-group> <function-app-name>
-```
-
-## Chainlit client
-
-Run the interactive chat client using [Chainlit](https://github.com/Chainlit/chainlit):
-
-```bash
-chainlit run chat_client/chainlit_app.py
-```
-
-`EVENT_API_URL` should point to the `/api/events` endpoint of the Azure
-Function. Configure `AUTH_TOKEN` with your JWT and set `NOTIFY_URL` for the
-Azure Functions as `http://<chainlit_host>/notify` so `UserMessenger` can
-forward messages back to the client.
-
-If your authentication gateway runs on a different host, set
-`AUTH_GATEWAY_URL` accordingly. When unset, the URL is inferred from the
-request's forwarded headers.
-
-## Dashboard
-
-A simple FastAPI dashboard is located in the `dashboard/` directory. It allows
-logging in, submitting events, and monitoring worker tasks. Launch it with:
-
-```bash
-uvicorn dashboard.app:app --reload
-```
-
-Set `API_BASE` to the base URL of your Azure Functions (defaults to
-`http://localhost:7071/api`). If `AUTH_TOKEN` is provided the dashboard will use
-it for outgoing requests; otherwise use the `/login` page to obtain a token.
-Visit `/tasks` to view task status and container logs.
-
-Container logs now include each bash command executed by the agent along with
-its output, allowing you to watch task progress in near real-time.
-
-
-## Worker Agents
-
-The `agents/` directory contains agent implementations that the worker container can
-invoke to process tasks. Each agent registers itself in `agents.AGENT_REGISTRY`
-and exposes a `run()` method used to handle the commands from a
-`WorkerTaskEvent`.
-
-All worker images include the `contexthub` CLI tool. Agents can invoke this
-command (or use the `Agent.hub()` helper) to interact with the deployed Context
-Hub service defined by the `HUB_URL` environment variable.
-
-## Tests
-
-Install the Python dependencies and run unit tests with `pytest`:
-
-```bash
-pip install -r agents/requirements-worker.txt
-pip install -e vextir_os
+# Core development
+cd core
+pip install -e .[dev]
 pytest
+
+# Context Hub
+cd context-hub
+cargo build --release
+cargo test
+
+# Conseil Agent
+cd agents/conseil
+pnpm install
+pnpm test
+
+# Voice Agent
+cd agents/voice-agent/webapp
+npm install
+npm run dev
 ```
 
-Performance benchmarks use the `pytest-benchmark` plugin. Generate a
-benchmark report for core functionality with:
+## Documentation
 
-```bash
-pytest tests/test_performance.py --benchmark-only
-```
+Complete documentation is available in the [`/docs`](./docs) directory:
 
-The command prints a summary table of timing results to the console.
+- **[Getting Started](./docs/development/LOCAL_DEVELOPMENT.md)** - Local development setup
+- **[Architecture](./docs/architecture/SYSTEM_OVERVIEW.md)** - System architecture overview
+- **[Deployment](./docs/deployment/README.md)** - Deployment guides for different environments
+- **[API Reference](./docs/reference/api.md)** - Complete API documentation
+- **[Configuration](./docs/reference/configuration.md)** - Environment variables and settings
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+- **Issues**: Report bugs and request features on [GitHub Issues](https://github.com/your-org/lightning/issues)
+- **Discussions**: Join the community on [GitHub Discussions](https://github.com/your-org/lightning/discussions)
+- **Documentation**: Comprehensive docs at [`/docs`](./docs)
+
+---
+
+Built with ❤️ by the Lightning OS team

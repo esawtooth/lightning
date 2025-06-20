@@ -25,10 +25,10 @@
         font-size: 0.875rem;
     }
     .modal {
-        display: none;
+        display: none !important;
     }
     .modal.show {
-        display: flex;
+        display: flex !important;
     }
 </style>
 {% endblock %}
@@ -38,8 +38,8 @@
     <!-- Header with Create Button -->
     <div class="flex justify-between items-center">
         <div>
-            <h2 class="text-2xl font-bold text-gray-900">Email & Calendar Instructions</h2>
-            <p class="text-gray-600 mt-1">Define how your email and calendar events should be processed</p>
+            <h2 class="text-2xl font-bold text-gray-900">Automation Instructions</h2>
+            <p class="text-gray-600 mt-1">Create automated workflows that respond to events and execute actions</p>
         </div>
         <button id="create-instruction-btn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2">
             <i class="fas fa-plus"></i>
@@ -111,7 +111,7 @@
 
 <!-- Create/Edit Instruction Modal -->
 <div id="instruction-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-4xl shadow-lg rounded-md bg-white">
+    <div class="relative top-20 mx-auto p-5 border w-11/12 max-w-3xl shadow-lg rounded-md bg-white">
         <div class="mt-3">
             <!-- Modal Header -->
             <div class="flex justify-between items-center mb-4">
@@ -121,405 +121,228 @@
                 </button>
             </div>
 
-            <!-- Modal Form -->
+            <!-- Natural Language Form -->
             <form id="instruction-form" class="space-y-6">
                 <input type="hidden" id="instruction-id" name="instruction_id">
                 
-                <!-- Basic Info -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label for="instruction-name" class="block text-sm font-medium text-gray-700">Name</label>
-                        <input type="text" id="instruction-name" name="name" required 
-                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label for="instruction-enabled" class="block text-sm font-medium text-gray-700">Status</label>
-                        <select id="instruction-enabled" name="enabled" 
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <option value="true">Enabled</option>
-                            <option value="false">Disabled</option>
-                        </select>
-                    </div>
-                </div>
-
+                <!-- Name Field -->
                 <div>
-                    <label for="instruction-description" class="block text-sm font-medium text-gray-700">Description</label>
-                    <textarea id="instruction-description" name="description" rows="2" 
-                              class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">
+                        Instruction Name
+                    </label>
+                    <input type="text" id="name" name="name" required
+                           placeholder="e.g., Daily Summary Report, Project Status Monitor"
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
                 </div>
-
-                <!-- Trigger Configuration -->
-                <div class="border rounded-lg p-4">
-                    <h4 class="text-md font-medium text-gray-900 mb-3">Trigger Configuration</h4>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                        <div>
-                            <label for="event-type" class="block text-sm font-medium text-gray-700">Event Type</label>
-                            <select id="event-type" name="event_type" 
-                                    class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                <option value="email.received">Email Received</option>
-                                <option value="email.sent">Email Sent</option>
-                                <option value="calendar.received">Calendar Event Received</option>
-                                <option value="calendar.created">Calendar Event Created</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="providers" class="block text-sm font-medium text-gray-700">Providers</label>
-                            <div class="mt-1 space-y-2">
-                                <label class="inline-flex items-center">
-                                    <input type="checkbox" name="providers" value="gmail" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                                    <span class="ml-2">Gmail</span>
-                                </label>
-                                <label class="inline-flex items-center ml-4">
-                                    <input type="checkbox" name="providers" value="outlook" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                                    <span class="ml-2">Outlook</span>
-                                </label>
-                                <label class="inline-flex items-center ml-4">
-                                    <input type="checkbox" name="providers" value="icloud" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                                    <span class="ml-2">iCloud</span>
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Content Filters -->
-                    <div>
-                        <label for="subject-contains" class="block text-sm font-medium text-gray-700">Subject Contains (comma-separated)</label>
-                        <input type="text" id="subject-contains" name="subject_contains" 
-                               placeholder="project, urgent, meeting"
-                               class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                    </div>
+                
+                <!-- Natural Language Instruction -->
+                <div>
+                    <label for="instruction-text" class="block text-sm font-medium text-gray-700 mb-1">
+                        What should this instruction do?
+                    </label>
+                    <textarea id="instruction-text" name="instruction_text" rows="4" required
+                              placeholder="Describe in natural language what you want to happen. For example:&#10;&#10;'When I receive an email about a project update, extract the key information and update my project status summary'&#10;&#10;'Every morning at 9am, check my calendar and email me a summary of today's meetings'"
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Be specific about triggers (when/what events) and actions (what to do)
+                    </p>
                 </div>
-
-                <!-- Action Configuration -->
-                <div class="border rounded-lg p-4">
-                    <h4 class="text-md font-medium text-gray-900 mb-3">Action Configuration</h4>
-                    
-                    <div class="mb-4">
-                        <label for="action-type" class="block text-sm font-medium text-gray-700">Action Type</label>
-                        <select id="action-type" name="action_type" 
-                                class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <option value="update_context_summary">Update Context Summary (Fast)</option>
-                            <option value="send_email">Send Email (Fast)</option>
-                            <option value="create_task">Create Task (Fast)</option>
-                            <option value="send_notification">Send Notification (Fast)</option>
-                            <option value="conseil_task">AI-Powered Task (Conseil)</option>
-                        </select>
-                    </div>
-
-                    <!-- Context Summary Action -->
-                    <div id="context-action-config" class="space-y-4">
-                        <div>
-                            <label for="context-key" class="block text-sm font-medium text-gray-700">Context Key</label>
-                            <input type="text" id="context-key" name="context_key" 
-                                   placeholder="email_summary, meeting_schedule, etc."
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                
+                <!-- Available Events Reference -->
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <h4 class="text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Available Event Triggers
+                    </h4>
+                    <div id="available-events" class="grid grid-cols-2 gap-2 text-xs">
+                        <div class="space-y-1">
+                            <div class="font-semibold text-gray-600">External Events:</div>
+                            <div class="text-gray-500">Loading available events...</div>
                         </div>
-                        <div>
-                            <label for="synthesis-prompt" class="block text-sm font-medium text-gray-700">Synthesis Prompt</label>
-                            <textarea id="synthesis-prompt" name="synthesis_prompt" rows="3" 
-                                      placeholder="Update the summary with key information: action items, deadlines, and important decisions."
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Email Action -->
-                    <div id="email-action-config" class="space-y-4 hidden">
-                        <div>
-                            <label for="email-to" class="block text-sm font-medium text-gray-700">Send To</label>
-                            <input type="email" id="email-to" name="email_to" 
-                                   placeholder="user@example.com"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label for="email-subject" class="block text-sm font-medium text-gray-700">Subject Template</label>
-                            <input type="text" id="email-subject" name="email_subject" 
-                                   placeholder="Alert: {subject}"
-                                   class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                        </div>
-                        <div>
-                            <label for="email-body" class="block text-sm font-medium text-gray-700">Body Template</label>
-                            <textarea id="email-body" name="email_body" rows="3" 
-                                      placeholder="New email from {from}: {subject}"
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
-                        </div>
-                    </div>
-
-                    <!-- Conseil Task Action -->
-                    <div id="conseil-action-config" class="space-y-4 hidden">
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                            <div class="flex items-start">
-                                <div class="flex-shrink-0">
-                                    <i class="fas fa-robot text-blue-600 text-lg"></i>
-                                </div>
-                                <div class="ml-3">
-                                    <h5 class="text-sm font-medium text-blue-800">AI-Powered Processing</h5>
-                                    <p class="text-sm text-blue-700 mt-1">
-                                        This action will spawn a Conseil AI worker with full context about the event. 
-                                        The AI can perform complex reasoning, update context, create events, and execute system commands.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div>
-                            <label for="conseil-prompt" class="block text-sm font-medium text-gray-700">Task Prompt</label>
-                            <textarea id="conseil-prompt" name="conseil_prompt" rows="4" 
-                                      placeholder="Analyze this email and extract key information. If it contains action items, create tasks for each one. Update the project status context with any relevant updates. Send me a summary if there are urgent items."
-                                      class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
-                            <p class="text-sm text-gray-500 mt-1">
-                                Describe what you want the AI to do with this event. Be specific about actions to take, context to update, or events to create.
-                            </p>
-                        </div>
-                        
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label for="conseil-complexity" class="block text-sm font-medium text-gray-700">Complexity Level</label>
-                                <select id="conseil-complexity" name="conseil_complexity" 
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="simple">Simple (Quick processing)</option>
-                                    <option value="complex" selected>Complex (Full AI reasoning)</option>
-                                    <option value="advanced">Advanced (Extended processing)</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label for="conseil-fallback" class="block text-sm font-medium text-gray-700">Fallback Action</label>
-                                <select id="conseil-fallback" name="conseil_fallback" 
-                                        class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                    <option value="">None</option>
-                                    <option value="send_notification">Send Notification</option>
-                                    <option value="log_event">Log Event Only</option>
-                                </select>
-                                <p class="text-sm text-gray-500 mt-1">Action to take if Conseil processing fails</p>
+                        <div class="space-y-1">
+                            <div class="font-semibold text-gray-600">Time-based:</div>
+                            <div class="text-gray-500">
+                                • Cron schedules (e.g., "every day at 9am")<br>
+                                • Intervals (e.g., "every 2 hours")<br>
+                                • Manual triggers
                             </div>
                         </div>
                     </div>
                 </div>
-
+                
+                <!-- Status Toggle -->
+                <div class="flex items-center justify-between">
+                    <label class="block text-sm font-medium text-gray-700">Status</label>
+                    <label class="inline-flex items-center">
+                        <input type="checkbox" id="enabled" name="enabled" checked
+                               class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <span class="ml-2 text-sm text-gray-600">Enabled</span>
+                    </label>
+                </div>
+                
                 <!-- Modal Actions -->
                 <div class="flex justify-end space-x-3 pt-4 border-t">
                     <button type="button" id="cancel-btn" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
                         Cancel
                     </button>
                     <button type="submit" class="px-4 py-2 bg-blue-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-blue-700">
-                        Save Instruction
+                        <span id="submit-text">Create Instruction</span>
                     </button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+
+<!-- Edit Instruction Modal with Plan Visualization -->
+<div id="edit-instruction-modal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-11/12 max-w-6xl shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <!-- Modal Header -->
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-medium text-gray-900">Edit Instruction</h3>
+                <button id="close-edit-modal" class="text-gray-400 hover:text-gray-600">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Left: Instruction Details & Critique -->
+                <div class="space-y-4">
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-700 mb-3">Instruction Details</h4>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Name:</label>
+                                <p id="edit-instruction-name" class="text-gray-900"></p>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Status:</label>
+                                <span id="edit-instruction-status" class="ml-2"></span>
+                            </div>
+                            <div>
+                                <label class="text-sm font-medium text-gray-600">Natural Language Description:</label>
+                                <p id="edit-instruction-description" class="text-gray-900 mt-1"></p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-blue-50 rounded-lg p-4">
+                        <h4 class="font-semibold text-gray-700 mb-3">Plan Summary</h4>
+                        <p id="edit-plan-summary" class="text-gray-700 text-sm">Loading plan summary...</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">
+                            Critique or Refine this Plan
+                        </label>
+                        <textarea id="edit-critique-text" rows="4" 
+                                  placeholder="Describe how you'd like to modify this plan..."
+                                  class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+                        <button onclick="submitEditCritique()" 
+                                class="mt-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 text-sm">
+                            <i class="fas fa-sync-alt mr-1"></i>Regenerate Plan
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Right: Plan Visualization -->
+                <div class="space-y-4">
+                    <div class="bg-white border rounded-lg p-4 h-full">
+                        <h4 class="font-semibold text-gray-700 mb-3">Plan Visualization</h4>
+                        <div id="plan-visualization" class="min-h-[400px]">
+                            <div class="text-center py-8">
+                                <i class="fas fa-spinner fa-spin text-gray-400 text-2xl"></i>
+                                <p class="text-gray-500 mt-2">Loading plan visualization...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t mt-6">
+                <button type="button" onclick="closeEditModal()" 
+                        class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
 {% endblock %}
 
 {% block extra_scripts %}
 <script>
+// Available events - will be populated from the backend
+let availableEvents = [];
+
+// Load available events from the backend
+async function loadAvailableEvents() {
+    try {
+        const response = await fetch('/api/events/types');
+        if (response.ok) {
+            const data = await response.json();
+            availableEvents = data.external || [];
+            
+            // Update the events display
+            const eventsContainer = document.querySelector('#available-events .space-y-1:first-child');
+            if (eventsContainer && availableEvents.length > 0) {
+                const eventsHtml = availableEvents.map(event => 
+                    `• ${event}`
+                ).join('<br>');
+                eventsContainer.innerHTML = `
+                    <div class="font-semibold text-gray-600">External Events:</div>
+                    <div class="text-gray-500">${eventsHtml}</div>
+                `;
+            }
+        }
+    } catch (error) {
+        console.error('Failed to load available events:', error);
+    }
+}
+
+// Main code starts here
 let instructions = [];
 let editingInstructionId = null;
 
-// Load instructions on page load
+// Initialize on page load
 document.addEventListener('DOMContentLoaded', function() {
+    loadAvailableEvents();
     loadInstructions();
     setupEventListeners();
 });
 
 function setupEventListeners() {
     // Modal controls
-    document.getElementById('create-instruction-btn').addEventListener('click', () => openModal());
-    document.getElementById('close-modal').addEventListener('click', () => closeModal());
-    document.getElementById('cancel-btn').addEventListener('click', () => closeModal());
+    const createBtn = document.getElementById('create-instruction-btn');
+    if (createBtn) {
+        createBtn.addEventListener('click', () => {
+            console.log('Create button clicked');
+            openModal();
+        });
+    } else {
+        console.error('Create instruction button not found!');
+    }
+    
+    const closeBtn = document.getElementById('close-modal');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => closeModal());
+    }
+    
+    const cancelBtn = document.getElementById('cancel-btn');
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => closeModal());
+    }
+    
+    document.getElementById('close-edit-modal')?.addEventListener('click', () => closeEditModal());
     
     // Form submission
-    document.getElementById('instruction-form').addEventListener('submit', handleFormSubmit);
-    
-    // Action type change
-    document.getElementById('action-type').addEventListener('change', handleActionTypeChange);
-    
-    // Close modal on outside click
-    document.getElementById('instruction-modal').addEventListener('click', function(e) {
-        if (e.target === this) closeModal();
-    });
-}
-
-async function loadInstructions() {
-    try {
-        const response = await fetch('/api/instructions');
-        if (response.ok) {
-            instructions = await response.json();
-            renderInstructions();
-            updateStats();
-        } else {
-            showError('Failed to load instructions');
-        }
-    } catch (error) {
-        console.error('Error loading instructions:', error);
-        showError('Failed to load instructions');
-    }
-}
-
-function renderInstructions() {
-    const container = document.getElementById('instructions-container');
-    
-    if (instructions.length === 0) {
-        container.innerHTML = `
-            <div class="text-center py-8">
-                <i class="fas fa-cogs text-gray-400 text-4xl mb-4"></i>
-                <h3 class="text-lg font-medium text-gray-900 mb-2">No Instructions Yet</h3>
-                <p class="text-gray-500 mb-4">Create your first instruction to start processing email and calendar events</p>
-                <button onclick="openModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
-                    Create First Instruction
-                </button>
-            </div>
-        `;
-        return;
-    }
-
-    const html = instructions.map(instruction => `
-        <div class="instruction-card bg-gray-50 rounded-lg p-4 mb-4">
-            <div class="flex justify-between items-start mb-3">
-                <div class="flex-1">
-                    <h4 class="text-lg font-medium text-gray-900">${instruction.name}</h4>
-                    <p class="text-gray-600 text-sm mt-1">${instruction.description || 'No description'}</p>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <span class="trigger-badge ${instruction.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'} rounded-full">
-                        ${instruction.enabled ? 'Enabled' : 'Disabled'}
-                    </span>
-                    <div class="flex space-x-1">
-                        <button onclick="toggleInstruction('${instruction.id}')" 
-                                class="p-2 text-gray-400 hover:text-gray-600" title="Toggle">
-                            <i class="fas fa-power-off"></i>
-                        </button>
-                        <button onclick="editInstruction('${instruction.id}')" 
-                                class="p-2 text-gray-400 hover:text-blue-600" title="Edit">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button onclick="deleteInstruction('${instruction.id}')" 
-                                class="p-2 text-gray-400 hover:text-red-600" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                <div>
-                    <span class="font-medium text-gray-700">Trigger:</span>
-                    <div class="mt-1">
-                        <span class="trigger-badge bg-blue-100 text-blue-800 rounded-full">
-                            ${instruction.trigger.event_type}
-                        </span>
-                        ${(instruction.trigger.providers || []).map(p => 
-                            `<span class="trigger-badge bg-purple-100 text-purple-800 rounded-full ml-1">${p}</span>`
-                        ).join('')}
-                    </div>
-                </div>
-                <div>
-                    <span class="font-medium text-gray-700">Action:</span>
-                    <div class="mt-1">
-                        <span class="action-badge bg-orange-100 text-orange-800 rounded-full">
-                            ${instruction.action.type}
-                        </span>
-                    </div>
-                </div>
-                <div>
-                    <span class="font-medium text-gray-700">Executions:</span>
-                    <div class="mt-1">
-                        <span class="text-gray-900">${instruction.execution_count || 0}</span>
-                        ${instruction.last_executed_at ? 
-                            `<div class="text-xs text-gray-500">Last: ${new Date(instruction.last_executed_at).toLocaleDateString()}</div>` : 
-                            '<div class="text-xs text-gray-500">Never executed</div>'
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
-    `).join('');
-    
-    container.innerHTML = html;
-}
-
-function updateStats() {
-    document.getElementById('total-instructions').textContent = instructions.length;
-    document.getElementById('active-instructions').textContent = instructions.filter(i => i.enabled).length;
-    
-    const totalExecutions = instructions.reduce((sum, i) => sum + (i.execution_count || 0), 0);
-    document.getElementById('total-executions').textContent = totalExecutions;
-    
-    const lastExecution = instructions
-        .filter(i => i.last_executed_at)
-        .sort((a, b) => new Date(b.last_executed_at) - new Date(a.last_executed_at))[0];
-    
-    document.getElementById('last-execution').textContent = lastExecution ? 
-        new Date(lastExecution.last_executed_at).toLocaleDateString() : 'Never';
-}
-
-function openModal(instruction = null) {
-    editingInstructionId = instruction?.id || null;
-    document.getElementById('modal-title').textContent = instruction ? 'Edit Instruction' : 'Create New Instruction';
-    
-    if (instruction) {
-        // Populate form with instruction data
-        document.getElementById('instruction-id').value = instruction.id;
-        document.getElementById('instruction-name').value = instruction.name;
-        document.getElementById('instruction-description').value = instruction.description || '';
-        document.getElementById('instruction-enabled').value = instruction.enabled.toString();
-        document.getElementById('event-type').value = instruction.trigger.event_type;
-        
-        // Set providers
-        const providerCheckboxes = document.querySelectorAll('input[name="providers"]');
-        providerCheckboxes.forEach(cb => {
-            cb.checked = (instruction.trigger.providers || []).includes(cb.value);
-        });
-        
-        // Set content filters
-        const subjectContains = instruction.trigger.conditions?.content_filters?.subject_contains || [];
-        document.getElementById('subject-contains').value = subjectContains.join(', ');
-        
-        // Set action
-        document.getElementById('action-type').value = instruction.action.type;
-        handleActionTypeChange();
-        
-        if (instruction.action.type === 'update_context_summary') {
-            document.getElementById('context-key').value = instruction.action.config?.context_key || '';
-            document.getElementById('synthesis-prompt').value = instruction.action.config?.synthesis_prompt || '';
-        } else if (instruction.action.type === 'send_email') {
-            document.getElementById('email-to').value = instruction.action.config?.email?.to || '';
-            document.getElementById('email-subject').value = instruction.action.config?.email?.subject || '';
-            document.getElementById('email-body').value = instruction.action.config?.email?.body_template || '';
-        }
-    } else {
-        // Reset form
-        document.getElementById('instruction-form').reset();
-        document.getElementById('instruction-id').value = '';
-        handleActionTypeChange();
-    }
-    
-    document.getElementById('instruction-modal').classList.add('show');
-}
-
-function closeModal() {
-    document.getElementById('instruction-modal').classList.remove('show');
-    editingInstructionId = null;
-}
-
-function handleActionTypeChange() {
-    const actionType = document.getElementById('action-type').value;
-    const contextConfig = document.getElementById('context-action-config');
-    const emailConfig = document.getElementById('email-action-config');
-    const conseilConfig = document.getElementById('conseil-action-config');
-    
-    // Hide all configs
-    contextConfig.classList.add('hidden');
-    emailConfig.classList.add('hidden');
-    conseilConfig.classList.add('hidden');
-    
-    // Show relevant config
-    if (actionType === 'update_context_summary') {
-        contextConfig.classList.remove('hidden');
-    } else if (actionType === 'send_email') {
-        emailConfig.classList.remove('hidden');
-    } else if (actionType === 'conseil_task') {
-        conseilConfig.classList.remove('hidden');
+    const form = document.getElementById('instruction-form');
+    if (form) {
+        form.addEventListener('submit', handleFormSubmit);
     }
 }
 
@@ -527,49 +350,28 @@ async function handleFormSubmit(e) {
     e.preventDefault();
     
     const formData = new FormData(e.target);
-    const providers = Array.from(document.querySelectorAll('input[name="providers"]:checked')).map(cb => cb.value);
-    const subjectContains = formData.get('subject_contains').split(',').map(s => s.trim()).filter(s => s);
+    const name = formData.get('name');
+    const instructionText = formData.get('instruction_text');
+    const enabled = formData.get('enabled') === 'on';
     
-    const instruction = {
-        name: formData.get('name'),
-        description: formData.get('description'),
-        enabled: formData.get('enabled') === 'true',
+    // Convert natural language to structured format
+    // In a real implementation, this would use NLP or the planner directly
+    const instructionData = {
+        name: name,
+        description: instructionText,
+        enabled: enabled,
         trigger: {
-            event_type: formData.get('event_type'),
-            providers: providers,
-            conditions: {
-                content_filters: {
-                    subject_contains: subjectContains
-                }
-            }
+            event_type: "manual", // This will be extracted from the natural language
+            providers: [],
+            conditions: {}
         },
         action: {
-            type: formData.get('action_type'),
-            config: {}
+            type: "conseil_task", // Default to AI-powered task
+            config: {
+                task_description: instructionText
+            }
         }
     };
-    
-    // Set action config based on type
-    if (instruction.action.type === 'update_context_summary') {
-        instruction.action.config = {
-            context_key: formData.get('context_key'),
-            synthesis_prompt: formData.get('synthesis_prompt')
-        };
-    } else if (instruction.action.type === 'send_email') {
-        instruction.action.config = {
-            email: {
-                to: formData.get('email_to'),
-                subject: formData.get('email_subject'),
-                body_template: formData.get('email_body')
-            }
-        };
-    } else if (instruction.action.type === 'conseil_task') {
-        instruction.action.config = {
-            prompt: formData.get('conseil_prompt'),
-            complexity: formData.get('conseil_complexity'),
-            fallback_action: formData.get('conseil_fallback') || null
-        };
-    }
     
     try {
         const url = editingInstructionId ? `/api/instructions/${editingInstructionId}` : '/api/instructions';
@@ -580,13 +382,13 @@ async function handleFormSubmit(e) {
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify(instruction)
+            body: JSON.stringify(instructionData)
         });
         
         if (response.ok) {
+            showSuccess(editingInstructionId ? 'Instruction updated successfully' : 'Instruction created successfully');
             closeModal();
             loadInstructions();
-            showSuccess(editingInstructionId ? 'Instruction updated successfully' : 'Instruction created successfully');
         } else {
             const error = await response.text();
             showError(`Failed to save instruction: ${error}`);
@@ -597,11 +399,263 @@ async function handleFormSubmit(e) {
     }
 }
 
+function openModal() {
+    editingInstructionId = null;
+    document.getElementById('modal-title').textContent = 'Create New Instruction';
+    document.getElementById('submit-text').textContent = 'Create Instruction';
+    document.getElementById('instruction-form').reset();
+    const modal = document.getElementById('instruction-modal');
+    modal.classList.add('show');
+    console.log('Modal opened:', modal.classList.toString());
+}
+
+function closeModal() {
+    const modal = document.getElementById('instruction-modal');
+    modal.classList.remove('show');
+    editingInstructionId = null;
+}
+
 function editInstruction(id) {
     const instruction = instructions.find(i => i.id === id);
-    if (instruction) {
-        openModal(instruction);
+    if (!instruction) return;
+    
+    // Show edit modal with plan visualization
+    document.getElementById('edit-instruction-modal').classList.remove('hidden');
+    
+    // Populate instruction details
+    document.getElementById('edit-instruction-name').textContent = instruction.name;
+    document.getElementById('edit-instruction-status').innerHTML = instruction.enabled ? 
+        '<span class="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Enabled</span>' :
+        '<span class="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">Disabled</span>';
+    document.getElementById('edit-instruction-description').textContent = instruction.description || 'No description available';
+    
+    // Load plan for this instruction
+    loadPlanForEdit(id);
+}
+
+function closeEditModal() {
+    document.getElementById('edit-instruction-modal').classList.add('hidden');
+    document.getElementById('edit-critique-text').value = '';
+}
+
+async function loadPlanForEdit(instructionId) {
+    const summaryElement = document.getElementById('edit-plan-summary');
+    const vizElement = document.getElementById('plan-visualization');
+    
+    try {
+        const response = await fetch(`/api/plans/instruction/${instructionId}`);
+        if (response.ok) {
+            const plan = await response.json();
+            
+            // Update summary
+            summaryElement.textContent = plan.summary || 'No summary available';
+            
+            // Store current plan for critique
+            window.currentEditPlan = plan;
+            window.currentEditInstructionId = instructionId;
+            
+            // Render plan visualization
+            renderPlanVisualization(plan, vizElement);
+        } else {
+            summaryElement.textContent = 'No plan generated yet';
+            vizElement.innerHTML = '<p class="text-center text-gray-500 py-8">No plan to visualize</p>';
+        }
+    } catch (error) {
+        console.error('Error loading plan:', error);
+        summaryElement.textContent = 'Error loading plan';
     }
+}
+
+function renderPlanVisualization(plan, container) {
+    // Simple visualization - in production, use a proper graph library like D3.js or vis.js
+    const steps = plan.steps || [];
+    if (steps.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 py-8">No steps defined in plan</p>';
+        return;
+    }
+    
+    let html = '<div class="space-y-4">';
+    
+    // Show triggers
+    const triggers = plan.external_triggers || [];
+    if (triggers.length > 0) {
+        html += `
+            <div class="mb-4">
+                <h5 class="font-semibold text-sm text-gray-700 mb-2">Triggers:</h5>
+                <div class="flex flex-wrap gap-2">
+                    ${triggers.map(t => `<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">${t}</span>`).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Show steps as a flow
+    html += '<div class="relative">';
+    steps.forEach((step, index) => {
+        const isLast = index === steps.length - 1;
+        html += `
+            <div class="flex items-start mb-4 ${!isLast ? 'pb-4 border-l-2 border-gray-300 ml-4' : ''}">
+                <div class="bg-white border-2 border-gray-300 rounded-full p-2 -ml-4 ${!isLast ? 'mb-0' : ''}">
+                    <span class="text-sm font-semibold text-gray-600">${index + 1}</span>
+                </div>
+                <div class="ml-4 flex-1">
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <h6 class="font-semibold text-sm text-gray-800">${step.name || `Step ${index + 1}`}</h6>
+                        <p class="text-xs text-gray-600 mt-1">Action: ${step.action || 'Unknown'}</p>
+                        ${step.requires ? `<p class="text-xs text-gray-500 mt-1">Requires: ${step.requires.join(', ')}</p>` : ''}
+                        ${step.produces ? `<p class="text-xs text-green-600 mt-1">Produces: ${step.produces.join(', ')}</p>` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    html += '</div></div>';
+    
+    container.innerHTML = html;
+}
+
+async function submitEditCritique() {
+    const critiqueText = document.getElementById('edit-critique-text').value.trim();
+    if (!critiqueText) {
+        showError('Please provide your feedback');
+        return;
+    }
+    
+    if (!window.currentEditPlan || !window.currentEditInstructionId) {
+        showError('No plan loaded');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/plans/${window.currentEditPlan.id}/critique`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                critique: critiqueText,
+                instruction_id: window.currentEditInstructionId
+            })
+        });
+        
+        if (response.ok) {
+            showSuccess('Plan regenerated successfully!');
+            document.getElementById('edit-critique-text').value = '';
+            
+            // Reload the plan
+            loadPlanForEdit(window.currentEditInstructionId);
+        } else {
+            const error = await response.text();
+            showError(`Failed to regenerate plan: ${error}`);
+        }
+    } catch (error) {
+        console.error('Error submitting critique:', error);
+        showError('Failed to regenerate plan');
+    }
+}
+
+// Load and display instructions
+async function loadInstructions() {
+    try {
+        console.log('Loading instructions...');
+        const response = await fetch('/api/instructions');
+        console.log('Response status:', response.status);
+        
+        if (response.ok) {
+            instructions = await response.json();
+            console.log('Loaded instructions:', instructions.length);
+            renderInstructions();
+            updateStats();
+        } else {
+            console.error('Failed to load instructions:', response.status, response.statusText);
+            showError('Failed to load instructions');
+        }
+    } catch (error) {
+        console.error('Failed to load instructions:', error);
+        showError('Failed to load instructions');
+    }
+}
+
+// Render instructions (keeping the original logic)
+function renderInstructions() {
+    const container = document.getElementById('instructions-container');
+    console.log('Rendering instructions, container:', !!container);
+    if (!container) {
+        console.error('Instructions container not found!');
+        return;
+    }
+    
+    if (instructions.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-8">
+                <i class="fas fa-lightbulb text-gray-400 text-5xl mb-4"></i>
+                <p class="text-gray-500">No instructions yet. Create your first one!</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = instructions.map(instruction => `
+        <div class="border rounded-lg p-6 mb-4 hover:shadow-md transition-shadow">
+            <div class="flex justify-between items-start mb-4">
+                <div class="flex-1">
+                    <h4 class="text-lg font-medium text-gray-900 flex items-center">
+                        ${instruction.name}
+                        ${instruction.enabled ? 
+                            '<span class="ml-2 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">Active</span>' : 
+                            '<span class="ml-2 px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded-full">Inactive</span>'
+                        }
+                    </h4>
+                    ${instruction.description ? `<p class="text-sm text-gray-600 mt-1">${instruction.description}</p>` : ''}
+                </div>
+                <div class="flex space-x-2 ml-4">
+                    <button onclick="editInstruction('${instruction.id}')" 
+                            class="p-2 text-gray-400 hover:text-blue-600" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="toggleInstruction('${instruction.id}')" 
+                            class="p-2 text-gray-400 hover:text-yellow-600" title="Toggle">
+                        <i class="fas fa-power-off"></i>
+                    </button>
+                    <button onclick="deleteInstruction('${instruction.id}')" 
+                            class="p-2 text-gray-400 hover:text-red-600" title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-gray-200" id="plan-summary-${instruction.id}">
+                <div class="flex items-start justify-between">
+                    <div class="flex-1">
+                        <span class="font-medium text-gray-700">Plan Summary:</span>
+                        <div class="mt-1 text-sm text-gray-600" id="plan-summary-content-${instruction.id}">
+                            <span class="text-gray-400">Loading plan...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+    
+    // Load plan summaries
+    instructions.forEach(instruction => {
+        loadPlanSummary(instruction.id);
+    });
+}
+
+function updateStats() {
+    document.getElementById('total-instructions').textContent = instructions.length;
+    document.getElementById('active-instructions').textContent = instructions.filter(i => i.enabled).length;
+    document.getElementById('total-executions').textContent = instructions.reduce((sum, i) => sum + (i.execution_count || 0), 0);
+    
+    const lastExecution = instructions
+        .filter(i => i.last_executed_at)
+        .sort((a, b) => new Date(b.last_executed_at) - new Date(a.last_executed_at))[0];
+    
+    document.getElementById('last-execution').textContent = lastExecution ? 
+        new Date(lastExecution.last_executed_at).toLocaleDateString() : 'Never';
 }
 
 async function toggleInstruction(id) {
@@ -645,7 +699,6 @@ async function deleteInstruction(id) {
 }
 
 function showSuccess(message) {
-    // Simple toast notification
     const toast = document.createElement('div');
     toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
     toast.textContent = message;
@@ -654,12 +707,44 @@ function showSuccess(message) {
 }
 
 function showError(message) {
-    // Simple toast notification
     const toast = document.createElement('div');
     toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
     toast.textContent = message;
     document.body.appendChild(toast);
     setTimeout(() => toast.remove(), 5000);
+}
+
+// Load plan summary for an instruction
+async function loadPlanSummary(instructionId) {
+    const summaryElement = document.getElementById(`plan-summary-content-${instructionId}`);
+    if (!summaryElement) return;
+    
+    try {
+        const response = await fetch(`/api/plans/instruction/${instructionId}`);
+        if (response.ok) {
+            const plan = await response.json();
+            if (plan.error) {
+                // Display plan generation error
+                summaryElement.innerHTML = `
+                    <div class="text-red-600">
+                        <span class="font-semibold">Plan generation failed:</span>
+                        <p class="text-sm mt-1">${plan.error_message || 'Unknown error occurred during plan generation'}</p>
+                    </div>
+                `;
+            } else if (plan.summary) {
+                summaryElement.innerHTML = `<p class="text-gray-700">${plan.summary}</p>`;
+            } else {
+                summaryElement.innerHTML = '<span class="text-gray-400 italic">No plan summary available</span>';
+            }
+        } else if (response.status === 404) {
+            summaryElement.innerHTML = '<span class="text-gray-400 italic">Plan generation in progress...</span>';
+        } else {
+            summaryElement.innerHTML = '<span class="text-red-500">Error loading plan</span>';
+        }
+    } catch (error) {
+        console.error(`Error loading plan for instruction ${instructionId}:`, error);
+        summaryElement.innerHTML = '<span class="text-red-500">Error loading plan</span>';
+    }
 }
 </script>
 {% endblock %}

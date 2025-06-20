@@ -1,35 +1,61 @@
-# Unified UI Dockerfile (Gateway + Auth + Integrated Apps)
+# Unified Lightning UI Dockerfile
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Build argument for deployment mode
+ARG LIGHTNING_MODE=local
 
-# Copy requirements from both apps
-COPY ui/chat_client/requirements.txt chat_client_requirements.txt
-COPY ui/integrated_app/requirements.txt integrated_app_requirements.txt
+# Install dependencies
+RUN pip install --no-cache-dir \
+    fastapi \
+    uvicorn[standard] \
+    aiohttp \
+    websockets \
+    jinja2 \
+    python-multipart \
+    pydantic \
+    itsdangerous \
+    requests \
+    pyjwt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -U pip setuptools wheel
-RUN pip install --no-cache-dir -r chat_client_requirements.txt
-RUN pip install --no-cache-dir -r integrated_app_requirements.txt
+# For Azure deployment, add Azure-specific dependencies
+RUN if [ "$LIGHTNING_MODE" = "azure" ]; then \
+        pip install --no-cache-dir \
+            azure-identity \
+            opencensus-ext-azure \
+            opencensus-ext-logging; \
+    fi
 
-# Copy all application code
-COPY ui/chat_client/*.py .
-COPY ui/chat_client/static ./static
-COPY ui/chat_client/templates ./templates
-COPY ui/integrated_app/ ./integrated_app
+# Copy the app files based on build context
+# When building from root: COPY ui/integrated_app/* .
+# When building from ui/integrated_app: COPY . .
+COPY ui/integrated_app/app.py .
+COPY ui/integrated_app/lightning_ui.py .
 
-# Ensure common directory is properly copied within integrated_app
-RUN if [ ! -d "integrated_app/common" ]; then echo "ERROR: integrated_app/common directory not found!"; exit 1; fi
+# Copy templates and static directories
+COPY ui/integrated_app/templates ./templates
+COPY ui/integrated_app/static ./static
 
-# Expose port
-EXPOSE 8000
+# Copy common utilities
+COPY ui/integrated_app/common ./common
 
-# Run the gateway application which mounts both auth and integrated apps
-CMD ["uvicorn", "gateway_app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Set environment variables
+ENV LIGHTNING_MODE=${LIGHTNING_MODE}
+ENV SERVICE_TYPE=ui
+
+# Expose port (Azure Container Instances will override this)
+EXPOSE 8080
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+
+# Run the appropriate application based on environment variable
+CMD if [ "$LIGHTNING_UI" = "true" ]; then \
+        uvicorn lightning_ui:app --host 0.0.0.0 --port 8080; \
+    elif [ -f "app.py" ]; then \
+        uvicorn app:app --host 0.0.0.0 --port 8080; \
+    else \
+        uvicorn app:app --host 0.0.0.0 --port 8080; \
+    fi

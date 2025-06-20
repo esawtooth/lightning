@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post},
+    routing::{get, post, patch},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -54,11 +54,13 @@ pub fn router(
             "/docs/{id}",
             get(get_document)
                 .put(update_document)
+                .patch(patch_document)
                 .delete(delete_document),
         )
         .route("/folders/{id}", get(get_folder_contents))
         .route("/folders/{id}/guide", get(get_folder_guide))
         .route("/search", get(search))
+        // .nest("/timeline", timeline_router(store.clone(), snapshot_dir.clone())) // Temporarily disabled
         .with_state(state)
 }
 
@@ -82,6 +84,10 @@ pub struct DocumentResponse {
     pub created_at: String,
     pub updated_at: String,
     pub index_guide: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub numbered_content: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub line_count: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -90,10 +96,20 @@ pub struct UpdateDocumentRequest {
 }
 
 #[derive(Deserialize)]
+pub struct PatchDocumentRequest {
+    pub patch: String,
+}
+
+#[derive(Deserialize)]
 pub struct SearchQuery {
     pub q: String,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
+}
+
+#[derive(Deserialize)]
+pub struct DocumentQuery {
+    pub format: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -107,9 +123,93 @@ pub struct DocumentSummary {
     pub id: Uuid,
     pub name: String,
     pub snippet: String,
+    pub parent_folder_id: Option<Uuid>,
     pub doc_type: String,
     pub updated_at: String,
     pub index_guide: Option<String>,
+}
+
+// Utility functions for line numbering and patch handling
+
+/// Add line numbers to content
+fn add_line_numbers(content: &str) -> String {
+    content
+        .lines()
+        .enumerate()
+        .map(|(i, line)| format!("{}: {}", i + 1, line))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Apply a unified diff patch to content
+fn apply_patch(original: &str, patch: &str) -> Result<String, String> {
+    // Simple patch application - in a production system you'd want a proper diff library
+    // For now, we'll implement basic unified diff parsing
+    
+    let lines: Vec<&str> = original.lines().collect();
+    let mut result_lines = Vec::new();
+    let mut current_line = 0;
+    
+    // Parse the patch
+    let patch_lines: Vec<&str> = patch.lines().collect();
+    let mut i = 0;
+    
+    // Skip header lines until we find a hunk
+    while i < patch_lines.len() {
+        if patch_lines[i].starts_with("@@") {
+            break;
+        }
+        i += 1;
+    }
+    
+    if i >= patch_lines.len() {
+        return Err("No valid hunk found in patch".to_string());
+    }
+    
+    // Parse hunk header: @@ -start,count +start,count @@
+    let hunk_line = patch_lines[i];
+    let parts: Vec<&str> = hunk_line.split_whitespace().collect();
+    if parts.len() < 3 {
+        return Err("Invalid hunk header".to_string());
+    }
+    
+    let old_start = parts[1].trim_start_matches('-').split(',').next()
+        .and_then(|s| s.parse::<usize>().ok())
+        .ok_or("Invalid old start line")?;
+    
+    // Convert to 0-based indexing
+    let old_start = old_start.saturating_sub(1);
+    
+    // Copy lines before the hunk
+    result_lines.extend_from_slice(&lines[current_line..old_start.min(lines.len())]);
+    current_line = old_start;
+    
+    // Process hunk lines
+    i += 1;
+    while i < patch_lines.len() && !patch_lines[i].starts_with("@@") {
+        let line = patch_lines[i];
+        if line.starts_with(' ') || line.starts_with('\\') {
+            // Context line - copy from original
+            if current_line < lines.len() {
+                result_lines.push(lines[current_line]);
+                current_line += 1;
+            }
+        } else if line.starts_with('-') {
+            // Deleted line - skip in original
+            current_line += 1;
+        } else if line.starts_with('+') {
+            // Added line - add to result
+            result_lines.push(&line[1..]);
+        }
+        i += 1;
+    }
+    
+    // Copy remaining lines
+    if current_line < lines.len() {
+        result_lines.extend_from_slice(&lines[current_line..]);
+    }
+    
+    Ok(result_lines.join("\n"))
 }
 
 // Helper to collect index guides from root to current folder
@@ -193,6 +293,8 @@ async fn create_document(
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
         index_guide: if !index_guide.is_empty() { Some(index_guide) } else { None },
+        numbered_content: None,
+        line_count: None,
     };
     
     // Schedule indexing
@@ -205,22 +307,35 @@ async fn create_document(
 async fn get_document(
     State(state): State<ApiState>,
     Path(id): Path<Uuid>,
+    Query(query): Query<DocumentQuery>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
     let store = state.store.read().await;
     let doc = store.get(id).ok_or(StatusCode::NOT_FOUND)?;
     
     let index_guide = collect_index_guides(&*store, doc.parent_folder_id()).await;
+    let content = doc.text();
+    
+    // Check if numbered format is requested
+    let (numbered_content, line_count) = if query.format.as_deref() == Some("numbered") {
+        let numbered = add_line_numbers(&content);
+        let count = content.lines().count();
+        (Some(numbered), Some(count))
+    } else {
+        (None, None)
+    };
     
     Ok(Json(DocumentResponse {
         id,
         name: doc.name().to_string(),
-        content: doc.text(),
+        content,
         owner: "default_user".to_string(),
         parent_folder_id: doc.parent_folder_id(),
         doc_type: doc.doc_type().as_str().to_string(),
         created_at: chrono::Utc::now().to_rfc3339(),
         updated_at: chrono::Utc::now().to_rfc3339(),
         index_guide: if !index_guide.is_empty() { Some(index_guide) } else { None },
+        numbered_content,
+        line_count,
     }))
 }
 
@@ -237,6 +352,49 @@ async fn update_document(
     } else {
         StatusCode::INTERNAL_SERVER_ERROR
     }
+}
+
+async fn patch_document(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+    Json(req): Json<PatchDocumentRequest>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
+    let mut store = state.store.write().await;
+    let doc = store.get(id).ok_or(StatusCode::NOT_FOUND)?;
+    
+    // Apply the patch
+    let original_content = doc.text();
+    let new_content = apply_patch(&original_content, &req.patch)
+        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    
+    // Update the document
+    if store.update(id, &new_content).is_err() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    
+    // Get the updated document
+    let updated_doc = store.get(id).ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    let index_guide = collect_index_guides(&*store, updated_doc.parent_folder_id()).await;
+    
+    let response = DocumentResponse {
+        id,
+        name: updated_doc.name().to_string(),
+        content: updated_doc.text(),
+        owner: "default_user".to_string(),
+        parent_folder_id: updated_doc.parent_folder_id(),
+        doc_type: updated_doc.doc_type().as_str().to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        updated_at: chrono::Utc::now().to_rfc3339(),
+        index_guide: if !index_guide.is_empty() { Some(index_guide) } else { None },
+        numbered_content: None,
+        line_count: None,
+    };
+    
+    // Schedule indexing
+    drop(store);
+    state.indexer.schedule_update(id).await;
+    
+    Ok(Json(response))
 }
 
 async fn delete_document(
@@ -279,6 +437,7 @@ async fn list_documents(
             id: *id,
             name: doc.name().to_string(),
             snippet,
+            parent_folder_id: doc.parent_folder_id(),
             doc_type: doc.doc_type().as_str().to_string(),
             updated_at: chrono::Utc::now().to_rfc3339(),
             index_guide: if !index_guide.is_empty() { Some(index_guide) } else { None },
@@ -316,6 +475,7 @@ async fn search(
                 id: *doc_id,
                 name: doc.name().to_string(),
                 snippet,
+                parent_folder_id: doc.parent_folder_id(),
                 doc_type: doc.doc_type().as_str().to_string(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
                 index_guide: if !index_guide.is_empty() { Some(index_guide) } else { None },
@@ -362,6 +522,7 @@ async fn get_folder_contents(
                 id: *id,
                 name: doc.name().to_string(),
                 snippet,
+                parent_folder_id: doc.parent_folder_id(),
                 doc_type: doc.doc_type().as_str().to_string(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
                 index_guide: if !folder_index_guide.is_empty() { Some(folder_index_guide.clone()) } else { None },
@@ -396,3 +557,9 @@ async fn get_folder_guide(
         content: guide_content,
     }))
 }
+
+// Timeline router factory - temporarily disabled
+// fn timeline_router(store: Arc<RwLock<DocumentStore>>, snapshot_dir: PathBuf) -> Router {
+//     // Implementation temporarily disabled due to Send/Sync issues with SnapshotManager
+//     Router::new()
+// }

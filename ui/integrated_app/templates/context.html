@@ -61,10 +61,16 @@
         <div class="bg-white rounded-lg shadow">
             <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 class="text-lg font-medium text-gray-900">My Documents</h3>
-                <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                    <i class="fas fa-plus mr-2"></i>
-                    New Document
-                </button>
+                <div class="flex space-x-2">
+                    <button onclick="showCreateFolderModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
+                        <i class="fas fa-folder-plus mr-2"></i>
+                        New Folder
+                    </button>
+                    <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                        <i class="fas fa-plus mr-2"></i>
+                        New Document
+                    </button>
+                </div>
             </div>
             <div class="p-6">
                 <div id="folder-browser" class="space-y-4">

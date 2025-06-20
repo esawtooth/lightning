@@ -1,0 +1,683 @@
+openapi: 3.0.3
+info:
+  title: Lightning Context Hub API
+  description: |
+    The Lightning Context Hub provides persistent, CRDT-synchronized document storage with advanced features for LLM-friendly document management.
+    
+    ## Features
+    - Document and folder management with hierarchical organization
+    - Full-text search with indexing
+    - Line-numbered document retrieval for precise editing
+    - Patch-based document editing using unified diff format
+    - Index guides for contextual document organization
+    - Timeline and versioning support (experimental)
+    
+    ## Authentication
+    All endpoints require the `X-User-Id` header to identify the user context.
+    
+    ## Document Types
+    - `Text`: Standard text documents
+    - `Folder`: Directory containers for organizing documents
+    - `IndexGuide`: Special documents that provide context for their containing folder
+    
+    ## LLM-Friendly Features
+    The API includes specialized endpoints designed for Large Language Model interactions:
+    - Line-numbered content retrieval for precise reference
+    - Unified diff patch application for efficient edits
+    - Contextual index guides for better understanding
+  version: 1.0.0
+  contact:
+    name: Lightning Team
+    url: https://github.com/vextir/lightning
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: http://context-hub:3000
+    description: Docker container network
+
+security:
+  - UserContext: []
+
+paths:
+  /docs:
+    post:
+      summary: Create a new document
+      description: Creates a new document in the Context Hub with the specified content and metadata.
+      operationId: createDocument
+      tags:
+        - Documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocumentRequest'
+            examples:
+              textDocument:
+                summary: Create a text document
+                value:
+                  name: "My Document"
+                  content: "This is the content of my document."
+                  doc_type: "Text"
+              folderDocument:
+                summary: Create a folder
+                value:
+                  name: "My Folder"
+                  content: ""
+                  doc_type: "Folder"
+              nestedDocument:
+                summary: Create document in folder
+                value:
+                  name: "Nested Document"
+                  content: "Content inside a folder"
+                  parent_folder_id: "550e8400-e29b-41d4-a716-446655440000"
+                  doc_type: "Text"
+      responses:
+        '201':
+          description: Document created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          description: Invalid request body
+        '500':
+          description: Internal server error
+
+    get:
+      summary: List all documents
+      description: |
+        Retrieves a list of all documents visible to the user. 
+        Returns document summaries with snippets for preview.
+        Index guides are excluded from the listing.
+      operationId: listDocuments
+      tags:
+        - Documents
+      responses:
+        '200':
+          description: List of documents retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+        '500':
+          description: Internal server error
+
+  /docs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: UUID of the document
+        schema:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+    get:
+      summary: Get a specific document
+      description: |
+        Retrieves a document by its ID. Supports line-numbered format for LLM-friendly editing.
+        
+        ## Line-Numbered Format
+        When `format=numbered` is specified, the response includes:
+        - `numbered_content`: Content with line numbers (e.g., "1: Line one\n2: Line two")
+        - `line_count`: Total number of lines in the document
+        
+        This format is particularly useful for LLMs that need to reference specific lines when generating patches.
+      operationId: getDocument
+      tags:
+        - Documents
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: Format for document content
+          schema:
+            type: string
+            enum: [numbered]
+          example: numbered
+      responses:
+        '200':
+          description: Document retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              examples:
+                standardFormat:
+                  summary: Standard document response
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    name: "Sample Document"
+                    content: "Line 1\nLine 2\nLine 3"
+                    owner: "default_user"
+                    parent_folder_id: null
+                    doc_type: "Text"
+                    created_at: "2025-06-20T06:37:19.540767548+00:00"
+                    updated_at: "2025-06-20T06:37:19.540772402+00:00"
+                    index_guide: null
+                numberedFormat:
+                  summary: Line-numbered document response
+                  value:
+                    id: "550e8400-e29b-41d4-a716-446655440000"
+                    name: "Sample Document"
+                    content: "Line 1\nLine 2\nLine 3"
+                    owner: "default_user"
+                    parent_folder_id: null
+                    doc_type: "Text"
+                    created_at: "2025-06-20T06:37:19.540767548+00:00"
+                    updated_at: "2025-06-20T06:37:19.540772402+00:00"
+                    index_guide: null
+                    numbered_content: "1: Line 1\n2: Line 2\n3: Line 3"
+                    line_count: 3
+        '404':
+          description: Document not found
+        '500':
+          description: Internal server error
+
+    put:
+      summary: Update document content
+      description: Replaces the entire content of a document with new content.
+      operationId: updateDocument
+      tags:
+        - Documents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDocumentRequest'
+            example:
+              content: "This is the new content for the document."
+      responses:
+        '204':
+          description: Document updated successfully
+        '404':
+          description: Document not found
+        '500':
+          description: Internal server error
+
+    patch:
+      summary: Apply patch to document
+      description: |
+        Applies a unified diff patch to the document content. This is an LLM-friendly way to make precise edits.
+        
+        ## Patch Format
+        The patch should be in unified diff format with the following structure:
+        ```
+        --- a/filename
+        +++ b/filename
+        @@ -start,count +start,count @@
+         context line
+        -removed line
+        +added line
+         context line
+        ```
+        
+        ## Example Usage
+        To change "Hello World" to "Hello Universe" on line 2:
+        ```
+        --- a/document
+        +++ b/document
+        @@ -1,3 +1,3 @@
+         Line 1
+        -Hello World
+        +Hello Universe
+         Line 3
+        ```
+        
+        ## Benefits for LLMs
+        - Precise edits without replacing entire document content
+        - Clear indication of what changed
+        - Preserves context around changes
+        - More efficient for large documents
+      operationId: patchDocument
+      tags:
+        - Documents
+        - LLM-Friendly
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchDocumentRequest'
+            examples:
+              simpleChange:
+                summary: Simple line change
+                value:
+                  patch: |
+                    --- a/document
+                    +++ b/document
+                    @@ -1,3 +1,3 @@
+                     Line 1
+                    -Old content
+                    +New content
+                     Line 3
+              multipleChanges:
+                summary: Multiple changes in one patch
+                value:
+                  patch: |
+                    --- a/document
+                    +++ b/document
+                    @@ -1,5 +1,6 @@
+                     Line 1
+                    -Line 2
+                    +Modified Line 2
+                    +Added Line 2.5
+                     Line 3
+                     Line 4
+                    -Line 5
+                    +Modified Line 5
+      responses:
+        '200':
+          description: Patch applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+        '400':
+          description: Invalid patch format or patch cannot be applied
+        '404':
+          description: Document not found
+        '500':
+          description: Internal server error
+
+    delete:
+      summary: Delete a document
+      description: Permanently deletes a document from the Context Hub.
+      operationId: deleteDocument
+      tags:
+        - Documents
+      responses:
+        '204':
+          description: Document deleted successfully
+        '404':
+          description: Document not found
+        '500':
+          description: Internal server error
+
+  /folders/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: UUID of the folder
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get folder contents
+      description: |
+        Retrieves all documents that are direct children of the specified folder.
+        Returns document summaries with contextual index guides when available.
+      operationId: getFolderContents
+      tags:
+        - Folders
+      responses:
+        '200':
+          description: Folder contents retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+        '400':
+          description: The specified ID is not a folder
+        '404':
+          description: Folder not found
+        '500':
+          description: Internal server error
+
+  /folders/{id}/guide:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: UUID of the folder
+        schema:
+          type: string
+          format: uuid
+
+    get:
+      summary: Get folder index guide
+      description: |
+        Retrieves the collected index guides for a folder, walking up the hierarchy from the folder to root.
+        Index guides provide contextual information that helps understand the purpose and organization of documents.
+      operationId: getFolderGuide
+      tags:
+        - Folders
+        - Index Guides
+      responses:
+        '200':
+          description: Folder guide retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FolderGuideResponse'
+              example:
+                content: |
+                  # Project Root Guide
+                  This is the main project directory.
+                  
+                  ---
+                  
+                  # Subfolder Guide
+                  This subfolder contains specific documents.
+        '400':
+          description: The specified ID is not a folder
+        '404':
+          description: Folder not found
+        '500':
+          description: Internal server error
+
+  /search:
+    get:
+      summary: Search documents
+      description: |
+        Performs full-text search across all documents using the integrated search index.
+        Returns ranked results with snippets.
+      operationId: searchDocuments
+      tags:
+        - Search
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Search query string
+          schema:
+            type: string
+          example: "machine learning algorithms"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+          example: 20
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip (for pagination)
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+          example: 0
+      responses:
+        '200':
+          description: Search completed successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+        '400':
+          description: Invalid search parameters
+        '500':
+          description: Search index error
+
+components:
+  securitySchemes:
+    UserContext:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: User identifier for document access control
+
+  schemas:
+    CreateDocumentRequest:
+      type: object
+      required:
+        - name
+        - content
+      properties:
+        name:
+          type: string
+          description: Name of the document
+          example: "My Document"
+          minLength: 1
+          maxLength: 255
+        content:
+          type: string
+          description: Content of the document
+          example: "This is the document content."
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the parent folder (null for root level)
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        doc_type:
+          type: string
+          description: Type of document
+          enum: [Text, Folder, IndexGuide]
+          default: "Text"
+          example: "Text"
+
+    UpdateDocumentRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          description: New content for the document
+          example: "Updated document content."
+
+    PatchDocumentRequest:
+      type: object
+      required:
+        - patch
+      properties:
+        patch:
+          type: string
+          description: |
+            Unified diff patch to apply to the document.
+            Should follow standard unified diff format with @@ hunk headers.
+          example: |
+            --- a/document
+            +++ b/document
+            @@ -1,3 +1,3 @@
+             Line 1
+            -Old Line 2
+            +New Line 2
+             Line 3
+
+    DocumentResponse:
+      type: object
+      required:
+        - id
+        - name
+        - content
+        - owner
+        - doc_type
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the document
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Name of the document
+          example: "My Document"
+        content:
+          type: string
+          description: Content of the document
+          example: "Line 1\nLine 2\nLine 3"
+        owner:
+          type: string
+          description: Owner of the document
+          example: "default_user"
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the parent folder
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        doc_type:
+          type: string
+          description: Type of document
+          enum: [Text, Folder, IndexGuide]
+          example: "Text"
+        created_at:
+          type: string
+          format: date-time
+          description: Document creation timestamp
+          example: "2025-06-20T06:37:19.540767548+00:00"
+        updated_at:
+          type: string
+          format: date-time
+          description: Document last modification timestamp
+          example: "2025-06-20T06:37:19.540772402+00:00"
+        index_guide:
+          type: string
+          nullable: true
+          description: Collected index guides for this document's context
+          example: "# Project Guide\nThis document is part of the main project."
+        numbered_content:
+          type: string
+          nullable: true
+          description: |
+            Content with line numbers (only present when format=numbered is requested).
+            Each line is prefixed with its line number and a colon.
+          example: "1: Line 1\n2: Line 2\n3: Line 3"
+        line_count:
+          type: integer
+          nullable: true
+          description: Total number of lines in the document (only present when format=numbered is requested)
+          example: 3
+
+    DocumentSummary:
+      type: object
+      required:
+        - id
+        - name
+        - snippet
+        - doc_type
+        - updated_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the document
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        name:
+          type: string
+          description: Name of the document
+          example: "My Document"
+        snippet:
+          type: string
+          description: Preview snippet of the document content (first 100 characters)
+          example: "This is the beginning of the document content..."
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: UUID of the parent folder
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        doc_type:
+          type: string
+          description: Type of document
+          enum: [Text, Folder, IndexGuide]
+          example: "Text"
+        updated_at:
+          type: string
+          format: date-time
+          description: Document last modification timestamp
+          example: "2025-06-20T06:37:19.540772402+00:00"
+        index_guide:
+          type: string
+          nullable: true
+          description: Collected index guides for this document's context
+          example: "# Project Guide\nThis document is part of the main project."
+
+    FolderGuideResponse:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          description: |
+            Collected index guides from the folder hierarchy, separated by "---".
+            Guides are collected from root to the current folder level.
+          example: |
+            # Root Guide
+            This is the root project guide.
+            
+            ---
+            
+            # Subfolder Guide
+            This is the specific folder guide.
+
+    SearchQuery:
+      type: object
+      required:
+        - q
+      properties:
+        q:
+          type: string
+          description: Search query string
+          example: "machine learning"
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 10
+          description: Maximum number of results
+        offset:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Number of results to skip
+
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          description: Error type
+          example: "DocumentNotFound"
+        message:
+          type: string
+          description: Human-readable error message
+          example: "The requested document could not be found"
+        details:
+          type: object
+          description: Additional error details
+          additionalProperties: true
+
+tags:
+  - name: Documents
+    description: Document management operations
+  - name: Folders
+    description: Folder and hierarchy operations
+  - name: Search
+    description: Full-text search capabilities
+  - name: Index Guides
+    description: Contextual organization and guidance
+  - name: LLM-Friendly
+    description: Features specifically designed for Large Language Model interactions
+
+externalDocs:
+  description: Lightning Context Hub Documentation
+  url: https://github.com/vextir/lightning/tree/main/context-hub

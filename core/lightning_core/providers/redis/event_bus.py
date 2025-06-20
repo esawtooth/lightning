@@ -10,6 +10,7 @@ import json
 import logging
 import uuid
 from collections import defaultdict
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 import redis.asyncio as redis
@@ -30,14 +31,17 @@ class RedisEventBus(EventBus):
     def __init__(
         self,
         connection_string: Optional[str] = None,
+        endpoint: Optional[str] = None,
         host: str = "localhost",
         port: int = 6379,
         db: int = 0,
         **kwargs: Any,
     ):
-        # Redis connection
+        # Redis connection - prioritize connection_string, then endpoint, then host/port
         if connection_string:
             self._redis = redis.from_url(connection_string, decode_responses=True)
+        elif endpoint:
+            self._redis = redis.from_url(endpoint, decode_responses=True)
         else:
             self._redis = redis.Redis(
                 host=host, port=port, db=db, decode_responses=True
@@ -119,11 +123,28 @@ class RedisEventBus(EventBus):
 
         # Subscribe to Redis channel
         channel = self._get_channel_name(topic, event_type)
-        await self._pubsub.subscribe(channel)
-
-        logger.info(
-            f"Created subscription {subscription_id} for {event_type} on channel {channel}"
-        )
+        
+        # Use pattern subscription for wildcards
+        if "*" in event_type:
+            await self._pubsub.psubscribe(channel)
+            logger.info(
+                f"Created pattern subscription {subscription_id} for {event_type} on pattern {channel}"
+            )
+        else:
+            await self._pubsub.subscribe(channel)
+            logger.info(
+                f"Created subscription {subscription_id} for {event_type} on channel {channel}"
+            )
+        
+        # Start listener on first subscription if running
+        if self._running and self._listener_task is None:
+            logger.info("Starting Redis listener task on first subscription")
+            self._listener_task = asyncio.create_task(self._listen_for_messages())
+        elif self._running and self._listener_task and self._listener_task.done():
+            # Restart listener if it stopped
+            logger.info("Restarting Redis listener task (previous task completed)")
+            self._listener_task = asyncio.create_task(self._listen_for_messages())
+            
         return subscription_id
 
     async def unsubscribe(self, subscription_id: str) -> None:
@@ -137,7 +158,10 @@ class RedisEventBus(EventBus):
         # Check if we still need this channel
         if not self._handlers[subscription.event_type]:
             channel = self._get_channel_name(None, subscription.event_type)
-            await self._pubsub.unsubscribe(channel)
+            if "*" in subscription.event_type:
+                await self._pubsub.punsubscribe(channel)
+            else:
+                await self._pubsub.unsubscribe(channel)
 
         del self._subscriptions[subscription_id]
         logger.info(f"Removed subscription {subscription_id}")
@@ -149,10 +173,8 @@ class RedisEventBus(EventBus):
 
         self._running = True
 
-        # Start the listener task
-        self._listener_task = asyncio.create_task(self._listen_for_messages())
-
-        logger.info("Redis event bus started")
+        # Don't start listener yet - will start when first subscription is added
+        logger.info("Redis event bus started (listener will start on first subscription)")
 
     async def stop(self) -> None:
         """Stop the event bus (stop processing events)."""
@@ -274,14 +296,22 @@ class RedisEventBus(EventBus):
 
     async def _listen_for_messages(self):
         """Listen for messages from Redis Pub/Sub."""
-        logger.info("Starting Redis Pub/Sub listener")
+        logger.info("_listen_for_messages called - Starting Redis Pub/Sub listener")
 
         try:
+            logger.info("Entering Redis listen loop...")
+            logger.info(f"Current subscriptions: {list(self._handlers.keys())}")
+            logger.info(f"PubSub channels: {self._pubsub.channels}")
+            logger.info(f"PubSub patterns: {self._pubsub.patterns}")
+            message_count = 0
             async for message in self._pubsub.listen():
+                message_count += 1
+                logger.debug(f"Redis listener received message #{message_count}: {message.get('type', 'unknown')}")
                 if not self._running:
                     break
 
                 if message["type"] in ["message", "pmessage"]:
+                    logger.info(f"Received Redis message: type={message['type']}, channel={message.get('channel', 'unknown')}")
                     try:
                         # Parse event
                         event = EventMessage.from_json(message["data"])
@@ -313,14 +343,14 @@ class RedisEventBus(EventBus):
         matching_subscriptions = []
 
         # Direct matches
-        if event_type in self._handlers:
-            matching_subscriptions.extend(self._handlers[event_type])
+        if event.event_type in self._handlers:
+            matching_subscriptions.extend(self._handlers[event.event_type])
 
-        # Wildcard matches
-        if "*" in event_type:
-            # This was a wildcard subscription
-            for sub_type, subs in self._handlers.items():
-                if self._matches_wildcard(event.event_type, sub_type):
+        # Wildcard matches - check all handlers for wildcard patterns
+        for handler_pattern, subs in self._handlers.items():
+            if "*" in handler_pattern:
+                # This is a wildcard subscription pattern
+                if handler_pattern == "*" or self._matches_wildcard(event.event_type, handler_pattern):
                     matching_subscriptions.extend(subs)
 
         # Check if event is orphaned (no matching subscriptions)
@@ -417,6 +447,37 @@ class RedisEventBus(EventBus):
                 return True
 
         return False
+
+    async def replay_events(
+        self,
+        start_time: datetime,
+        end_time: Optional[datetime] = None,
+        event_types: Optional[List[str]] = None,
+        topic: Optional[str] = None,
+    ) -> List[EventMessage]:
+        """
+        Replay events from history within a time range.
+        
+        Note: Redis implementation doesn't support full event history.
+        This is a placeholder that returns empty list.
+        """
+        logger.warning("Event replay not supported in Redis implementation")
+        return []
+
+    async def get_event_history(
+        self,
+        event_id: Optional[str] = None,
+        correlation_id: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> List[EventMessage]:
+        """
+        Get event history by ID or correlation ID.
+        
+        Note: Redis implementation doesn't support full event history.
+        This is a placeholder that returns empty list.
+        """
+        logger.warning("Event history not supported in Redis implementation")
+        return []
 
     async def get_orphaned_events(
         self, since: Optional[datetime] = None, max_items: Optional[int] = None

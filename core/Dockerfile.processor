@@ -3,6 +3,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
+# Build argument for deployment mode
+ARG LIGHTNING_MODE=local
+
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
@@ -15,9 +18,16 @@ RUN apt-get update && apt-get install -y \
 COPY pyproject.toml .
 COPY README.md .
 
-# Install Python dependencies
+# Install Python dependencies based on mode
 RUN pip install --no-cache-dir -U pip setuptools wheel
-RUN pip install --no-cache-dir -e .[local]
+RUN if [ "$LIGHTNING_MODE" = "azure" ]; then \
+        echo "Installing Azure dependencies for event processor"; \
+        pip install --no-cache-dir -e .[azure]; \
+    else \
+        echo "Installing local dependencies for event processor"; \
+        pip install --no-cache-dir -e .[local]; \
+    fi
+RUN pip install --no-cache-dir pyyaml
 
 # Copy application code
 COPY . .
@@ -25,5 +35,9 @@ COPY . .
 # Create data directory
 RUN mkdir -p /app/data
 
-# Run the event processor
-CMD ["python", "-m", "lightning_core.vextir_os.local_event_processor"]
+# Set environment variables
+ENV LIGHTNING_MODE=${LIGHTNING_MODE}
+ENV SERVICE_TYPE=event_processor
+
+# Use the service launcher as entry point
+CMD ["python", "-m", "lightning_core.service_launcher"]
