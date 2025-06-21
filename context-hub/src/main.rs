@@ -70,7 +70,13 @@ async fn main() -> anyhow::Result<()> {
         Duration::from_secs(interval),
         snapshot_retention,
     ));
-    let app = Router::new().merge(router).route("/health", get(|| async { "OK" }));
+    let app = Router::new().merge(router).route("/health", get(|| async {
+        axum::Json(serde_json::json!({
+            "status": "healthy",
+            "service": "context-hub",
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        }))
+    }));
 
     let host = std::env::var("HOST").unwrap_or_else(|_| "0.0.0.0".into());
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".into());

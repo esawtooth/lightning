@@ -1,0 +1,30 @@
+# Build stage
+FROM rust:1.87-bookworm AS builder
+
+WORKDIR /app
+
+# Copy the entire context-hub directory
+COPY . .
+
+# Build the application
+RUN cargo build --release
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the built binary from builder
+COPY --from=builder /app/target/release/context-hub /app/context-hub
+
+# Expose port
+EXPOSE 3000
+
+# Run the binary
+CMD ["./context-hub"]

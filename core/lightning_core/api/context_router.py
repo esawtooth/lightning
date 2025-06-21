@@ -151,12 +151,30 @@ async def get_folders():
                         folder["parent_id"] = folder["parent_folder_id"]
                     
                     # Get documents in this folder
-                    folder["documents"] = [
+                    folder_docs = [
                         doc for doc in docs 
                         if doc.get("parent_folder_id") == folder_id and doc.get("doc_type") != "Folder"
                     ]
+                    
+                    # Find Index Guide for this folder
+                    index_guide_content = None
+                    index_guide_id = None
+                    for doc in folder_docs:
+                        if doc.get("name") == "Index Guide" or doc.get("doc_type") == "IndexGuide":
+                            index_guide_id = doc.get("id")
+                            break
+                    
+                    # Store the Index Guide ID for later fetching
+                    folder["index_guide_id"] = index_guide_id
+                    
+                    # Filter out Index Guide from regular documents
+                    folder["documents"] = [
+                        doc for doc in folder_docs
+                        if doc.get("name") != "Index Guide" and doc.get("doc_type") != "IndexGuide"
+                    ]
                     folder["document_count"] = len(folder["documents"])
                     folder["level"] = level
+                    folder["index_guide"] = index_guide_content
                     
                     # Get subfolders recursively
                     folder["subfolders"] = build_folder_tree(folder_id, level + 1)
@@ -210,11 +228,53 @@ async def create_folder(folder: FolderCreate):
         "parent_folder_id": folder.parent_id,
         "doc_type": "Folder"
     }
-    return await proxy_to_context_hub(
+    
+    # Create the folder
+    folder_response = await proxy_to_context_hub(
         "POST",
         "/docs",
         json=doc_data,
     )
+    
+    # Automatically create an Index Guide for the folder
+    if folder_response and "id" in folder_response:
+        folder_id = folder_response["id"]
+        folder_name = folder_response.get("name", folder.name)
+        
+        # Create Index Guide content
+        index_guide_content = f"""# {folder_name}
+
+## Purpose
+This folder is for organizing your {folder_name.lower()} content.
+
+## Organization Guidelines
+- Keep related documents together
+- Use descriptive names for your files
+- Consider creating subfolders for better organization
+- Update documents regularly to keep information current
+
+## Best Practices
+- Add dates to time-sensitive documents
+- Use consistent naming conventions
+- Include relevant keywords for easy searching
+- Regular review and cleanup of outdated content
+"""
+        
+        # Create the Index Guide document
+        index_guide_data = {
+            "name": "Index Guide",
+            "content": index_guide_content,
+            "parent_folder_id": folder_id,
+            "doc_type": "IndexGuide"
+        }
+        
+        await proxy_to_context_hub(
+            "POST",
+            "/docs",
+            json=index_guide_data,
+        )
+    
+    return folder_response
 
 
 @router.get("/search")
@@ -320,6 +380,32 @@ async def update_folder(folder_id: str, update: Dict[str, Any]):
         f"/docs/{folder_id}",
         json={"name": update.get("name"), "content": update.get("content", "")},
     )
+
+
+@router.get("/folders/{folder_id}/guide")
+async def get_folder_guide(folder_id: str):
+    """Get the Index Guide for a specific folder."""
+    try:
+        # Get all documents
+        result = await proxy_to_context_hub("GET", "/docs")
+        docs = result if isinstance(result, list) else result.get("docs", [])
+        
+        # Find documents in this folder
+        folder_docs = [
+            doc for doc in docs 
+            if doc.get("parent_folder_id") == folder_id
+        ]
+        
+        # Find the Index Guide
+        for doc in folder_docs:
+            if doc.get("name") == "Index Guide" or doc.get("doc_type") == "IndexGuide":
+                # Fetch full document content
+                guide_doc = await proxy_to_context_hub("GET", f"/docs/{doc['id']}")
+                return {"content": guide_doc.get("content", "")}
+        
+        return {"content": ""}
+    except Exception as e:
+        return {"content": "", "error": str(e)}
 
 
 # Timeline endpoints for the enhanced context view

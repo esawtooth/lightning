@@ -813,7 +813,7 @@ def origin_group(
 
 ui_og, ui_origin = origin_group(
     "ui",
-    "/",
+    "/health",
     ui_cg.ip_address.apply(lambda ip: ip.fqdn),
     8000,
     https=False,
@@ -834,7 +834,7 @@ api_og, api_origin = origin_group(
 )
 voice_og, voice_origin = origin_group(
     "voice",
-    "/",
+    "/health",
     voice_cg.ip_address.apply(lambda ip: ip.fqdn),
     8081,
     https=False,

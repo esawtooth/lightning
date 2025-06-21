@@ -111,13 +111,14 @@
 {% block extra_scripts %}
 <script>
     let chatHistory = [];
+    let messageHistory = []; // Store message history for context
     let isProcessing = false;
     window.sessionId = 'session-' + Date.now();
     
     // WebSocket connection function
     function connectWebSocket() {
         // Get API base URL from the page or use default
-        const apiBase = '{{ api_base }}' || 'http://localhost:7071';
+        const apiBase = '{{ api_base }}' || 'http://localhost:8000';
         const wsUrl = apiBase.replace('http://', 'ws://').replace('https://', 'wss://');
         const userId = '{{ user_id }}' || 'local-user';
         
@@ -138,6 +139,8 @@
             if (data.type === 'chat_response') {
                 // Add the AI response to chat
                 addMessage(data.response, 'assistant');
+                // Add to message history
+                messageHistory.push({"role": "assistant", "content": data.response});
                 setProcessing(false);
             } else if (data.type === 'ack') {
                 console.log('Message acknowledged:', data.request_id);
@@ -189,6 +192,9 @@
         // Add user message to chat
         addMessage(message, 'user');
         
+        // Add to message history
+        messageHistory.push({"role": "user", "content": message});
+        
         // Clear input and reset height
         chatInput.value = '';
         chatInput.style.height = 'auto';
@@ -203,11 +209,12 @@
                 connectWebSocket();
             }
             
-            // Send message via WebSocket
+            // Send message via WebSocket with full history
             if (window.chatWebSocket && window.chatWebSocket.readyState === WebSocket.OPEN) {
                 window.chatWebSocket.send(JSON.stringify({
                     type: 'chat_message',
                     message: message,
+                    messages: messageHistory, // Send full conversation history
                     session_id: window.sessionId || 'default-session'
                 }));
             } else {
@@ -296,6 +303,7 @@
             messagesContainer.innerHTML = '';
             messagesContainer.appendChild(welcomeMessage);
             chatHistory = [];
+            messageHistory = []; // Clear message history too
         }
     }
 

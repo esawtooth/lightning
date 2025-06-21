@@ -10,7 +10,7 @@ use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
-    routing::{get, post, patch},
+    routing::{get, post},
     Router,
 };
 use serde::{Deserialize, Serialize};
@@ -267,15 +267,32 @@ async fn create_document(
         .unwrap_or(DocumentType::Text);
     
     let mut store = state.store.write().await;
-    let doc_id = store
-        .create(
-            req.name.clone(),
-            &req.content,
-            "default_user".to_string(),
-            req.parent_folder_id,
-            doc_type,
-        )
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Use create_folder for Folder type to ensure Index Guide is created
+    let doc_id = if doc_type == DocumentType::Folder {
+        // For folders, we need a parent folder ID
+        let parent_id = if let Some(pid) = req.parent_folder_id {
+            pid
+        } else {
+            store.ensure_root("default_user")
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        };
+        
+        store
+            .create_folder(parent_id, req.name.clone(), "default_user".to_string())
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    } else {
+        // For regular documents, use create
+        store
+            .create(
+                req.name.clone(),
+                &req.content,
+                "default_user".to_string(),
+                req.parent_folder_id,
+                doc_type,
+            )
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+    };
     
     let doc = store
         .get(doc_id)

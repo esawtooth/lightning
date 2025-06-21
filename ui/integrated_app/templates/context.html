@@ -6,193 +6,148 @@
 {% block extra_head %}
 <!-- JSTree CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/themes/default/style.min.css" />
+<style>
+    /* Make the main content area full height */
+    #main-content {
+        height: calc(100vh - 220px); /* Adjust based on header height */
+    }
+    
+    #main-content > div {
+        height: 100%;
+    }
+    
+    /* Action icons styling */
+    .tree-actions {
+        display: none;
+    }
+    
+    .jstree-hovered .tree-actions,
+    .jstree-clicked .tree-actions {
+        display: inline-block !important;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
-<!-- Context Hub Status -->
-<div class="mb-8">
-    <div class="bg-white rounded-lg shadow p-6">
-        <div class="flex items-center justify-between mb-4">
-            <h3 class="text-lg font-medium text-gray-900">Context Hub Status</h3>
-            <div id="context-status" class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600">
+<!-- Unified Top Control Bar -->
+<div class="mb-6 bg-white rounded-lg shadow p-4">
+    <div class="flex items-center gap-2 flex-wrap">
+        <!-- Context Status -->
+        <div class="flex items-center gap-2">
+            <div id="context-status" class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
                 <i class="fas fa-spinner fa-spin mr-1"></i>
                 Loading...
             </div>
+            <button id="init-context-btn" onclick="initializeContext()" class="hidden bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 transition-colors">
+                <i class="fas fa-plus mr-1"></i>
+                Initialize
+            </button>
         </div>
-        <div id="context-info" class="hidden">
-            <p class="text-gray-600 mb-4">Your personal knowledge base where you can store and organize documents, notes, and project files.</p>
-            <div class="flex space-x-4">
-                <button id="init-context-btn" onclick="initializeContext()" class="hidden bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    <i class="fas fa-plus mr-2"></i>
-                    Initialize Context Hub
-                </button>
-                <button onclick="refreshContext()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors">
-                    <i class="fas fa-sync-alt mr-2"></i>
-                    Refresh
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Search Bar -->
-<div class="mb-6">
-    <div class="bg-white rounded-lg shadow p-6">
-        <h3 class="text-lg font-medium text-gray-900 mb-4">Search Your Documents</h3>
-        <div class="flex space-x-4">
+        
+        <!-- Search Bar (smaller) -->
+        <div class="flex items-center gap-2 flex-1 max-w-md">
             <input 
                 type="text" 
                 id="search-input" 
-                placeholder="Search your documents, notes, and files..."
-                class="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                placeholder="Search..."
+                class="flex-1 border border-gray-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 onkeypress="handleSearchKeypress(event)"
             >
-            <button onclick="searchContext()" class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                <i class="fas fa-search mr-2"></i>
-                Search
+            <button onclick="searchContext()" class="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 transition-colors">
+                <i class="fas fa-search"></i>
             </button>
         </div>
-        <div id="search-results" class="mt-4 hidden">
-            <h4 class="font-medium text-gray-900 mb-2">Search Results</h4>
-            <div id="search-results-list" class="space-y-2"></div>
+        
+        <!-- Quick Actions -->
+        <button onclick="showCreateDocumentModal()" class="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600 transition-colors">
+            <i class="fas fa-file-alt mr-1"></i>
+            Create
+        </button>
+        <button onclick="showUploadModal()" class="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 transition-colors">
+            <i class="fas fa-upload mr-1"></i>
+            Upload
+        </button>
+        <button onclick="exportContext()" class="bg-purple-500 text-white px-3 py-1.5 rounded text-sm hover:bg-purple-600 transition-colors">
+            <i class="fas fa-download mr-1"></i>
+            Export
+        </button>
+        
+        <!-- Folder/Document Actions -->
+        <div class="border-l border-gray-300 pl-2">
+            <button onclick="showCreateFolderModal()" class="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-600 transition-colors">
+                <i class="fas fa-folder-plus mr-1"></i>
+                New Folder
+            </button>
+            <button onclick="showCreateDocumentModal()" class="bg-teal-500 text-white px-3 py-1.5 rounded text-sm hover:bg-teal-600 transition-colors">
+                <i class="fas fa-plus mr-1"></i>
+                New Document
+            </button>
         </div>
+        
+        <!-- Refresh -->
+        <button id="refresh-btn" onclick="refreshContext()" class="bg-gray-500 text-white px-3 py-1.5 rounded text-sm hover:bg-gray-600 transition-colors">
+            <i class="fas fa-sync-alt"></i>
+        </button>
+    </div>
+    
+    <!-- Search Results (hidden by default) -->
+    <div id="search-results" class="mt-4 hidden">
+        <h4 class="font-medium text-gray-900 mb-2 text-sm">Search Results</h4>
+        <div id="search-results-list" class="space-y-1"></div>
     </div>
 </div>
 
-<!-- Dynamic Content Layout -->
-<div id="main-content" class="transition-all duration-300">
-    <!-- Full Width File Browser (default state) -->
-    <div id="full-browser" class="bg-white rounded-lg shadow">
-        <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 class="text-lg font-medium text-gray-900">My Documents</h3>
-            <div class="flex space-x-2">
-                <button onclick="showCreateFolderModal()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm">
-                    <i class="fas fa-folder-plus mr-2"></i>
-                    New Folder
-                </button>
-                <button onclick="showCreateDocumentModal()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                    <i class="fas fa-plus mr-2"></i>
-                    New Document
-                </button>
+<!-- Hidden info div for status messages -->
+<div id="context-info" class="hidden"></div>
+
+<!-- Main Content - Side by Side Layout -->
+<div id="main-content" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <!-- Folder Browser (Left Side) -->
+    <div class="lg:col-span-1">
+        <div class="bg-white rounded-lg shadow h-full flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h3 class="text-lg font-medium text-gray-900">Files & Folders</h3>
             </div>
-        </div>
-        <div class="p-6">
-            <div id="folder-browser" class="min-h-96">
-                <!-- JSTree will be initialized here -->
-            </div>
-            <div id="no-context" class="text-center py-8 text-gray-500 hidden">
-                <i class="fas fa-folder-open text-4xl mb-4"></i>
-                <p>Your context hub is not initialized yet.</p>
-                <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+            <div class="p-4 flex-1 overflow-hidden">
+                <div id="folder-browser" class="h-full overflow-y-auto">
+                    <!-- JSTree will be initialized here -->
+                </div>
+                <div id="no-context" class="text-center py-8 text-gray-500 hidden">
+                    <i class="fas fa-folder-open text-4xl mb-4"></i>
+                    <p>Your context hub is not initialized yet.</p>
+                    <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Split View Layout (when document is selected) -->
-    <div id="split-view" class="hidden grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <!-- Minimized Folder Browser -->
-        <div class="lg:col-span-1">
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                    <h3 class="text-base font-medium text-gray-900">Files</h3>
-                    <button onclick="closeDocumentEditor()" class="text-gray-400 hover:text-gray-600">
-                        <i class="fas fa-times"></i>
+    <!-- Document Viewer/Editor (Right Side) -->
+    <div class="lg:col-span-2">
+        <div class="bg-white rounded-lg shadow h-full flex flex-col">
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <i id="doc-icon" class="fas fa-file-alt text-gray-500"></i>
+                    <h3 id="doc-title" class="text-lg font-medium text-gray-900">Select a Document</h3>
+                </div>
+                <div id="doc-actions" class="hidden flex space-x-2">
+                    <button onclick="saveDocument()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                        <i class="fas fa-save mr-2"></i>
+                        Save
                     </button>
                 </div>
-                <div class="p-4">
-                    <div id="folder-browser-mini" class="min-h-64">
-                        <!-- JSTree will be cloned here -->
-                    </div>
-                </div>
             </div>
-        </div>
-
-        <!-- Document Editor -->
-        <div class="lg:col-span-2">
-            <div class="bg-white rounded-lg shadow">
-                <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                    <div class="flex items-center gap-3">
-                        <i id="doc-icon" class="fas fa-file-alt text-gray-500"></i>
-                        <h3 id="doc-title" class="text-lg font-medium text-gray-900">Document</h3>
-                    </div>
-                    <div class="flex space-x-2">
-                        <button onclick="saveDocument()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                            <i class="fas fa-save mr-2"></i>
-                            Save
-                        </button>
-                        <button onclick="closeDocumentEditor()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors text-sm">
-                            <i class="fas fa-times mr-2"></i>
-                            Close
-                        </button>
-                    </div>
+            <div class="p-6 flex-1 overflow-hidden">
+                <div id="doc-placeholder" class="text-center py-16 text-gray-500">
+                    <i class="fas fa-file-alt text-6xl mb-4"></i>
+                    <p class="text-lg">Select a document to view or edit</p>
+                    <p class="text-sm mt-2">Click on any file in the tree to open it</p>
                 </div>
-                <div class="p-6">
-                    <textarea 
-                        id="doc-editor" 
-                        class="w-full h-96 border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
-                        placeholder="Document content...">
-                    </textarea>
-                </div>
+                <textarea 
+                    id="doc-editor" 
+                    class="hidden w-full h-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none"
+                    placeholder="Document content...">
+                </textarea>
             </div>
-        </div>
-    </div>
-
-    <!-- Sidebar (only visible in full browser mode) -->
-    <div id="sidebar" class="mt-6 space-y-6">
-        <!-- Quick Actions -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Quick Actions</h3>
-            </div>
-            <div class="p-6 space-y-3">
-                <button onclick="showCreateDocumentModal()" class="w-full bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors">
-                    <i class="fas fa-file-alt mr-2"></i>
-                    Create Document
-                </button>
-                <button onclick="showUploadModal()" class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
-                    <i class="fas fa-upload mr-2"></i>
-                    Upload File
-                </button>
-                <button onclick="exportContext()" class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-colors">
-                    <i class="fas fa-download mr-2"></i>
-                    Export Data
-                </button>
-            </div>
-        </div>
-
-        <!-- Context Stats -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Statistics</h3>
-            </div>
-            <div class="p-6 space-y-4">
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">Total Documents</span>
-                    <span id="doc-count" class="text-lg font-semibold text-gray-900">-</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">Folders</span>
-                    <span id="folder-count" class="text-lg font-semibold text-gray-900">-</span>
-                </div>
-                <div class="flex items-center justify-between">
-                    <span class="text-sm text-gray-600">Last Updated</span>
-                    <span id="last-updated" class="text-xs text-gray-500">-</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Tips -->
-        <div class="bg-blue-50 rounded-lg p-6">
-            <h4 class="font-medium text-blue-900 mb-2">
-                <i class="fas fa-lightbulb mr-2"></i>
-                Tips
-            </h4>
-            <ul class="text-sm text-blue-800 space-y-1">
-                <li>• Use descriptive names for your documents</li>
-                <li>• Organize files into relevant folders</li>
-                <li>• Your AI assistant can search these documents during chat</li>
-                <li>• Regular backups are recommended</li>
-            </ul>
         </div>
     </div>
 </div>
@@ -313,38 +268,34 @@
 
     function updateStatusDisplay(status) {
         const statusEl = document.getElementById('context-status');
-        const infoEl = document.getElementById('context-info');
         const initBtn = document.getElementById('init-context-btn');
         const noContextEl = document.getElementById('no-context');
 
         if (status.initialized) {
-            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Initialized';
-            statusEl.className = 'px-3 py-1 text-sm rounded-full bg-green-100 text-green-800';
+            statusEl.innerHTML = '<i class="fas fa-check-circle mr-1"></i> Ready';
+            statusEl.className = 'px-2 py-1 text-xs rounded-full bg-green-100 text-green-800';
             initBtn.classList.add('hidden');
-            noContextEl.classList.add('hidden');
+            if (noContextEl) noContextEl.classList.add('hidden');
             loadFolders();
         } else {
-            statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Not Initialized';
-            statusEl.className = 'px-3 py-1 text-sm rounded-full bg-yellow-100 text-yellow-800';
+            statusEl.innerHTML = '<i class="fas fa-exclamation-circle mr-1"></i> Not Ready';
+            statusEl.className = 'px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800';
             initBtn.classList.remove('hidden');
-            noContextEl.classList.remove('hidden');
+            if (noContextEl) noContextEl.classList.remove('hidden');
         }
-        
-        infoEl.classList.remove('hidden');
     }
 
     async function initializeContext() {
         try {
             const response = await fetch('/api/context/initialize', { method: 'POST' });
             if (response.ok) {
-                alert('Context hub initialized successfully!');
+                // Silent success, just reload
                 loadContextStatus();
             } else {
-                alert('Failed to initialize context hub');
+                console.error('Failed to initialize context hub');
             }
         } catch (error) {
             console.error('Error initializing context:', error);
-            alert('Error initializing context hub');
         }
     }
 
@@ -355,7 +306,6 @@
                 const data = await response.json();
                 contextData.folders = data;
                 updateFolderDisplay(data);
-                updateStats();
             }
         } catch (error) {
             console.error('Failed to load folders:', error);
@@ -368,9 +318,21 @@
         }
         
         function convertFolderToJSTreeNode(folder) {
+            // Create action buttons for folders
+            const folderActions = `
+                <span class="tree-actions" style="float: right; margin-right: 10px;">
+                    <i class="fas fa-plus text-green-500 hover:text-green-700 cursor-pointer mr-2" 
+                       onclick="event.stopPropagation(); showQuickCreateModal('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')" 
+                       title="Add to folder"></i>
+                    <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
+                       onclick="event.stopPropagation(); deleteItem('${folder.id}', 'folder', '${folder.name.replace(/'/g, "\\'")}')" 
+                       title="Delete folder"></i>
+                </span>
+            `;
+            
             const node = {
                 id: folder.id,
-                text: `${folder.name} (${folder.document_count || 0} documents)`,
+                text: `${folder.name} (${folder.document_count || 0} documents)${folderActions}`,
                 icon: folder.id === 'root' ? 'fas fa-home' : 'fas fa-folder',
                 state: { opened: true },
                 data: folder,
@@ -380,9 +342,18 @@
             // Add documents as child nodes
             if (folder.documents && folder.documents.length > 0) {
                 folder.documents.forEach(doc => {
+                    // Create action buttons for documents
+                    const docActions = `
+                        <span class="tree-actions" style="float: right; margin-right: 10px;">
+                            <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
+                               onclick="event.stopPropagation(); deleteItem('${doc.id}', 'document', '${doc.name.replace(/'/g, "\\'")}')" 
+                               title="Delete document"></i>
+                        </span>
+                    `;
+                    
                     node.children.push({
                         id: `doc_${doc.id}`,
-                        text: doc.name,
+                        text: doc.name + docActions,
                         icon: 'fas fa-file-alt',
                         type: 'document',
                         data: doc
@@ -440,12 +411,13 @@
         }).on('select_node.jstree', function (e, data) {
             // Handle folder or document selection
             if (data.node.type === 'document') {
-                // Document selected - open editor
-                openDocumentEditor(data.node.data);
+                // Document selected - load it for viewing/editing
+                loadDocument(data.node.data);
             } else {
-                // Folder selected - store for creating subfolders
+                // Folder selected - store for creating subfolders and show index guide
                 contextData.selectedFolder = data.node.data;
                 console.log('Selected folder:', contextData.selectedFolder);
+                displayFolderGuide(data.node.data);
             }
         }).on('ready.jstree', function() {
             // Tree is ready
@@ -453,8 +425,62 @@
         });
     }
     
-    async function openDocumentEditor(document) {
-        console.log('Opening document editor for:', document);
+    async function displayFolderGuide(folder) {
+        console.log('Displaying folder guide:', folder);
+        
+        // Clear selected document
+        contextData.selectedDocument = null;
+        
+        // Update display to show folder guide
+        const title = folder.name || 'Folder';
+        
+        window.document.getElementById('doc-icon').className = 'fas fa-folder text-gray-500';
+        window.document.getElementById('doc-title').textContent = title + ' - Folder Guide';
+        
+        // Fetch the Index Guide content
+        let guide = '';
+        if (folder.id) {
+            try {
+                const response = await fetch(`/api/context/folders/${folder.id}/guide`);
+                if (response.ok) {
+                    const data = await response.json();
+                    guide = data.content || '';
+                }
+            } catch (error) {
+                console.error('Error fetching folder guide:', error);
+            }
+        }
+        
+        if (guide) {
+            // Display the guide content as read-only
+            window.document.getElementById('doc-editor').value = guide;
+            window.document.getElementById('doc-editor').readOnly = true;
+            window.document.getElementById('doc-editor').classList.add('bg-gray-50');
+            
+            // Show editor, hide placeholder and actions
+            window.document.getElementById('doc-placeholder').classList.add('hidden');
+            window.document.getElementById('doc-editor').classList.remove('hidden');
+            window.document.getElementById('doc-actions').classList.add('hidden');
+        } else {
+            // No guide - show placeholder with folder info
+            const placeholder = window.document.getElementById('doc-placeholder');
+            placeholder.innerHTML = `
+                <i class="fas fa-folder text-6xl mb-4"></i>
+                <p class="text-lg font-medium">${title}</p>
+                <p class="text-sm mt-2">This folder has no Index Guide yet.</p>
+                <p class="text-sm mt-1">Index Guides help organize content within folders.</p>
+                <button onclick="createIndexGuide('${folder.id}', '${title.replace(/'/g, "\\'")}')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    <i class="fas fa-plus mr-2"></i>Create Index Guide
+                </button>
+            `;
+            placeholder.classList.remove('hidden');
+            window.document.getElementById('doc-editor').classList.add('hidden');
+            window.document.getElementById('doc-actions').classList.add('hidden');
+        }
+    }
+    
+    async function loadDocument(document) {
+        console.log('Loading document:', document);
         
         try {
             // Fetch the full document content
@@ -465,89 +491,31 @@
             
             const docData = await response.json();
             contextData.selectedDocument = docData;
-            contextData.editorMode = true;
             
-            // Switch to editor layout
-            switchToEditorLayout(docData);
+            // Update document display
+            window.document.getElementById('doc-icon').className = 'fas fa-file-alt text-gray-500';
+            window.document.getElementById('doc-title').textContent = docData.name;
+            window.document.getElementById('doc-editor').value = docData.content || '';
+            window.document.getElementById('doc-editor').readOnly = false;
+            window.document.getElementById('doc-editor').classList.remove('bg-gray-50');
+            
+            // Show editor, hide placeholder
+            window.document.getElementById('doc-placeholder').classList.add('hidden');
+            window.document.getElementById('doc-editor').classList.remove('hidden');
+            window.document.getElementById('doc-actions').classList.remove('hidden');
             
         } catch (error) {
             console.error('Error loading document:', error);
-            alert('Failed to load document: ' + error.message);
+            // Show error in placeholder instead of alert
+            window.document.getElementById('doc-placeholder').innerHTML = `
+                <i class="fas fa-exclamation-circle text-6xl mb-4 text-red-500"></i>
+                <p class="text-lg">Failed to load document</p>
+                <p class="text-sm mt-2">${error.message}</p>
+            `;
+            window.document.getElementById('doc-placeholder').classList.remove('hidden');
+            window.document.getElementById('doc-editor').classList.add('hidden');
+            window.document.getElementById('doc-actions').classList.add('hidden');
         }
-    }
-    
-    function switchToEditorLayout(docData) {
-        // Hide full browser and sidebar
-        window.document.getElementById('full-browser').classList.add('hidden');
-        window.document.getElementById('sidebar').classList.add('hidden');
-        
-        // Show split view
-        window.document.getElementById('split-view').classList.remove('hidden');
-        
-        // Update document editor
-        window.document.getElementById('doc-title').textContent = docData.name;
-        window.document.getElementById('doc-editor').value = docData.content || '';
-        
-        // Clone the tree to the mini browser
-        cloneTreeToMini();
-    }
-    
-    function cloneTreeToMini() {
-        const originalTree = $('#folder-browser');
-        const miniTree = $('#folder-browser-mini');
-        
-        // Clear mini tree
-        if (miniTree.jstree(true)) {
-            miniTree.jstree('destroy');
-        }
-        
-        // Get the current tree data
-        if (originalTree.jstree(true)) {
-            const treeData = originalTree.jstree(true).get_json('#', {flat: false});
-            
-            // Initialize mini tree with same data
-            miniTree.jstree({
-                'core': {
-                    'data': treeData,
-                    'check_callback': true,
-                    'themes': {
-                        'name': 'default',
-                        'responsive': true
-                    }
-                },
-                'plugins': ['wholerow', 'types'],
-                'types': {
-                    'default': {
-                        'icon': 'fas fa-folder'
-                    },
-                    'document': {
-                        'icon': 'fas fa-file-alt'
-                    }
-                }
-            }).on('select_node.jstree', function (e, data) {
-                if (data.node.type === 'document') {
-                    openDocumentEditor(data.node.data);
-                } else {
-                    contextData.selectedFolder = data.node.data;
-                }
-            });
-        }
-    }
-    
-    function closeDocumentEditor() {
-        contextData.editorMode = false;
-        contextData.selectedDocument = null;
-        
-        // Show full browser and sidebar
-        window.document.getElementById('full-browser').classList.remove('hidden');
-        window.document.getElementById('sidebar').classList.remove('hidden');
-        
-        // Hide split view
-        window.document.getElementById('split-view').classList.add('hidden');
-        
-        // Clear editor
-        window.document.getElementById('doc-editor').value = '';
-        window.document.getElementById('doc-title').textContent = 'Document';
     }
     
     async function saveDocument() {
@@ -590,30 +558,19 @@
                 // Refresh folder data to update any counts
                 loadFolders();
             } else {
-                alert('Failed to save document');
+                console.error('Failed to save document');
+                // Visual feedback only - change save button color briefly
+                const saveBtn = document.querySelector('button[onclick="saveDocument()"]');
+                saveBtn.classList.add('bg-red-600');
+                setTimeout(() => {
+                    saveBtn.classList.remove('bg-red-600');
+                }, 2000);
             }
         } catch (error) {
             console.error('Error saving document:', error);
-            alert('Error saving document');
         }
     }
 
-    function updateStats() {
-        if (!contextData.folders) return;
-
-        let docCount = 0;
-        let folderCount = contextData.folders.folders ? contextData.folders.folders.length : 0;
-
-        if (contextData.folders.folders) {
-            contextData.folders.folders.forEach(folder => {
-                docCount += folder.document_count || 0;
-            });
-        }
-
-        document.getElementById('doc-count').textContent = docCount;
-        document.getElementById('folder-count').textContent = folderCount;
-        document.getElementById('last-updated').textContent = 'Just now';
-    }
 
     async function searchContext() {
         const query = document.getElementById('search-input').value.trim();
@@ -625,11 +582,10 @@
                 const data = await response.json();
                 displaySearchResults(data);
             } else {
-                alert('Search failed');
+                console.error('Search failed');
             }
         } catch (error) {
             console.error('Search error:', error);
-            alert('Search error');
         }
     }
 
@@ -662,8 +618,28 @@
         }
     }
 
-    function refreshContext() {
-        loadContextStatus();
+    async function refreshContext() {
+        // Show loading state on refresh button
+        const refreshBtn = document.getElementById('refresh-btn');
+        const originalHTML = refreshBtn.innerHTML;
+        refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        refreshBtn.disabled = true;
+        
+        try {
+            // Refresh all components
+            await loadContextStatus();
+            await loadFolders();
+            
+            // If a document is currently selected, reload it by fetching fresh data
+            if (contextData.selectedDocument && contextData.selectedDocument.id) {
+                // Re-fetch the document to get latest content
+                await loadDocument({id: contextData.selectedDocument.id, name: contextData.selectedDocument.name});
+            }
+        } finally {
+            // Restore button state
+            refreshBtn.innerHTML = originalHTML;
+            refreshBtn.disabled = false;
+        }
     }
 
     function showCreateDocumentModal() {
@@ -699,7 +675,8 @@
     }
 
     function exportContext() {
-        alert('Export functionality coming soon!');
+        // Silent - no alert for unimplemented features
+        console.log('Export functionality not yet implemented');
     }
 
     // Handle create document form submission
@@ -731,13 +708,12 @@
             if (response.ok) {
                 closeCreateDocumentModal();
                 loadFolders();
-                alert('Document created successfully!');
+                // Silent success
             } else {
-                alert('Failed to create document');
+                console.error('Failed to create document');
             }
         } catch (error) {
             console.error('Error creating document:', error);
-            alert('Error creating document');
         }
     });
 
@@ -824,14 +800,98 @@
             if (response.ok) {
                 closeCreateFolderModal();
                 loadFolders();
-                alert('Folder created successfully!');
+                // Silent success
             } else {
-                alert('Failed to create folder');
+                console.error('Failed to create folder');
             }
         } catch (error) {
             console.error('Error creating folder:', error);
-            alert('Error creating folder');
         }
     });
+
+    // Delete item function
+    async function deleteItem(itemId, itemType, itemName) {
+        // Delete without confirmation
+        try {
+            const endpoint = itemType === 'folder' ? 
+                `/api/context/folders/${itemId}` : 
+                `/api/context/documents/${itemId}`;
+            
+            const response = await fetch(endpoint, { method: 'DELETE' });
+            
+            if (response.ok) {
+                // Silently refresh the folder list
+                loadFolders();
+            } else {
+                // Only show error if deletion fails
+                console.error(`Failed to delete ${itemType}: ${response.status}`);
+            }
+        } catch (error) {
+            console.error(`Error deleting ${itemType}:`, error);
+        }
+    }
+
+    // Quick create modal - default to document
+    function showQuickCreateModal(folderId, folderName) {
+        // Default to creating a document
+        contextData.selectedFolder = { id: folderId, name: folderName };
+        showCreateDocumentModal();
+        // Pre-select the folder in the modal
+        setTimeout(() => {
+            const select = document.getElementById('doc-folder');
+            if (select) select.value = folderId;
+        }, 100);
+    }
+    
+    // Create Index Guide for a folder
+    async function createIndexGuide(folderId, folderName) {
+        const defaultContent = `# ${folderName} Folder
+
+## Purpose
+This folder is for organizing your ${folderName.toLowerCase()} content.
+
+## Organization Guidelines
+- Keep related documents together
+- Use descriptive names for your files
+- Consider creating subfolders for better organization
+- Update documents regularly to keep information current
+
+## Best Practices
+- Add dates to time-sensitive documents
+- Use consistent naming conventions
+- Include relevant keywords for easy searching
+- Regular review and cleanup of outdated content
+`;
+        
+        try {
+            const response = await fetch('/api/context/documents', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    name: 'Index Guide',
+                    content: defaultContent,
+                    folder_id: folderId,
+                    doc_type: 'IndexGuide'
+                })
+            });
+            
+            if (response.ok) {
+                // Silent success
+                await loadFolders();
+                // Re-display the folder with the new guide
+                const folder = contextData.folders?.folders?.find(f => f.id === folderId);
+                if (folder) {
+                    folder.index_guide = defaultContent;
+                    displayFolderGuide(folder);
+                }
+            } else {
+                console.error('Failed to create Index Guide');
+            }
+        } catch (error) {
+            console.error('Error creating Index Guide:', error);
+        }
+    }
 </script>
 {% endblock %}

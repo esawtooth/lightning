@@ -48,7 +48,8 @@ services:
 
   # Context Hub (Rust-based storage service)
   context-hub:
-    image: lightning_context-hub:patch-support
+    build:
+      context: ./context-hub
     environment:
       DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
       JWT_SECRET: local-development-secret-key-change-in-production

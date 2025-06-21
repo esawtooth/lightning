@@ -35,6 +35,8 @@ from .drivers import (
 )
 from .registries import get_model_registry, get_tool_registry
 
+logger = logging.getLogger(__name__)
+
 
 @driver(
     "context_hub",
@@ -397,16 +399,38 @@ class ChatAgentDriver(AgentDriver):
         self._completions_api = None
 
         self.system_prompt = """
-You are a helpful AI assistant with full access to the user's personal context hub. You have the following capabilities:
+You are Vex, an AI assistant powered by the Vextir OS. You have full access to the user's personal context hub, which serves as your primary memory store.
 
-1. **Search Documents**: Use search_user_context to find relevant documents based on keywords
-2. **Read Documents**: Use read_document to get the full content of a specific document when you have its ID
-3. **Write Documents**: Use write_document to create new documents or update existing ones
-4. **List Documents**: Use list_documents to see what's in a specific folder
+CRITICAL INSTRUCTIONS:
+- **ALWAYS search the context hub BEFORE answering any question** - it contains important information about users, projects, and topics
+- **Treat the context hub as your memory** - any new information shared by the user should be appropriately stored there
+- **When you learn something new**, immediately create or update a document to record it
+- **Start every response by searching** for relevant context, even if you think you know the answer
 
-IMPORTANT: The context hub may contain "Index Guides" that provide specific instructions on how to use and organize content within folders. Always respect and follow these guides when working with documents. The guides are automatically included with search results and document listings.
+Your capabilities:
+1. **Search Documents**: Use search_user_context to find relevant information (DO THIS FIRST for every query!)
+2. **Read Documents**: Use read_document to get the full content when you have an ID
+3. **Write Documents**: Use write_document to store new information or update existing records
+4. **List Documents**: Use list_documents to browse folder contents
 
-Always cite sources when referencing information from their context hub. When creating or updating documents, confirm the action with the user first unless they explicitly ask you to do so.
+WORKFLOW:
+1. User asks a question → Search context hub for relevant information
+2. User provides new information → Store it in an appropriate document
+3. User requests an update → Search for the existing document, then update it
+4. Always maintain conversation context by referencing previous findings
+
+IMPORTANT ACTION-TAKING RULES:
+- When the user asks you to update, create, or modify a document, YOU MUST USE THE write_document FUNCTION
+- Do not just say you will update - ACTUALLY CALL THE FUNCTION
+- If the user provides new information about someone or something, USE write_document to save it
+- After searching and finding a document to update, USE write_document with the document_id to update it
+- Your responses should show that you've taken action, not just promised to take action
+
+Example correct behavior:
+User: "Update Rohit's document to say he weighs 170 kg"
+You: [First search for Rohit's document, then ACTUALLY CALL write_document to update it, then confirm the update was made]
+
+Remember: The context hub is your memory. Use it heavily. Store everything. Search before answering. TAKE ACTION, don't just promise action.
 """
 
     def get_capabilities(self) -> List[str]:
@@ -448,15 +472,35 @@ Always cite sources when referencing information from their context hub. When cr
                 model_id = model.id if model else self.default_model
 
                 # First attempt with function calling
+                tools = self._get_context_tools()
+                logger.info(f"Calling OpenAI with {len(tools)} tools available")
+                
+                # Check if the last user message suggests a document update
+                last_user_msg = ""
+                for msg in reversed(messages):
+                    if msg.get("role") == "user":
+                        last_user_msg = msg.get("content", "").lower()
+                        break
+                
+                # Force function calling for update/create requests
+                tool_choice = "auto"
+                if any(word in last_user_msg for word in ["update", "create", "add", "store", "save", "record", "write"]):
+                    logger.info("Detected update/create request - encouraging function use")
+                    # We can't force a specific function, but we can encourage function use
+                    tool_choice = "auto"  # OpenAI doesn't support "required" anymore
+                
                 response = await self._completions_api.create(
                     model=model_id,
                     messages=messages,
                     user_id=event.user_id,
-                    tools=self._get_context_tools(),
-                    tool_choice="auto",
+                    tools=tools,
+                    tool_choice=tool_choice,
                 )
 
                 message = response.choices[0].message
+                logger.info(f"OpenAI response message: role={message.role}, content={message.content[:100] if message.content else 'None'}...")
+                logger.info(f"Tool calls in response: {message.tool_calls}")
+                
                 usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 if response.usage:
                     usage = {
@@ -466,7 +510,9 @@ Always cite sources when referencing information from their context hub. When cr
                     }
 
                 # Check if the model wants to call a function
+                logger.info(f"Response has tool_calls: {bool(message.tool_calls)}")
                 if message.tool_calls:
+                    logger.info(f"Processing {len(message.tool_calls)} tool calls")
                     # Handle function calls
                     # Convert tool_calls to dict format if needed
                     tool_calls_dict = []
@@ -520,14 +566,92 @@ Always cite sources when referencing information from their context hub. When cr
                         )
 
                     # Get final response with function results
+                    # Include tools again to allow chained function calls
                     final_response = await self._completions_api.create(
                         model=model_id,
                         messages=messages,
                         user_id=event.user_id,
+                        tools=tools,
+                        tool_choice="auto",
                     )
 
-                    reply = final_response.choices[0].message.content
-                    if final_response.usage:
+                    # Check if the final response also has tool calls
+                    final_message = final_response.choices[0].message
+                    logger.info(f"Final response has tool_calls: {bool(final_message.tool_calls)}")
+                    
+                    # Handle chained function calls
+                    max_iterations = 5  # Prevent infinite loops
+                    iteration = 0
+                    while final_message.tool_calls and iteration < max_iterations:
+                        iteration += 1
+                        logger.info(f"Processing chained tool calls (iteration {iteration})")
+                        
+                        # Process the additional tool calls
+                        tool_calls_dict = []
+                        for tc in final_message.tool_calls:
+                            if hasattr(tc, 'function'):
+                                tool_calls_dict.append({
+                                    "id": tc.id,
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc.function.name,
+                                        "arguments": tc.function.arguments
+                                    }
+                                })
+                            else:
+                                tool_calls_dict.append(tc)
+                        
+                        messages.append({
+                            "role": final_message.role.value if hasattr(final_message.role, 'value') else final_message.role,
+                            "content": final_message.content,
+                            "tool_calls": tool_calls_dict
+                        })
+                        
+                        for tool_call in final_message.tool_calls:
+                            if hasattr(tool_call, 'function'):
+                                function_name = tool_call.function.name
+                                arguments_str = tool_call.function.arguments
+                                tool_call_id = tool_call.id
+                            else:
+                                function_name = tool_call["function"]["name"]
+                                arguments_str = tool_call["function"]["arguments"]
+                                tool_call_id = tool_call.get("id", "unknown")
+                            
+                            try:
+                                arguments = json.loads(arguments_str)
+                            except json.JSONDecodeError:
+                                arguments = {}
+
+                            function_result = await self._handle_function_call(
+                                function_name, arguments, event.user_id
+                            )
+
+                            messages.append({
+                                "tool_call_id": tool_call_id,
+                                "role": "tool",
+                                "name": function_name,
+                                "content": function_result,
+                            })
+                        
+                        # Get next response
+                        final_response = await self._completions_api.create(
+                            model=model_id,
+                            messages=messages,
+                            user_id=event.user_id,
+                            tools=tools,
+                            tool_choice="auto",
+                        )
+                        final_message = final_response.choices[0].message
+                        
+                        if final_response.usage:
+                            usage = {
+                                "prompt_tokens": usage["prompt_tokens"] + final_response.usage.prompt_tokens,
+                                "completion_tokens": usage["completion_tokens"] + final_response.usage.completion_tokens,
+                                "total_tokens": usage["total_tokens"] + final_response.usage.total_tokens,
+                            }
+                    
+                    reply = final_message.content
+                    if final_response.usage and iteration == 0:  # Only update if we didn't loop
                         usage = {
                             "prompt_tokens": usage["prompt_tokens"] + final_response.usage.prompt_tokens,
                             "completion_tokens": usage["completion_tokens"] + final_response.usage.completion_tokens,

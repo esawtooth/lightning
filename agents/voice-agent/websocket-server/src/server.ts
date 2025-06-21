@@ -157,6 +157,17 @@ app.get("/public-url", (req, res) => {
   res.json({ publicUrl: PUBLIC_URL });
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    service: "voice-websocket-server",
+    timestamp: new Date().toISOString(),
+    cosmos: !!userContainer,
+    servicebus: !!sbClient
+  });
+});
+
 app.all("/twiml", async (req, res) => {
   const from = (req.body?.From as string) || (req.query?.From as string) || "";
   currentUserProfile = await lookupUserByPhone(from);

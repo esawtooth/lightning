@@ -849,11 +849,17 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                 request_id = str(uuid.uuid4())
                 manager.pending_responses[request_id] = connection_id
                 
+                # Use full conversation history if provided, otherwise just current message
+                messages = data.get("messages", [])
+                if not messages:
+                    # Fallback to single message if no history provided
+                    messages = [{"role": "user", "content": data.get("message", "")}]
+                
                 # Create chat event
                 event = EventMessage(
                     event_type="llm.chat",
                     data={
-                        "messages": [{"role": "user", "content": data.get("message", "")}],
+                        "messages": messages,
                         "model": data.get("model", "gpt-4"),
                         "temperature": data.get("temperature", 0.7)
                     },
