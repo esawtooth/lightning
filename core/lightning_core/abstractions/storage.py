@@ -158,3 +158,9 @@ class StorageProvider(ABC, HealthCheckable):
                 latency_ms=latency_ms,
                 error=str(e)
             )
+
+# Backwards compatibility: expose ProviderFactory here
+try:
+    from .factory import ProviderFactory  # type: ignore
+except Exception:  # pragma: no cover - avoid circular import at startup
+    ProviderFactory = None

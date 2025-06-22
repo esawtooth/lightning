@@ -11,3 +11,9 @@ pytest-benchmark
 click>=8.1.0
 croniter
 httpx
+jsonschema>=4.0.0
+pm4py>=2.7.0
+PyYAML
+aiofiles
+docker
+aiosqlite
