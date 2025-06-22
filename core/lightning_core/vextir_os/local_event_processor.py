@@ -83,7 +83,7 @@ class LocalEventProcessorService:
         async def process_event(event: EventMessage):
             """Process incoming events."""
             try:
-                logger.info(f"Received event from bus: {event.event_type} (ID: {event.id})")
+                logger.info(f"[TRACE] Received event from bus: {event.event_type} (ID: {event.id}) at {datetime.utcnow().isoformat()}")
                 logger.info(f"Processing event: {event.event_type} (ID: {event.id})")
 
                 # Invoke the serverless function

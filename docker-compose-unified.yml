@@ -88,6 +88,7 @@ services:
       
       # Redis
       REDIS_URL: redis://redis:6379
+      LIGHTNING_EVENT_BUS_CONNECTION: redis://redis:6379
       
       # Context Hub
       CONTEXT_HUB_URL: http://context-hub:3000
@@ -161,7 +162,7 @@ services:
       dockerfile: ui/integrated_app/Dockerfile
     environment:
       # Backend APIs
-      API_BASE: http://lightning-api:8000
+      API_BASE: http://lightning-api:8000/api
       EVENT_API_URL: http://lightning-api:8000/api/events
       CONTEXT_HUB_URL: http://context-hub:3000
       

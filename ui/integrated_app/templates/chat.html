@@ -5,55 +5,29 @@
 
 {% block content %}
 <div class="h-full flex flex-col bg-white rounded-lg shadow">
-    <!-- Chat Header -->
-    <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-        <div class="flex items-center space-x-3">
-            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <i class="fas fa-robot text-white"></i>
-            </div>
-            <div>
-                <h3 class="text-lg font-medium text-gray-900">AI Assistant</h3>
-                <p class="text-sm text-gray-500">Ready to help you with any questions</p>
-            </div>
-        </div>
-        <div class="flex items-center space-x-2">
-            <span class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                <i class="fas fa-circle mr-1"></i>
-                Online
-            </span>
-            <button onclick="clearChat()" class="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                <i class="fas fa-trash"></i>
-            </button>
-        </div>
+    <!-- Chat Header with New Chat Button -->
+    <div class="px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+        <h2 id="chat-title" class="text-lg font-medium text-gray-900">Chat</h2>
+        <button onclick="startNewChat()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2">
+            <i class="fas fa-plus"></i>
+            <span>New Chat</span>
+        </button>
     </div>
 
     <!-- Chat Messages Container -->
     <div id="chat-messages" class="flex-1 overflow-y-auto p-6 space-y-4" style="height: calc(100vh - 200px);">
         <!-- Welcome Message -->
         <div class="flex items-start space-x-3">
-            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                <i class="fas fa-robot text-white text-sm"></i>
+            <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                <img src="/static/favicon-32x32.png" alt="Vextir" class="w-6 h-6">
             </div>
             <div class="flex-1">
                 <div class="bg-gray-100 rounded-lg p-4">
-                    <div class="flex items-center space-x-2 mb-2">
-                        <img src="/static/vextir-logo.svg" alt="Vextir" class="w-6 h-6">
-                        <span class="font-medium text-gray-900">Vextir Assistant</span>
+                    <div class="mb-2">
+                        <span class="font-medium text-gray-900">Vex</span>
                     </div>
                     <p class="text-gray-700">
-                        🌟 <strong>Welcome to Vextir Chat, {{ username }}!</strong>
-                    </p>
-                    <p class="text-gray-700 mt-2">
-                        I'm your AI assistant, ready to help you with:
-                    </p>
-                    <ul class="list-disc list-inside text-gray-700 mt-2 space-y-1">
-                        <li>Answering questions</li>
-                        <li>Code assistance</li>
-                        <li>Repository analysis</li>
-                        <li>General conversation</li>
-                    </ul>
-                    <p class="text-gray-700 mt-2">
-                        What would you like to explore today?
+                        🌟 <strong>Hi {{ username }}!</strong> I'm Vextir, your AI assistant. How can I help you today?
                     </p>
                 </div>
                 <div class="text-xs text-gray-500 mt-1">Just now</div>
@@ -114,6 +88,102 @@
     let messageHistory = []; // Store message history for context
     let isProcessing = false;
     window.sessionId = 'session-' + Date.now();
+    window.currentThreadId = null;
+    
+    // Get thread ID from URL params
+    const urlParams = new URLSearchParams(window.location.search);
+    const threadIdFromUrl = urlParams.get('thread');
+    
+    // WebSocket message handler
+    function handleWebSocketMessage(event) {
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+        
+        if (data.type === 'chat_loaded') {
+            window.currentThreadId = data.thread_id;
+            
+            // Update page title with chat title
+            const chatTitle = data.title || 'Chat';
+            document.getElementById('chat-title').textContent = chatTitle;
+            
+            // Clear existing messages (including welcome message for loaded chats)
+            const messagesContainer = document.getElementById('chat-messages');
+            messagesContainer.innerHTML = '';
+            
+            // Load historical messages
+            if (data.messages && data.messages.length > 0) {
+                data.messages.forEach(msg => {
+                    addMessage(msg.content, msg.role, 'normal', false);
+                });
+            } else {
+                // If no messages, show welcome message
+                const welcomeDiv = document.createElement('div');
+                welcomeDiv.className = 'flex items-start space-x-3';
+                welcomeDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                        <img src="/static/favicon-32x32.png" alt="Vextir" class="w-6 h-6">
+                    </div>
+                    <div class="flex-1">
+                        <div class="bg-gray-100 rounded-lg p-4">
+                            <div class="mb-2">
+                                <span class="font-medium text-gray-900">Vex</span>
+                            </div>
+                            <p class="text-gray-700">
+                                🌟 <strong>Continuing our conversation...</strong> How can I help you?
+                            </p>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">Just now</div>
+                    </div>
+                `;
+                messagesContainer.appendChild(welcomeDiv);
+            }
+            
+            // Update message history
+            messageHistory = data.messages.map(msg => ({role: msg.role, content: msg.content}));
+            
+        } else if (data.type === 'chat_created') {
+            window.currentThreadId = data.thread_id;
+            document.getElementById('chat-title').textContent = 'New Chat';
+            
+            // For new chats, ensure we have the welcome message
+            const messagesContainer = document.getElementById('chat-messages');
+            if (messagesContainer.children.length === 0 || !messagesContainer.querySelector('.text-gray-700')) {
+                messagesContainer.innerHTML = '';
+                const welcomeDiv = document.createElement('div');
+                welcomeDiv.className = 'flex items-start space-x-3';
+                welcomeDiv.innerHTML = `
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                        <img src="/static/favicon-32x32.png" alt="Vextir" class="w-6 h-6">
+                    </div>
+                    <div class="flex-1">
+                        <div class="bg-gray-100 rounded-lg p-4">
+                            <div class="mb-2">
+                                <span class="font-medium text-gray-900">Vex</span>
+                            </div>
+                            <p class="text-gray-700">
+                                🌟 <strong>Hi {{ username }}!</strong> I'm Vextir, your AI assistant. How can I help you today?
+                            </p>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">Just now</div>
+                    </div>
+                `;
+                messagesContainer.appendChild(welcomeDiv);
+            }
+            // Update URL without reload
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('thread', data.thread_id);
+            window.history.pushState({}, '', newUrl);
+            
+        } else if (data.type === 'chat_response') {
+            // Add the AI response to chat
+            addMessage(data.response, 'assistant');
+            // Add to message history
+            messageHistory.push({"role": "assistant", "content": data.response});
+            setProcessing(false);
+        } else if (data.type === 'ack') {
+            console.log('Message acknowledged:', data.request_id);
+        }
+    }
     
     // WebSocket connection function
     function connectWebSocket() {
@@ -133,19 +203,7 @@
             }
         };
         
-        window.chatWebSocket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            
-            if (data.type === 'chat_response') {
-                // Add the AI response to chat
-                addMessage(data.response, 'assistant');
-                // Add to message history
-                messageHistory.push({"role": "assistant", "content": data.response});
-                setProcessing(false);
-            } else if (data.type === 'ack') {
-                console.log('Message acknowledged:', data.request_id);
-            }
-        };
+        window.chatWebSocket.onmessage = handleWebSocketMessage;
         
         window.chatWebSocket.onerror = (error) => {
             console.error('WebSocket error:', error);
@@ -166,6 +224,30 @@
     
     // Connect WebSocket on page load
     connectWebSocket();
+    
+    // Initialize chat (load latest or specified thread)
+    async function initializeChat() {
+        if (window.chatWebSocket && window.chatWebSocket.readyState === WebSocket.OPEN) {
+            // Only load a thread if explicitly specified in URL
+            if (threadIdFromUrl) {
+                window.chatWebSocket.send(JSON.stringify({
+                    type: 'init_chat',
+                    thread_id: threadIdFromUrl,
+                    session_id: window.sessionId
+                }));
+            } else {
+                // For new chat, just send init without loading any thread
+                window.chatWebSocket.send(JSON.stringify({
+                    type: 'init_chat',
+                    thread_id: 'new',
+                    session_id: window.sessionId
+                }));
+            }
+        } else {
+            // Retry after connection is established
+            setTimeout(initializeChat, 500);
+        }
+    }
 
     // Auto-resize textarea
     const chatInput = document.getElementById('chat-input');
@@ -228,7 +310,37 @@
         }
     });
 
-    function addMessage(content, sender, type = 'normal') {
+    function startNewChat() {
+        if (confirm('Start a new chat? Current conversation will be saved.')) {
+            // Clear messages
+            const messagesContainer = document.getElementById('chat-messages');
+            const welcomeMessage = messagesContainer.firstElementChild.cloneNode(true);
+            messagesContainer.innerHTML = '';
+            messagesContainer.appendChild(welcomeMessage);
+            
+            // Reset state
+            chatHistory = [];
+            messageHistory = [];
+            window.currentThreadId = null;
+            document.getElementById('chat-title').textContent = 'New Chat';
+            
+            // Update URL
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('thread');
+            window.history.pushState({}, '', newUrl);
+            
+            // Notify server
+            if (window.chatWebSocket && window.chatWebSocket.readyState === WebSocket.OPEN) {
+                window.chatWebSocket.send(JSON.stringify({
+                    type: 'init_chat',
+                    thread_id: 'new',
+                    session_id: window.sessionId
+                }));
+            }
+        }
+    }
+    
+    function addMessage(content, sender, type = 'normal', scrollToBottom = true) {
         const messagesContainer = document.getElementById('chat-messages');
         const messageDiv = document.createElement('div');
         messageDiv.className = 'flex items-start space-x-3';
@@ -253,8 +365,8 @@
             const textColor = type === 'error' ? 'text-red-700' : 'text-gray-700';
             
             messageDiv.innerHTML = `
-                <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i class="fas fa-robot text-white text-sm"></i>
+                <div class="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0">
+                    <img src="/static/favicon-32x32.png" alt="Vextir" class="w-6 h-6">
                 </div>
                 <div class="flex-1 max-w-xs lg:max-w-md">
                     <div class="${bgColor} rounded-lg p-4">
@@ -266,7 +378,9 @@
         }
         
         messagesContainer.appendChild(messageDiv);
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        if (scrollToBottom) {
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
         
         // Store in history
         chatHistory.push({ content, sender, timestamp, type });
@@ -316,6 +430,8 @@
     // Focus on input when page loads
     document.addEventListener('DOMContentLoaded', () => {
         chatInput.focus();
+        // Initialize chat after a short delay to ensure WebSocket is connected
+        setTimeout(initializeChat, 100);
     });
 
     // In a real implementation, you would set up WebSocket connection here

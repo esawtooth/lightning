@@ -152,6 +152,9 @@ async def chat_page(request: Request):
     """Chat interface page."""
     username = getattr(request.state, "username", "User")
     
+    # Get thread ID from query params
+    thread_id = request.query_params.get("thread")
+    
     # Determine the appropriate API base URL based on the request
     # Use the actual host from the request to support external access
     host_header = request.headers.get("host", "")
@@ -169,7 +172,8 @@ async def chat_page(request: Request):
         "username": username,
         "active_page": "chat",
         "api_base": api_base,
-        "user_id": username
+        "user_id": username,
+        "chat_thread_id": thread_id
     })
 
 
@@ -491,9 +495,10 @@ async def settings_page(request: Request):
 
 
 @app.get("/api/context/status")
-async def context_status(token: str = Depends(_get_token)):
+async def context_status(request: Request, token: str = Depends(_get_token)):
     """Get user's context hub status."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", "demo-user")
+    headers = _api_headers(token, username)
     resp = requests.get(f"{API_BASE}/context/status", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -511,9 +516,10 @@ async def initialize_context(token: str = Depends(_get_token)):
 
 
 @app.get("/api/context/folders")
-async def get_folders(token: str = Depends(_get_token)):
+async def get_folders(request: Request, token: str = Depends(_get_token)):
     """Get user's folder structure."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", "demo-user")
+    headers = _api_headers(token, username)
     resp = requests.get(f"{API_BASE}/context/folders", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -553,9 +559,10 @@ async def create_document(doc: DocumentIn, token: str = Depends(_get_token)):
 
 
 @app.get("/api/context/documents/{document_id}")
-async def get_document(document_id: str, token: str = Depends(_get_token)):
+async def get_document(document_id: str, request: Request, token: str = Depends(_get_token)):
     """Get a specific document from user's context hub."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", "demo-user")
+    headers = _api_headers(token, username)
     resp = requests.get(f"{API_BASE}/context/documents/{document_id}", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -563,9 +570,10 @@ async def get_document(document_id: str, token: str = Depends(_get_token)):
 
 
 @app.put("/api/context/documents/{document_id}")
-async def update_document(document_id: str, doc: DocumentIn, token: str = Depends(_get_token)):
+async def update_document(document_id: str, doc: DocumentIn, request: Request, token: str = Depends(_get_token)):
     """Update a document in user's context hub."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", "demo-user")
+    headers = _api_headers(token, username)
     payload = {
         "name": doc.name,
         "content": doc.content
@@ -602,9 +610,10 @@ class FolderIn(BaseModel):
 
 
 @app.post("/api/context/folders")
-async def create_folder(folder: FolderIn, token: str = Depends(_get_token)):
+async def create_folder(folder: FolderIn, request: Request, token: str = Depends(_get_token)):
     """Create a new folder in user's context hub."""
-    headers = _api_headers(token)
+    username = getattr(request.state, "username", "demo-user")
+    headers = _api_headers(token, username)
     payload = {
         "name": folder.name,
         "parent_id": folder.parent_id
@@ -630,6 +639,16 @@ async def rename_folder(folder_id: str, name: dict, token: str = Depends(_get_to
     """Rename a folder in user's context hub."""
     headers = _api_headers(token)
     resp = requests.patch(f"{API_BASE}/context/folders/{folder_id}", json=name, headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/context/folders/{folder_id}/guide")
+async def get_folder_guide(folder_id: str, token: str = Depends(_get_token)):
+    """Get the Index Guide for a specific folder."""
+    headers = _api_headers(token)
+    resp = requests.get(f"{API_BASE}/context/folders/{folder_id}/guide", headers=headers)
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return resp.json()
@@ -880,6 +899,30 @@ async def disconnect_provider(provider: str, token: str = Depends(_get_token)):
     if resp.status_code >= 300:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return {"status": "disconnected"}
+
+
+# Chat API endpoints
+@app.get("/api/chats")
+async def get_chat_threads(request: Request, limit: int = 50, token: str = Depends(_get_token)):
+    """Get list of chat threads for the current user."""
+    username = getattr(request.state, "username", "local-user")
+    headers = _api_headers(token, username)
+    params = {"limit": limit}
+    resp = requests.get(f"{API_BASE}/chats", headers=headers, params=params)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
+
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat_thread(chat_id: str, request: Request, token: str = Depends(_get_token)):
+    """Get a specific chat thread."""
+    username = getattr(request.state, "username", "local-user")
+    headers = _api_headers(token, username)
+    resp = requests.get(f"{API_BASE}/chats/{chat_id}", headers=headers)
+    if resp.status_code >= 300:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return resp.json()
 
 
 # Context summaries API endpoints

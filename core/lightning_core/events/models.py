@@ -193,5 +193,29 @@ class InstructionEvent(VextirEvent):
     type: str = "instruction"
 
 
+@dataclass
+class FolderCreatedEvent(VextirEvent):
+    """Event emitted when a new folder is created in the context hub"""
+
+    type: str = "context.folder.created"
+    category: EventCategory = EventCategory.INTERNAL
+
+
+@dataclass
+class IndexGuideGenerationEvent(VextirEvent):
+    """Event to request LLM generation of an index guide for a folder"""
+
+    type: str = "llm.index_guide.generate"
+    category: EventCategory = EventCategory.INTERNAL
+
+
+@dataclass
+class IndexGuideGeneratedEvent(VextirEvent):
+    """Event containing the LLM-generated index guide content"""
+
+    type: str = "context.index_guide.generated"
+    category: EventCategory = EventCategory.OUTPUT
+
+
 # Backward compatibility alias
 Event = VextirEvent

@@ -221,7 +221,7 @@ async def process_event_message(event_data: Dict[str, Any]) -> Dict[str, Any]:
                 'id': event_data.get('id'),
                 'timestamp': event_data.get('timestamp'),
                 'source': event_data.get('metadata', {}).get('source', 'unknown'),
-                'user_id': event_data.get('metadata', {}).get('user_id', 'unknown'),
+                'user_id': event_data.get('metadata', {}).get('userID') or event_data.get('metadata', {}).get('user_id', 'unknown'),
                 'metadata': event_data.get('metadata', {})
             }
             
@@ -232,7 +232,8 @@ async def process_event_message(event_data: Dict[str, Any]) -> Dict[str, Any]:
         if 'source' not in event_data:
             event_data['source'] = 'unknown'
         if 'user_id' not in event_data:
-            event_data['user_id'] = 'unknown'
+            # Try to extract user_id from metadata if not at top level
+            event_data['user_id'] = event_data.get('metadata', {}).get('userID') or event_data.get('metadata', {}).get('user_id', 'unknown')
         
         # Create appropriate typed event based on event type
         event_type = event_data.get('type', 'unknown')

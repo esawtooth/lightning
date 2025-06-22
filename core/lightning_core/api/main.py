@@ -33,6 +33,7 @@ from lightning_core.vextir_os.driver_initialization import (
 )
 from lightning_core.vextir_os.instruction_processor import setup_instruction_event_handlers
 from .context_router import router as context_router
+from .chat_persistence import ChatPersistence, ChatThread, ChatMessage, ChatToolCall
 
 # Configure logging
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"))
@@ -51,6 +52,7 @@ class ConnectionManager:
         self.active_connections: Dict[str, WebSocket] = {}
         self.user_connections: Dict[str, str] = {}  # user_id -> connection_id
         self.pending_responses: Dict[str, str] = {}  # request_id -> connection_id
+        self.active_threads: Dict[str, ChatThread] = {}  # connection_id -> ChatThread
         
     async def connect(self, websocket: WebSocket, connection_id: str, user_id: str):
         await websocket.accept()
@@ -75,6 +77,7 @@ class ConnectionManager:
             await self.send_message(connection_id, message)
 
 manager = ConnectionManager()
+chat_persistence = ChatPersistence(os.getenv("CONTEXT_HUB_URL", "http://context-hub:3000"))
 
 
 # Pydantic models
@@ -206,16 +209,34 @@ async def lifespan(app: FastAPI):
         if event.event_type == "llm.chat.response":
             request_id = event.metadata.get("request_id")
             user_id = event.metadata.get("userID")
+            response_text = event.data.get("response", "")
             
             # Send to the user's WebSocket connection
             if user_id:
                 await manager.send_to_user(user_id, {
                     "type": "chat_response",
                     "request_id": request_id,
-                    "response": event.data.get("response", ""),
+                    "response": response_text,
                     "usage": event.data.get("usage", {}),
                     "timestamp": event.timestamp.isoformat()
                 })
+                
+                # Update chat thread with assistant response
+                if user_id in manager.user_connections:
+                    connection_id = manager.user_connections[user_id]
+                    if connection_id in manager.active_threads:
+                        thread = manager.active_threads[connection_id]
+                        thread.messages.append(ChatMessage(
+                            role="assistant",
+                            content=response_text,
+                            metadata={"request_id": request_id}
+                        ))
+                        thread.updated_at = datetime.utcnow().isoformat()
+                        # Save updated thread
+                        try:
+                            await chat_persistence.save_chat(thread)
+                        except Exception as e:
+                            logger.error(f"Failed to save chat thread: {e}")
             
             # Also check if we have a pending request
             if request_id and request_id in manager.pending_responses:
@@ -223,7 +244,7 @@ async def lifespan(app: FastAPI):
                 await manager.send_message(connection_id, {
                     "type": "chat_response",
                     "request_id": request_id,
-                    "response": event.data.get("response", ""),
+                    "response": response_text,
                     "usage": event.data.get("usage", {}),
                     "timestamp": event.timestamp.isoformat()
                 })
@@ -831,6 +852,35 @@ async def get_models():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Chat API endpoints
+@app.get("/api/chats")
+async def get_chat_threads(request: Request, limit: int = 50):
+    """Get list of chat threads for the current user."""
+    try:
+        user_id = request.headers.get("X-User-ID", "local-user")
+        chats = await chat_persistence.list_chats(user_id, limit)
+        return {"chats": chats, "total": len(chats)}
+    except Exception as e:
+        logger.error(f"Failed to get chat threads: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/chats/{chat_id}")
+async def get_chat_thread(chat_id: str, request: Request):
+    """Get a specific chat thread."""
+    try:
+        user_id = request.headers.get("X-User-ID", "local-user")
+        thread = await chat_persistence.load_chat(chat_id, user_id)
+        if not thread:
+            raise HTTPException(status_code=404, detail="Chat thread not found")
+        return thread.dict()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get chat thread: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/chat/{user_id}")
 async def websocket_chat(websocket: WebSocket, user_id: str):
@@ -838,22 +888,95 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
     connection_id = str(uuid.uuid4())
     await manager.connect(websocket, connection_id, user_id)
     
+    # Initialize or load chat thread
+    thread = None
+    thread_id = None
+    
     try:
         while True:
             # Receive message from client
             data = await websocket.receive_json()
             logger.info(f"Received WebSocket message: {data}")
             
-            if data.get("type") == "chat_message":
+            if data.get("type") == "init_chat":
+                # Initialize chat - either load existing or create new
+                thread_id = data.get("thread_id")
+                if thread_id and thread_id not in ["new", "latest"]:
+                    # Load existing thread
+                    thread = await chat_persistence.load_chat(thread_id, user_id)
+                    if thread:
+                        logger.info(f"Loaded existing chat thread {thread_id}")
+                        # Send thread history to client
+                        await websocket.send_json({
+                            "type": "chat_loaded",
+                            "thread_id": thread_id,
+                            "messages": [msg.dict() for msg in thread.messages],
+                            "title": thread.title
+                        })
+                else:
+                    # Create new thread or load latest
+                    if thread_id == "latest":
+                        thread = await chat_persistence.get_latest_chat(user_id)
+                        if thread:
+                            logger.info(f"Loaded latest chat thread {thread.id}")
+                            await websocket.send_json({
+                                "type": "chat_loaded",
+                                "thread_id": thread.id,
+                                "messages": [msg.dict() for msg in thread.messages],
+                                "title": thread.title
+                            })
+                    
+                    if not thread:
+                        # Create new thread
+                        thread = ChatThread(
+                            user_id=user_id,
+                            session_id=data.get("session_id", connection_id)
+                        )
+                        logger.info(f"Created new chat thread {thread.id}")
+                        await websocket.send_json({
+                            "type": "chat_created",
+                            "thread_id": thread.id
+                        })
+                
+                manager.active_threads[connection_id] = thread
+            
+            elif data.get("type") == "chat_message":
+                # Ensure we have a thread
+                if connection_id not in manager.active_threads:
+                    thread = ChatThread(
+                        user_id=user_id,
+                        session_id=data.get("session_id", connection_id)
+                    )
+                    manager.active_threads[connection_id] = thread
+                else:
+                    thread = manager.active_threads[connection_id]
+                
                 # Generate a unique request ID
                 request_id = str(uuid.uuid4())
                 manager.pending_responses[request_id] = connection_id
                 
+                # Add user message to thread
+                user_message = data.get("message", "")
+                thread.messages.append(ChatMessage(
+                    role="user",
+                    content=user_message,
+                    metadata={"request_id": request_id}
+                ))
+                thread.updated_at = datetime.utcnow().isoformat()
+                
+                # Save thread after user message
+                try:
+                    doc_id = await chat_persistence.save_chat(thread)
+                    logger.info(f"Saved chat thread {thread.id} to document {doc_id}")
+                except Exception as e:
+                    logger.error(f"Failed to save chat thread: {e}")
+                
                 # Use full conversation history if provided, otherwise just current message
                 messages = data.get("messages", [])
                 if not messages:
-                    # Fallback to single message if no history provided
-                    messages = [{"role": "user", "content": data.get("message", "")}]
+                    # Use thread messages for context
+                    messages = [{"role": msg.role, "content": msg.content} 
+                               for msg in thread.messages]
                 
                 # Create chat event
                 event = EventMessage(
@@ -867,14 +990,15 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                         "userID": user_id,
                         "source": "websocket_chat",
                         "request_id": request_id,
-                        "session_id": data.get("session_id", connection_id)
+                        "session_id": data.get("session_id", connection_id),
+                        "thread_id": thread.id
                     }
                 )
                 
                 # Publish event to event bus
-                logger.info(f"Publishing event {event.event_type} with request_id {request_id}")
+                logger.info(f"[TRACE] Publishing event {event.event_type} with request_id {request_id}, event_id={event.id}")
                 await runtime.publish_event(event)
-                logger.info(f"Event published successfully")
+                logger.info(f"[TRACE] Event published successfully: event_id={event.id}")
                 
                 # Send acknowledgment
                 await websocket.send_json({
@@ -885,10 +1009,14 @@ async def websocket_chat(websocket: WebSocket, user_id: str):
                 
     except WebSocketDisconnect:
         manager.disconnect(connection_id)
+        if connection_id in manager.active_threads:
+            del manager.active_threads[connection_id]
         logger.info(f"WebSocket disconnected for user {user_id}")
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         manager.disconnect(connection_id)
+        if connection_id in manager.active_threads:
+            del manager.active_threads[connection_id]
 
 
 # Instruction endpoints

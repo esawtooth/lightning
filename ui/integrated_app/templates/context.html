@@ -320,8 +320,8 @@
         function convertFolderToJSTreeNode(folder) {
             // Create action buttons for folders
             const folderActions = `
-                <span class="tree-actions" style="float: right; margin-right: 10px;">
-                    <i class="fas fa-plus text-green-500 hover:text-green-700 cursor-pointer mr-2" 
+                <span class="tree-actions" style="float: right; margin-left: 20px;">
+                    <i class="fas fa-plus text-green-500 hover:text-green-700 cursor-pointer mr-1" 
                        onclick="event.stopPropagation(); showQuickCreateModal('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')" 
                        title="Add to folder"></i>
                     <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
@@ -344,7 +344,7 @@
                 folder.documents.forEach(doc => {
                     // Create action buttons for documents
                     const docActions = `
-                        <span class="tree-actions" style="float: right; margin-right: 10px;">
+                        <span class="tree-actions" style="float: right; margin-left: 20px;">
                             <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
                                onclick="event.stopPropagation(); deleteItem('${doc.id}', 'document', '${doc.name.replace(/'/g, "\\'")}')" 
                                title="Delete document"></i>
@@ -437,46 +437,54 @@
         window.document.getElementById('doc-icon').className = 'fas fa-folder text-gray-500';
         window.document.getElementById('doc-title').textContent = title + ' - Folder Guide';
         
-        // Fetch the Index Guide content
-        let guide = '';
-        if (folder.id) {
+        // Check if folder has an index_guide_id
+        if (folder.index_guide_id) {
+            // Load the Index Guide as an editable document
             try {
-                const response = await fetch(`/api/context/folders/${folder.id}/guide`);
+                const response = await fetch(`/api/context/documents/${folder.index_guide_id}`);
                 if (response.ok) {
-                    const data = await response.json();
-                    guide = data.content || '';
+                    const docData = await response.json();
+                    contextData.selectedDocument = docData;
+                    
+                    // Update document display - make it editable
+                    window.document.getElementById('doc-icon').className = 'fas fa-book text-gray-500';
+                    window.document.getElementById('doc-title').textContent = title + ' - Index Guide';
+                    window.document.getElementById('doc-editor').value = docData.content || '';
+                    window.document.getElementById('doc-editor').readOnly = false;
+                    window.document.getElementById('doc-editor').classList.remove('bg-gray-50');
+                    
+                    // Show editor and save button
+                    window.document.getElementById('doc-placeholder').classList.add('hidden');
+                    window.document.getElementById('doc-editor').classList.remove('hidden');
+                    window.document.getElementById('doc-actions').classList.remove('hidden');
+                } else {
+                    console.error('Failed to load Index Guide document');
+                    showNoIndexGuidePlaceholder(folder, title);
                 }
             } catch (error) {
-                console.error('Error fetching folder guide:', error);
+                console.error('Error loading Index Guide:', error);
+                showNoIndexGuidePlaceholder(folder, title);
             }
-        }
-        
-        if (guide) {
-            // Display the guide content as read-only
-            window.document.getElementById('doc-editor').value = guide;
-            window.document.getElementById('doc-editor').readOnly = true;
-            window.document.getElementById('doc-editor').classList.add('bg-gray-50');
-            
-            // Show editor, hide placeholder and actions
-            window.document.getElementById('doc-placeholder').classList.add('hidden');
-            window.document.getElementById('doc-editor').classList.remove('hidden');
-            window.document.getElementById('doc-actions').classList.add('hidden');
         } else {
-            // No guide - show placeholder with folder info
-            const placeholder = window.document.getElementById('doc-placeholder');
-            placeholder.innerHTML = `
-                <i class="fas fa-folder text-6xl mb-4"></i>
-                <p class="text-lg font-medium">${title}</p>
-                <p class="text-sm mt-2">This folder has no Index Guide yet.</p>
-                <p class="text-sm mt-1">Index Guides help organize content within folders.</p>
-                <button onclick="createIndexGuide('${folder.id}', '${title.replace(/'/g, "\\'")}')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    <i class="fas fa-plus mr-2"></i>Create Index Guide
-                </button>
-            `;
-            placeholder.classList.remove('hidden');
-            window.document.getElementById('doc-editor').classList.add('hidden');
-            window.document.getElementById('doc-actions').classList.add('hidden');
+            showNoIndexGuidePlaceholder(folder, title);
         }
+    }
+    
+    function showNoIndexGuidePlaceholder(folder, title) {
+        // Show placeholder with folder info
+        const placeholder = window.document.getElementById('doc-placeholder');
+        placeholder.innerHTML = `
+            <i class="fas fa-folder text-6xl mb-4"></i>
+            <p class="text-lg font-medium">${title}</p>
+            <p class="text-sm mt-2">This folder has no Index Guide yet.</p>
+            <p class="text-sm mt-1">Index Guides help organize content within folders.</p>
+            <button onclick="createIndexGuide('${folder.id}', '${title.replace(/'/g, "\\'")}')" class="mt-4 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                <i class="fas fa-plus mr-2"></i>Create Index Guide
+            </button>
+        `;
+        placeholder.classList.remove('hidden');
+        window.document.getElementById('doc-editor').classList.add('hidden');
+        window.document.getElementById('doc-actions').classList.add('hidden');
     }
     
     async function loadDocument(document) {

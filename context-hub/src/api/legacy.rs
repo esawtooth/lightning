@@ -436,10 +436,6 @@ async fn list_documents(
     
     // Collect all documents
     for (id, doc) in store.iter() {
-        // Skip index guides themselves from the listing
-        if doc.doc_type() == DocumentType::IndexGuide {
-            continue;
-        }
         
         let snippet = if doc.text().len() > 100 {
             format!("{}...", &doc.text()[..100])

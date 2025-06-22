@@ -67,7 +67,7 @@ async def universal_event_processor_handler(
         
         # Log event type - check both 'type' and 'event_type' fields
         event_type = event_data.get('type') or event_data.get('event_type', 'unknown')
-        user_id = event_data.get('userID') or event_data.get('user_id', 'unknown')
+        user_id = event_data.get('userID') or event_data.get('user_id') or event_data.get('metadata', {}).get('userID', 'unknown')
         
         logger.info(
             f"Processing event: {event_type} for user {user_id}"

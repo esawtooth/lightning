@@ -76,6 +76,16 @@ def get_driver_definitions() -> List[Tuple[DriverManifest, Type[BaseDriver]]]:
         )
     except ImportError as e:
         logger.warning(f"Could not import core drivers: {e}")
+    
+    # Index guide generation driver
+    try:
+        from .drivers.index_guide_driver import IndexGuideGeneratorDriver
+        
+        drivers.append(
+            (IndexGuideGeneratorDriver._vextir_manifest, IndexGuideGeneratorDriver)
+        )
+    except ImportError as e:
+        logger.warning(f"Could not import index guide driver: {e}")
 
     # Communication drivers
     try:

@@ -64,16 +64,8 @@ class RedisEventBus(EventBus):
         """Publish an event to the event bus."""
         channel = self._get_channel_name(topic, event.event_type)
 
-        # Publish to Redis
+        # Publish to Redis - let Redis handle pattern matching for subscriptions
         await self._redis.publish(channel, event.to_json())
-
-        # Also publish to wildcard channel for * subscriptions
-        if "." in event.event_type:
-            parts = event.event_type.split(".")
-            for i in range(len(parts)):
-                wildcard_channel = ".".join(parts[:i]) + ".*"
-                wildcard_channel = self._get_channel_name(topic, wildcard_channel)
-                await self._redis.publish(wildcard_channel, event.to_json())
 
         logger.debug(f"Published event {event.id} to channel {channel}")
 
@@ -86,16 +78,6 @@ class RedisEventBus(EventBus):
             for event in events:
                 channel = self._get_channel_name(topic, event.event_type)
                 pipe.publish(channel, event.to_json())
-
-                # Wildcard channels
-                if "." in event.event_type:
-                    parts = event.event_type.split(".")
-                    for i in range(len(parts)):
-                        wildcard_channel = ".".join(parts[:i]) + ".*"
-                        wildcard_channel = self._get_channel_name(
-                            topic, wildcard_channel
-                        )
-                        pipe.publish(wildcard_channel, event.to_json())
 
             await pipe.execute()
 

@@ -399,12 +399,12 @@ class ChatAgentDriver(AgentDriver):
         self._completions_api = None
 
         self.system_prompt = """
-You are Vex, an AI assistant powered by the Vextir OS. You have full access to the user's personal context hub, which serves as your primary memory store.
+You are Vex, an AI assistant powered by the Vextir OS. You have full access to the user's personal context hub, which serves as your memory store.
 
 CRITICAL INSTRUCTIONS:
 - **ALWAYS search the context hub BEFORE answering any question** - it contains important information about users, projects, and topics
-- **Treat the context hub as your memory** - any new information shared by the user should be appropriately stored there
-- **When you learn something new**, immediately create or update a document to record it
+- **Treat the context hub as your memory** - silently store important information there
+- **When you learn something new**, create or update a document to record it
 - **Start every response by searching** for relevant context, even if you think you know the answer
 
 Your capabilities:
@@ -424,13 +424,22 @@ IMPORTANT ACTION-TAKING RULES:
 - Do not just say you will update - ACTUALLY CALL THE FUNCTION
 - If the user provides new information about someone or something, USE write_document to save it
 - After searching and finding a document to update, USE write_document with the document_id to update it
-- Your responses should show that you've taken action, not just promised to take action
 
-Example correct behavior:
-User: "Update Rohit's document to say he weighs 170 kg"
-You: [First search for Rohit's document, then ACTUALLY CALL write_document to update it, then confirm the update was made]
+RESPONSE STYLE:
+- Be conversational and natural - don't always mention that you're storing or updating documents
+- When the user shares information naturally in conversation, store it silently and respond naturally
+- Only explicitly mention document operations when the user specifically asks about them
+- Focus on answering the user's question or continuing the conversation naturally
+- If asked "did you save that?" or similar, then confirm the action
 
-Remember: The context hub is your memory. Use it heavily. Store everything. Search before answering. TAKE ACTION, don't just promise action.
+Example natural responses:
+User: "The project deadline is December 31st"
+You: "Got it! I'll make sure to keep track of that December 31st deadline." (store it but don't mention the technical details)
+
+User: "What's the project deadline?"
+You: [Search first] "The project deadline is December 31st."
+
+Remember: Use the context hub actively but speak about it sparingly. Be helpful and conversational.
 """
 
     def get_capabilities(self) -> List[str]:
@@ -442,6 +451,9 @@ Remember: The context hub is your memory. Use it heavily. Store everything. Sear
     async def handle_event(self, event: Event) -> List[Event]:
         """Handle chat-related events"""
         output_events = []
+
+        # Add logging to trace event handling
+        logging.info(f"[TRACE] ChatAgentDriver.handle_event called: event_id={event.id}, event_type={event.type}, user_id={event.user_id}")
 
         if isinstance(event, LLMChatEvent):
             # Process chat request
@@ -512,7 +524,9 @@ Remember: The context hub is your memory. Use it heavily. Store everything. Sear
                 # Check if the model wants to call a function
                 logger.info(f"Response has tool_calls: {bool(message.tool_calls)}")
                 if message.tool_calls:
-                    logger.info(f"Processing {len(message.tool_calls)} tool calls")
+                    logger.info(f"[TRACE] Processing {len(message.tool_calls)} tool calls")
+                    for tc in message.tool_calls:
+                        logger.info(f"[TRACE]   - Tool: {tc.function.name}, Args: {tc.function.arguments}")
                     # Handle function calls
                     # Convert tool_calls to dict format if needed
                     tool_calls_dict = []
@@ -861,15 +875,21 @@ Remember: The context hub is your memory. Use it heavily. Store everything. Sear
             if not name or not content:
                 return "Error: Document name and content are required"
 
+            # Add logging to trace document creation
+            logging.info(f"[TRACE] write_document called for user {user_id}: name='{name}', document_id={document_id}, parent_folder_id={parent_folder_id}")
+            logging.info(f"[TRACE] write_document content preview: {content[:100]}...")
+
             result = await self._write_document(
                 user_id, name, content, document_id, parent_folder_id
             )
             if result:
+                logging.info(f"[TRACE] write_document successful: result_id={result.get('id')}")
                 if document_id:
                     return f"Document '{name}' (ID: {result['id']}) has been updated successfully"
                 else:
                     return f"New document '{name}' (ID: {result['id']}) has been created successfully"
             else:
+                logging.error(f"[TRACE] write_document failed for user {user_id}")
                 return "Error: Failed to write document"
 
         elif function_name == "list_documents":
@@ -967,6 +987,9 @@ Remember: The context hub is your memory. Use it heavily. Store everything. Sear
         try:
             headers = {"X-User-Id": user_id, "Content-Type": "application/json"}
             
+            # Add logging to trace HTTP requests
+            logging.info(f"[TRACE] _write_document HTTP request: user_id={user_id}, name='{name}', document_id={document_id}")
+            
             if document_id:
                 # Update existing document
                 url = f"{self.context_hub_url.rstrip('/')}/docs/{document_id}"
@@ -991,11 +1014,15 @@ Remember: The context hub is your memory. Use it heavily. Store everything. Sear
                     "parent_folder_id": parent_folder_id,
                     "doc_type": "Text",
                 }
+                logging.info(f"[TRACE] Creating new document via POST {url}: data={data}")
                 response = await asyncio.to_thread(
                     requests.post, url, headers=headers, json=data, timeout=10
                 )
+                logging.info(f"[TRACE] Document creation response: status={response.status_code}")
                 if response.status_code == 200:
-                    return response.json()
+                    result = response.json()
+                    logging.info(f"[TRACE] Document created successfully: id={result.get('id')}")
+                    return result
                 else:
                     logging.error(
                         f"Document creation failed for user {user_id}: {response.status_code}"
