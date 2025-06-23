@@ -26,7 +26,7 @@ Successfully implemented unified Docker containers that can run in both local an
 - **Mode-specific dependencies**: Azure vs local packages
 - **Flexible deployment**: Container or Function mode
 
-#### Integrated UI Dockerfile (`ui/integrated_app/Dockerfile`)
+#### UI Dockerfile (`ui/app/Dockerfile`)
 - **Build arguments**: `LIGHTNING_MODE`
 - **Cloud dependencies**: Azure-specific packages for telemetry
 - **Health checks**: Built-in health monitoring
@@ -34,7 +34,7 @@ Successfully implemented unified Docker containers that can run in both local an
 
 ### 3. Docker Compose Configurations
 
-#### Local Development (`docker-compose.yml`)
+#### Local Development (`docker-compose.local.yml`)
 - **Updated**: Added build arguments for local mode
 - **Services**: PostgreSQL, Redis, RabbitMQ, Context Hub, API, Event Processor, UI
 

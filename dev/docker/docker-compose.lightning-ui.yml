@@ -5,7 +5,7 @@ services:
   lightning-ui:
     build:
       context: .
-      dockerfile: ui/integrated_app/Dockerfile
+      dockerfile: ui/app/Dockerfile
     container_name: lightning-ui
     environment:
       - LIGHTNING_UI=false

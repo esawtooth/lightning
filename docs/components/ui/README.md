@@ -42,7 +42,7 @@ docker-compose -f docker-compose.lightning-ui.yml up -d
 ### Running Just the UI (for development)
 
 ```bash
-cd ui/integrated_app
+cd ui/app
 python lightning_ui.py
 ```
 
@@ -96,7 +96,7 @@ You can interact with the AI assistant using natural language. Some examples:
 
 To modify the Lightning UI:
 
-1. Edit `ui/integrated_app/lightning_ui.py`
+1. Edit `ui/app/lightning_ui.py`
 2. Rebuild the Docker image: `docker-compose -f docker-compose.lightning-ui.yml build lightning-ui`
 3. Restart the service: `docker-compose -f docker-compose.lightning-ui.yml restart lightning-ui`
 

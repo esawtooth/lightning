@@ -106,14 +106,14 @@ start_services() {
     print_info "Starting Lightning OS services..."
     
     # Start core services first
-    docker-compose up -d postgres redis rabbitmq
+    docker-compose -f docker-compose.local.yml up -d postgres redis rabbitmq
     
     # Wait for databases to be ready
     print_info "Waiting for databases to initialize..."
     sleep 10
     
     # Start remaining services
-    docker-compose up -d
+    docker-compose -f docker-compose.local.yml up -d
     
     print_info "✓ All services started"
 }

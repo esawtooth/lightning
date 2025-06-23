@@ -171,7 +171,7 @@ build_services() {
             "all")
                 build_image "lightning-api" "core/Dockerfile" "./core" "api"
                 build_image "lightning-processor" "core/Dockerfile.processor" "./core" ""
-                build_image "lightning-ui" "ui/integrated_app/Dockerfile" "." ""
+                build_image "lightning-ui" "ui/app/Dockerfile" "." ""
                 build_image "context-hub" "context-hub/Dockerfile" "./context-hub" ""
                 ;;
             "api")
@@ -181,7 +181,7 @@ build_services() {
                 build_image "lightning-processor" "core/Dockerfile.processor" "./core" ""
                 ;;
             "ui")
-                build_image "lightning-ui" "ui/integrated_app/Dockerfile" "." ""
+                build_image "lightning-ui" "ui/app/Dockerfile" "." ""
                 ;;
             "hub")
                 build_image "context-hub" "context-hub/Dockerfile" "./context-hub" ""

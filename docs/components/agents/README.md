@@ -144,7 +144,7 @@ pnpm install
 pnpm dev
 
 # Start all agents
-docker-compose up agents
+docker-compose -f docker-compose.local.yml up agents
 ```
 
 ### Production Deployment

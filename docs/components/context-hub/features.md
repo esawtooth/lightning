@@ -174,7 +174,7 @@ GET /folders/{id}/guide
 
 ## 🚀 Getting Started
 
-1. **Start the Context Hub**: `docker-compose up context-hub`
+1. **Start the Context Hub**: `docker-compose -f docker-compose.local.yml up context-hub`
 2. **Create a Document**: `POST /docs` with name and content
 3. **Get Line Numbers**: `GET /docs/{id}?format=numbered`
 4. **Apply a Patch**: `PATCH /docs/{id}` with unified diff

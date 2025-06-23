@@ -69,7 +69,7 @@ A unified web interface that combines the dashboard and chat functionality into 
 
 1. **Navigate to the integrated app directory:**
    ```bash
-   cd ui/integrated_app
+   cd ui/app
    ```
 
 2. **Run the startup script:**
@@ -139,7 +139,7 @@ uvicorn app:app --host 0.0.0.0 --port 8002 --reload
 
 ### Project Structure
 ```
-ui/integrated_app/
+ui/app/
 ├── app.py                 # Main FastAPI application
 ├── requirements.txt       # Python dependencies
 ├── start.sh              # Startup script

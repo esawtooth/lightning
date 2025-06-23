@@ -70,7 +70,7 @@ jobs:
             file: ./agents/conseil/Dockerfile
           - image_tag: integrated-ui
             context: .
-            file: ./ui/integrated_app/Dockerfile
+            file: ./ui/app/Dockerfile
           - image_tag: voice-ws
             context: ./agents/voice-agent/websocket-server
             file: ./agents/voice-agent/websocket-server/Dockerfile

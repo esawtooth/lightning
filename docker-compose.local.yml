@@ -165,7 +165,7 @@ services:
   integrated-app:
     build:
       context: .
-      dockerfile: ui/integrated_app/Dockerfile
+      dockerfile: ui/app/Dockerfile
       args:
         LIGHTNING_MODE: local
     environment:
@@ -184,7 +184,7 @@ services:
       - lightning-api
       - context-hub
     volumes:
-      - ./ui/integrated_app:/app
+      - ./ui/app:/app
 
   # Local Agent Runner (for testing agents)
   agent-runner:

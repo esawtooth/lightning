@@ -12,10 +12,10 @@ Local development API server - a FastAPI application that provides Lightning OS 
 
 ### `docker/`
 Development Docker Compose files for specific environments:
-- `docker-compose-local.yml` - Local development stack  
+- `docker-compose.local.yml` - Local development stack  
 - `docker-compose.lightning-ui.yml` - Lightning UI development
 
-**Note**: The main development environment is now in the root `docker-compose.yml` file.
+**Note**: The main development environment is now in the root `docker-compose.local.yml` file.
 
 ### `core_debug/`
 Core development and debugging tools:
@@ -33,7 +33,7 @@ Core development and debugging tools:
 ### Start Local Development Environment
 ```bash
 # From dev/docker directory
-docker-compose -f docker-compose-local.yml up
+docker-compose -f docker-compose.local.yml up
 
 # Or from root directory  
 docker-compose -f dev/docker/docker-compose-local.yml up

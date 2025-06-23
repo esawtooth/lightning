@@ -88,12 +88,12 @@ docker-compose build
 
 ```bash
 # Start all services
-docker-compose up -d
+docker-compose -f docker-compose.local.yml up -d
 
 # Start specific services
-docker-compose up -d postgres redis
-docker-compose up -d lightning-api event-processor
-docker-compose up -d chat-client dashboard integrated-app
+docker-compose -f docker-compose.local.yml up -d postgres redis
+docker-compose -f docker-compose.local.yml up -d lightning-api event-processor
+docker-compose -f docker-compose.local.yml up -d chat-client dashboard integrated-app
 ```
 
 ### 4. View Logs
@@ -231,7 +231,7 @@ docker-compose exec redis redis-cli
 ## Advanced Configuration
 
 ### Using Different Ports
-Edit `docker-compose.yml` and change the port mappings:
+Edit `docker-compose.local.yml` and change the port mappings:
 ```yaml
 ports:
   - "9000:8000"  # API on port 9000 instead of 8000
@@ -240,8 +240,8 @@ ports:
 ### Persistent Data
 Data is stored in Docker volumes. To reset:
 ```bash
-docker-compose down -v  # Remove volumes
-docker-compose up -d    # Recreate
+docker-compose -f docker-compose.local.yml down -v  # Remove volumes
+docker-compose -f docker-compose.local.yml up -d    # Recreate
 ```
 
 ### Running Agents

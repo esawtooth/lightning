@@ -29,7 +29,7 @@ python examples/local_demo.py
 ### Docker Compose
 ```bash
 # Start all services with Docker Compose
-docker-compose up -d
+docker-compose -f docker-compose.local.yml up -d
 
 # Check service status
 docker-compose ps

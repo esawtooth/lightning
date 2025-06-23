@@ -98,7 +98,7 @@ if [[ "$MODE" == "azure" ]]; then
     COMPOSE_FILE="docker-compose.azure.yml"
     ENV_FILE=".env.azure"
 else
-    COMPOSE_FILE="docker-compose.yml"
+    COMPOSE_FILE="docker-compose.local.yml"
     ENV_FILE=".env.local"
 fi
 
