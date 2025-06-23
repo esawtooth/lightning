@@ -8,20 +8,17 @@ allowing the same event processing logic to run both locally and in Azure.
 import json
 import logging
 import os
+import sys
 from datetime import datetime
 
 import azure.functions as func
 
+# Add core directory to path
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "core"))
+
 # Import the abstracted event processor
-try:
-    from lightning_core.vextir_os.serverless_processor import universal_event_processor_handler
-    from lightning_core.abstractions.serverless import FunctionContext, TriggerType
-except ImportError:
-    # Fallback for current deployment structure
-    import sys
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from vextir_os.serverless_processor import universal_event_processor_handler
-    from vextir_os.serverless import FunctionContext, TriggerType
+from lightning_core.vextir_os.serverless_processor import universal_event_processor_handler
+from lightning_core.abstractions.serverless import FunctionContext, TriggerType
 
 
 # Configure logging

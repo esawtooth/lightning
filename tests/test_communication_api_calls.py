@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from vextir_os.communication_drivers import EmailConnectorDriver, CalendarConnectorDriver
+from lightning_core.vextir_os.communication_drivers import EmailConnectorDriver, CalendarConnectorDriver
 
 
 def setup_driver_env(monkeypatch):

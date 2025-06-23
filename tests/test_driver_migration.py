@@ -11,20 +11,24 @@ import sys
 from datetime import datetime
 from typing import Dict, Any, List
 
-# Add Azure Function package path for imports
-sys.path.append('./azure-function')
+import sys
+from datetime import datetime
+from typing import Dict, Any, List
+
+# Add core directory to path
+sys.path.append('./core')
 
 from lightning_core.events.models import Event, LLMChatEvent, EmailEvent, CalendarEvent, ContextUpdateEvent, WorkerTaskEvent
-from vextir_os.universal_processor import UniversalEventProcessor
-from vextir_os.registries import get_driver_registry, get_model_registry, get_tool_registry
-from vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver
-from vextir_os.communication_drivers import (
+from lightning_core.vextir_os.universal_processor import UniversalEventProcessor
+from lightning_core.vextir_os.registries import get_driver_registry, get_model_registry, get_tool_registry
+from lightning_core.vextir_os.core_drivers import ContextHubDriver, ChatAgentDriver, AuthenticationDriver
+from lightning_core.vextir_os.communication_drivers import (
     EmailConnectorDriver,
     CalendarConnectorDriver,
     UserMessengerDriver,
     VoiceCallDriver,
 )
-from vextir_os.orchestration_drivers import InstructionEngineDriver, TaskMonitorDriver, SchedulerDriver
+from lightning_core.vextir_os.orchestration_drivers import InstructionEngineDriver, TaskMonitorDriver, SchedulerDriver
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

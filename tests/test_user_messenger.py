@@ -7,7 +7,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from lightning_core.events.models import Event
-from vextir_os.communication_drivers import UserMessengerDriver
+from lightning_core.vextir_os.communication_drivers import UserMessengerDriver
 
 
 def load_user_messenger_driver(monkeypatch, capture):

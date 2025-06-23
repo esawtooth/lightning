@@ -32,7 +32,7 @@ def load_chat_agent(monkeypatch, capture):
         "vextir_os.core_drivers.get_model_registry", lambda: model_registry
     )
 
-    from vextir_os.core_drivers import ChatAgentDriver
+    from lightning_core.vextir_os.core_drivers import ChatAgentDriver
 
     return ChatAgentDriver(ChatAgentDriver._vextir_manifest)
 

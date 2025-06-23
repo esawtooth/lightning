@@ -58,7 +58,7 @@ def load_task_monitor_driver(monkeypatch, capture):
     aci_mod.ContainerInstanceManagementClient = DummyACI
     monkeypatch.setitem(sys.modules, "azure.mgmt.containerinstance", aci_mod)
 
-    from vextir_os.orchestration_drivers import TaskMonitorDriver
+    from lightning_core.vextir_os.orchestration_drivers import TaskMonitorDriver
 
     return TaskMonitorDriver(TaskMonitorDriver._vextir_manifest)
 
