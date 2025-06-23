@@ -23,9 +23,9 @@ from rich.tree import Tree
 # Add the parent directory to the path to import lightning_core modules
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from vextir_cli.config import Config
-from vextir_cli.client import VextirClient
-from vextir_cli.utils import format_timestamp, format_json, handle_async, get_status_color
+from ui.cli.config import Config
+from ui.cli.client import VextirClient
+from ui.cli.utils import format_timestamp, format_json, handle_async, get_status_color
 
 # Import Lightning Core components
 try:

@@ -136,7 +136,7 @@ vextir config set auth.token your_bearer_token
 
 ### Quick Install
 ```bash
-cd vextir_cli
+cd ui/cli
 chmod +x install.sh
 ./install.sh
 ```

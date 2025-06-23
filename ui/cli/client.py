@@ -11,7 +11,7 @@ from typing import Any, AsyncGenerator, Dict, List, Optional
 import aiohttp
 from aiohttp import ClientSession, ClientTimeout
 
-from vextir_cli.config import Config
+from ui.cli.config import Config
 
 
 class VextirClientError(Exception):

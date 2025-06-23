@@ -40,7 +40,7 @@ setup(
     install_requires=read_requirements(),
     entry_points={
         'console_scripts': [
-            'vextir=vextir_cli.main:cli',
+            'vextir=ui.cli.main:cli',
         ],
     },
     classifiers=[

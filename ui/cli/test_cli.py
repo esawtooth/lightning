@@ -41,7 +41,7 @@ def test_basic_commands():
     print("🧪 Testing basic CLI commands...")
     
     # Test help command
-    success, stdout, stderr = run_command("python -m vextir_cli.main --help")
+    success, stdout, stderr = run_command("python -m ui.cli.main --help")
     if not success:
         return False
     
@@ -52,7 +52,7 @@ def test_basic_commands():
     print("✅ Help command works")
     
     # Test version/basic functionality
-    success, stdout, stderr = run_command("python -m vextir_cli.main config get endpoint", expect_success=False)
+    success, stdout, stderr = run_command("python -m ui.cli.main config get endpoint", expect_success=False)
     # This might fail if no config exists, which is expected
     print("✅ Config command accessible")
     
@@ -68,14 +68,14 @@ def test_config_commands():
         
         # Test setting config
         success, stdout, stderr = run_command(
-            f"python -m vextir_cli.main --config {config_file} config set test_key test_value"
+            f"python -m ui.cli.main --config {config_file} config set test_key test_value"
         )
         if not success:
             return False
         
         # Test getting config
         success, stdout, stderr = run_command(
-            f"python -m vextir_cli.main --config {config_file} config get test_key"
+            f"python -m ui.cli.main --config {config_file} config get test_key"
         )
         if not success:
             return False
@@ -88,7 +88,7 @@ def test_config_commands():
         
         # Test listing all config
         success, stdout, stderr = run_command(
-            f"python -m vextir_cli.main --config {config_file} config get"
+            f"python -m ui.cli.main --config {config_file} config get"
         )
         if not success:
             return False
@@ -113,7 +113,7 @@ def test_command_structure():
     ]
     
     for cmd in commands:
-        success, stdout, stderr = run_command(f"python -m vextir_cli.main {cmd}")
+        success, stdout, stderr = run_command(f"python -m ui.cli.main {cmd}")
         if not success:
             print(f"❌ Command group failed: {cmd}")
             return False
@@ -135,12 +135,12 @@ def test_json_output():
         config_file = os.path.join(temp_dir, "test_config.json")
         
         # Set some config values
-        run_command(f"python -m vextir_cli.main --config {config_file} config set endpoint https://test.com")
-        run_command(f"python -m vextir_cli.main --config {config_file} config set auth.method azure_cli")
+        run_command(f"python -m ui.cli.main --config {config_file} config set endpoint https://test.com")
+        run_command(f"python -m ui.cli.main --config {config_file} config set auth.method azure_cli")
         
         # Get config as JSON
         success, stdout, stderr = run_command(
-            f"python -m vextir_cli.main --config {config_file} config get"
+            f"python -m ui.cli.main --config {config_file} config get"
         )
         
         if not success:
@@ -165,7 +165,7 @@ def test_error_handling():
     
     # Test invalid command
     success, stdout, stderr = run_command(
-        "python -m vextir_cli.main invalid_command", 
+        "python -m ui.cli.main invalid_command", 
         expect_success=False
     )
     
@@ -175,7 +175,7 @@ def test_error_handling():
     
     # Test invalid config key
     success, stdout, stderr = run_command(
-        "python -m vextir_cli.main config get nonexistent_key",
+        "python -m ui.cli.main config get nonexistent_key",
         expect_success=False
     )
     

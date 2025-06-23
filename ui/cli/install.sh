@@ -91,7 +91,7 @@ install_cli() {
     if [ -f "setup.py" ]; then
         $PIP_CMD install -e .
     else
-        print_error "setup.py not found. Please run this script from the vextir_cli directory."
+        print_error "setup.py not found. Please run this script from the ui/cli directory."
         exit 1
     fi
     
