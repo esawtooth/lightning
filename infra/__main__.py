@@ -683,6 +683,7 @@ conseil_cg = aci_group(
 # Context Hub Container App (replaced ACI with Container Apps)
 hub_secrets = [
     app.SecretArgs(name="jwt-secret", value=aad_password.value),
+    app.SecretArgs(name="cosmos-connection", value=cosmos_conn),
 ]
 
 hub_ca = create_container_app(
@@ -695,11 +696,15 @@ hub_ca = create_container_app(
         app.EnvironmentVarArgs(name="AAD_TENANT_ID", value=aad_tenant_id),
         app.EnvironmentVarArgs(name="JWT_SECRET", secret_ref="jwt-secret"),
         app.EnvironmentVarArgs(name="PORT", value="3000"),
+        app.EnvironmentVarArgs(name="COSMOS_CONNECTION_STRING", secret_ref="cosmos-connection"),
+        app.EnvironmentVarArgs(name="COSMOS_DATABASE", value="context-hub"),
+        app.EnvironmentVarArgs(name="COSMOS_CONTAINER", value="contexts"),
     ],
     secrets=hub_secrets,
     min_replicas=1,  # Always on for hub
     max_replicas=5,
     external=True,
+    health_path=None,  # Disable health probes temporarily
 )
 
 # Get internal URL for hub (for other services to use)
@@ -881,6 +886,8 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
         app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
         app.EnvironmentVarArgs(name="AUTH_ENABLED", value="true"),  # Enable authentication
+        app.EnvironmentVarArgs(name="CONTEXT_HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
+        app.EnvironmentVarArgs(name="HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
     ],
     secrets=ui_secrets,
     min_replicas=1,  # UI should be always on
