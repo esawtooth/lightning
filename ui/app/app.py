@@ -277,12 +277,11 @@ async def auth_callback(request: Request, code: str = None, state: str = None):
     if not all([client_id, client_secret, tenant_id]):
         raise HTTPException(status_code=500, detail="Azure AD configuration missing")
     
-    # Build callback URL
-    scheme = request.url.scheme
-    if request.headers.get("X-Forwarded-Proto"):
-        scheme = request.headers.get("X-Forwarded-Proto")
-    host = request.headers.get("host", "localhost")
-    callback_url = f"{scheme}://{host}/auth/callback"
+    # Build callback URL - must exactly match what's registered in Azure AD
+    # Always use www.vextir.com as that's what's configured in the Auth function
+    callback_url = "https://www.vextir.com/auth/callback"
+    
+    logger.info(f"Token exchange - callback URL: {callback_url}")
     
     # Exchange code for tokens
     token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
@@ -302,8 +301,13 @@ async def auth_callback(request: Request, code: str = None, state: str = None):
             )
             
             if response.status_code != 200:
-                logger.error(f"Token exchange failed: {response.text}")
-                raise HTTPException(status_code=400, detail="Token exchange failed")
+                error_data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"error": response.text}
+                logger.error(f"Token exchange failed - Status: {response.status_code}, Error: {error_data}")
+                logger.error(f"Request details - client_id: {client_id}, callback_url: {callback_url}")
+                
+                # Provide more specific error message
+                error_msg = error_data.get("error_description", error_data.get("error", "Token exchange failed"))
+                raise HTTPException(status_code=400, detail=error_msg)
             
             token_data = response.json()
             
