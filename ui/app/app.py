@@ -140,8 +140,8 @@ def _resolve_gateway_url(request: Request) -> str:
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Authentication middleware for all routes."""
-    # Allow health checks and static assets
-    if request.url.path in ["/health"] or request.url.path.startswith("/static"):
+    # Allow health checks, login page, and static assets
+    if request.url.path in ["/health", "/login"] or request.url.path.startswith("/static"):
         return await call_next(request)
 
     # Check authentication
@@ -153,10 +153,9 @@ async def auth_middleware(request: Request, call_next):
             response = await call_next(request)
             return response
         
-        # Redirect to auth gateway
-        gateway_base = _resolve_gateway_url(request)
-        redirect_url = f"{gateway_base}/?redirect={request.url}"
-        return RedirectResponse(url=redirect_url)
+        # Redirect to login page
+        login_url = f"/login?redirect={quote(str(request.url))}"
+        return RedirectResponse(url=login_url)
 
     # Store username in request state
     request.state.username = username
@@ -210,6 +209,25 @@ async def landing_page(request: Request):
         "request": request,
         "username": username,
         "active_page": "home"
+    })
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, redirect: str = None):
+    """Display custom login page with marketing carousel."""
+    # If already authenticated, redirect
+    username = await authenticate_user(request)
+    if username:
+        return RedirectResponse(url=redirect or "/dashboard")
+    
+    # Build the auth URL that will start the OAuth flow
+    auth_gateway = AUTH_GATEWAY_URL or f"https://api.vextir.com/api/auth"
+    redirect_param = f"?redirect={redirect}" if redirect else ""
+    microsoft_login_url = f"{auth_gateway}{redirect_param}"
+    
+    return templates.TemplateResponse("login.html", {
+        "request": request,
+        "microsoft_login_url": microsoft_login_url
     })
 
 # Dashboard route
