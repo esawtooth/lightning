@@ -47,7 +47,7 @@ pub fn router(
         snapshot_retention,
         indexer,
         events,
-        verifier,
+        verifier: verifier.clone(),
     };
 
     let auth_routes = Router::new()
