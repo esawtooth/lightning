@@ -156,8 +156,15 @@ async def auth_middleware(request: Request, call_next):
             response = await call_next(request)
             return response
         
-        # Redirect to login page
-        login_url = f"/login?redirect={quote(str(request.url))}"
+        # Redirect to login page with proper public URL
+        # Construct the public URL instead of using internal Container App URL
+        scheme = request.headers.get("X-Forwarded-Proto", request.url.scheme)
+        host = request.headers.get("X-Forwarded-Host", request.headers.get("Host", "www.vextir.com"))
+        path = request.url.path
+        query = f"?{request.url.query}" if request.url.query else ""
+        public_url = f"{scheme}://{host}{path}{query}"
+        
+        login_url = f"/login?redirect={quote(public_url)}"
         return RedirectResponse(url=login_url)
 
     # Store username in request state
