@@ -367,6 +367,7 @@ sb_keys = servicebus.list_namespace_keys_output(
 aad_app = azuread.Application(
     "aad-app",
     display_name=f"Vextir-{stack_suffix}",
+    sign_in_audience="AzureADMultipleOrgs",  # Enable multi-tenant support
     web=azuread.ApplicationWebArgs(
         redirect_uris=[
             pulumi.Output.concat("https://", domain, "/auth/callback"),
@@ -378,6 +379,62 @@ aad_app = azuread.Application(
             pulumi.Output.concat("https://hub.", domain, "/auth/login"),
         ]
     ),
+    # Enable public client for desktop apps
+    public_client=azuread.ApplicationPublicClientArgs(
+        redirect_uris=[
+            "http://localhost:9899/callback",  # Desktop app callback
+            "ms-appx-web://microsoft.aad.brokerplugin/YOUR_CLIENT_ID",  # Windows broker
+        ]
+    ),
+    # API configuration for v2.0 tokens
+    api=azuread.ApplicationApiArgs(
+        requested_access_token_version=2,
+    ),
+    # Required permissions
+    required_resource_accesses=[
+        azuread.ApplicationRequiredResourceAccessArgs(
+            resource_app_id="00000003-0000-0000-c000-000000000000",  # Microsoft Graph
+            resource_accesses=[
+                azuread.ApplicationRequiredResourceAccessResourceAccessArgs(
+                    id="e1fe6dd8-ba31-4d61-89e7-88639da4683d",  # User.Read
+                    type="Scope",
+                ),
+                azuread.ApplicationRequiredResourceAccessResourceAccessArgs(
+                    id="64a6cdd6-aab1-4aaf-94b8-3cc8405e90d0",  # email
+                    type="Scope",
+                ),
+                azuread.ApplicationRequiredResourceAccessResourceAccessArgs(
+                    id="14dad69e-099b-42c9-810b-d002981feec1",  # profile
+                    type="Scope",
+                ),
+                azuread.ApplicationRequiredResourceAccessResourceAccessArgs(
+                    id="7427e0e9-2fba-42fe-b0c0-848c9e6a8182",  # offline_access
+                    type="Scope",
+                ),
+            ],
+        ),
+    ],
+    # App roles for RBAC
+    app_roles=[
+        azuread.ApplicationAppRoleArgs(
+            allowed_member_types=["User"],
+            description="Context Hub administrators",
+            display_name="Context Hub Admin",
+            enabled=True,
+            id=str(uuid.uuid4()),
+            value="ContextHub.Admin",
+        ),
+        azuread.ApplicationAppRoleArgs(
+            allowed_member_types=["User"],
+            description="Context Hub users",
+            display_name="Context Hub User",
+            enabled=True,
+            id=str(uuid.uuid4()),
+            value="ContextHub.User",
+        ),
+    ],
+    # Group membership claims
+    group_membership_claims=["SecurityGroup"],
 )
 
 aad_sp = azuread.ServicePrincipal("aad-sp", client_id=aad_app.client_id)
@@ -390,6 +447,22 @@ aad_password = azuread.ApplicationPassword(
 )
 pulumi.export("aadClientId", aad_app.client_id)
 pulumi.export("aadClientSecret", pulumi.Output.secret(aad_password.value))
+
+# Desktop app configuration
+pulumi.export("desktopAppConfig", pulumi.Output.all(aad_app.client_id, aad_tenant_id).apply(
+    lambda args: {
+        "clientId": args[0],
+        "tenantId": args[1],
+        "redirectUri": "http://localhost:9899/callback",
+        "authority": f"https://login.microsoftonline.com/{args[1]}",
+        "scopes": ["User.Read", "email", "profile", "offline_access"],
+    }
+))
+
+# JWKS URL for token validation
+pulumi.export("jwksUrl", pulumi.Output.concat(
+    "https://login.microsoftonline.com/", aad_tenant_id, "/discovery/v2.0/keys"
+))
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 11. CONTAINER APPS ENVIRONMENT
