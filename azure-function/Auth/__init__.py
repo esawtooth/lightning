@@ -2,7 +2,7 @@ import azure.functions as func
 import os
 import json
 import logging
-from urllib.parse import urlencode, urlparse, parse_qs
+from urllib.parse import urlencode, urlparse, parse_qs, quote
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +25,20 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
     
     # Check if this is a callback from Azure AD
     code = req.params.get('code')
+    state = req.params.get('state')  # Contains the original redirect URL
+    
     if code:
-        # This is the callback - redirect to UI with auth code
-        # The UI will handle token exchange
+        # This is the callback - redirect to UI auth callback with code
+        # The state parameter contains the original redirect URL
+        original_redirect = state or 'https://www.vextir.com/'
+        
+        # Redirect to the UI's auth callback endpoint
+        ui_callback_url = f"https://www.vextir.com/auth/callback?code={code}&state={quote(original_redirect)}"
+        
         return func.HttpResponse(
             status_code=302,
             headers={
-                'Location': f"{redirect_uri}?code={code}"
+                'Location': ui_callback_url
             }
         )
     
@@ -48,7 +55,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         'response_type': 'code',
         'redirect_uri': callback_url,
         'response_mode': 'query',
-        'scope': 'openid profile email User.Read',
+        'scope': 'openid profile email User.Read offline_access',
         'state': redirect_uri,  # Store original redirect in state
         'prompt': 'select_account'
     }

@@ -3,13 +3,15 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 from starlette.middleware.sessions import SessionMiddleware
 import os
 import requests
 import logging
 from common.jwt_utils import verify_token
 from typing import Optional
+import httpx
+from urllib.parse import urlencode
 
 # Configuration
 API_BASE = os.environ.get("API_BASE", "http://localhost:8000/api")
@@ -42,7 +44,15 @@ def _get_token(
 def verify_user_token(token: str) -> Optional[str]:
     """Verify JWT token and return username."""
     try:
-        return verify_token(token)
+        claims = verify_token(token)
+        # Extract user ID from claims
+        user_id = claims.get("oid") or claims.get("sub")
+        if not user_id:
+            logging.warning("No user ID in token claims")
+            return None
+        # Get username from claims
+        username = claims.get("preferred_username") or claims.get("email") or user_id
+        return username
     except Exception as e:
         logging.warning(f"Invalid token: {e}")
         return None
@@ -50,12 +60,68 @@ def verify_user_token(token: str) -> Optional[str]:
 
 async def authenticate_user(request: Request) -> Optional[str]:
     """Authenticate user from session or token."""
-    token = request.cookies.get("auth_token")
-    if token:
-        username = verify_user_token(token)
+    # Get tokens from cookies
+    auth_token = request.cookies.get("auth_token")
+    refresh_token = request.cookies.get("refresh_token")
+    
+    if not auth_token and not refresh_token:
+        return None
+    
+    # Try auth token first
+    if auth_token:
+        username = verify_user_token(auth_token)
         if username:
             return username
+    
+    # Try refresh token if auth token failed
+    if refresh_token:
+        new_tokens = await refresh_access_token(refresh_token)
+        if new_tokens and new_tokens.get("id_token"):
+            # Store new tokens for middleware to set as cookies
+            request.state._new_auth_token = new_tokens.get("id_token")
+            request.state._new_refresh_token = new_tokens.get("refresh_token")
+            
+            # Verify and return username from new token
+            username = verify_user_token(new_tokens["id_token"])
+            if username:
+                return username
+    
     return None
+
+
+async def refresh_access_token(refresh_token: str) -> Optional[dict]:
+    """Refresh the access token using the refresh token."""
+    client_id = os.environ.get("AAD_CLIENT_ID")
+    client_secret = os.environ.get("AAD_CLIENT_SECRET")
+    tenant_id = os.environ.get("AAD_TENANT_ID")
+    
+    if not all([client_id, client_secret, tenant_id]):
+        return None
+    
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                token_url,
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "grant_type": "refresh_token",
+                    "scope": "openid profile email User.Read offline_access"
+                }
+            )
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                logging.error(f"Token refresh failed: {response.text}")
+                return None
+                
+        except Exception as e:
+            logging.error(f"Error refreshing token: {e}")
+            return None
 
 
 def _resolve_gateway_url(request: Request) -> str:
@@ -95,6 +161,28 @@ async def auth_middleware(request: Request, call_next):
     # Store username in request state
     request.state.username = username
     response = await call_next(request)
+    
+    # Set new tokens if they were refreshed
+    if hasattr(request.state, '_new_auth_token') and request.state._new_auth_token:
+        response.set_cookie(
+            key="auth_token",
+            value=request.state._new_auth_token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="lax",
+            max_age=3600  # 1 hour
+        )
+    
+    if hasattr(request.state, '_new_refresh_token') and request.state._new_refresh_token:
+        response.set_cookie(
+            key="refresh_token",
+            value=request.state._new_refresh_token,
+            httponly=True,
+            secure=request.url.scheme == "https",
+            samesite="lax",
+            max_age=86400 * 30  # 30 days
+        )
+    
     return response
 
 
@@ -145,6 +233,129 @@ async def tasks_page(request: Request):
         "username": username,
         "active_page": "tasks"
     })
+
+
+@app.get("/auth/callback")
+async def auth_callback(request: Request, code: str = None, state: str = None):
+    """Handle OAuth callback from Azure AD."""
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code not provided")
+    
+    # Get configuration
+    client_id = os.environ.get("AAD_CLIENT_ID")
+    client_secret = os.environ.get("AAD_CLIENT_SECRET")
+    tenant_id = os.environ.get("AAD_TENANT_ID")
+    
+    if not all([client_id, client_secret, tenant_id]):
+        raise HTTPException(status_code=500, detail="Azure AD configuration missing")
+    
+    # Build callback URL
+    scheme = request.url.scheme
+    if request.headers.get("X-Forwarded-Proto"):
+        scheme = request.headers.get("X-Forwarded-Proto")
+    host = request.headers.get("host", "localhost")
+    callback_url = f"{scheme}://{host}/auth/callback"
+    
+    # Exchange code for tokens
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                token_url,
+                data={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "code": code,
+                    "redirect_uri": callback_url,
+                    "grant_type": "authorization_code",
+                    "scope": "openid profile email User.Read offline_access"
+                }
+            )
+            
+            if response.status_code != 200:
+                logger.error(f"Token exchange failed: {response.text}")
+                raise HTTPException(status_code=400, detail="Token exchange failed")
+            
+            token_data = response.json()
+            
+            # Verify the ID token
+            id_token = token_data.get("id_token")
+            if not id_token:
+                raise HTTPException(status_code=400, detail="No ID token received")
+            
+            # Verify token to ensure it's valid
+            try:
+                claims = verify_token(id_token)
+            except Exception as e:
+                logger.error(f"Token verification failed: {e}")
+                raise HTTPException(status_code=400, detail="Invalid token")
+            
+            # Create response with redirect
+            redirect_url = state or "/"
+            response = RedirectResponse(url=redirect_url)
+            
+            # Set auth cookies
+            response.set_cookie(
+                key="auth_token",
+                value=id_token,
+                httponly=True,
+                secure=scheme == "https",
+                samesite="lax",
+                max_age=3600  # 1 hour
+            )
+            
+            # Store refresh token if available
+            refresh_token = token_data.get("refresh_token")
+            if refresh_token:
+                response.set_cookie(
+                    key="refresh_token",
+                    value=refresh_token,
+                    httponly=True,
+                    secure=scheme == "https",
+                    samesite="lax",
+                    max_age=86400 * 30  # 30 days
+                )
+            
+            return response
+            
+        except httpx.RequestError as e:
+            logger.error(f"Request error during token exchange: {e}")
+            raise HTTPException(status_code=500, detail="Failed to contact Azure AD")
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    """Logout user by clearing cookies and redirecting to Azure AD logout."""
+    tenant_id = os.environ.get("AAD_TENANT_ID")
+    client_id = os.environ.get("AAD_CLIENT_ID")
+    
+    # Build post-logout redirect URL
+    scheme = request.url.scheme
+    if request.headers.get("X-Forwarded-Proto"):
+        scheme = request.headers.get("X-Forwarded-Proto")
+    host = request.headers.get("host", "localhost")
+    post_logout_url = f"{scheme}://{host}/"
+    
+    # Build Azure AD logout URL
+    logout_params = {
+        "post_logout_redirect_uri": post_logout_url
+    }
+    
+    if tenant_id:
+        logout_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/logout?{urlencode(logout_params)}"
+    else:
+        # Fallback to just clearing cookies
+        logout_url = "/"
+    
+    # Create redirect response
+    response = RedirectResponse(url=logout_url)
+    
+    # Clear auth cookies
+    response.delete_cookie(key="auth_token")
+    response.delete_cookie(key="refresh_token")
+    
+    return response
 
 
 @app.get("/chat", response_class=HTMLResponse)
