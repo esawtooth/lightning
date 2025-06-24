@@ -1,0 +1,133 @@
+name: Fix Container Apps Migration
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.10'
+  PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+  ARM_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  ARM_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.ARM_SUBSCRIPTION_ID }}
+  AZURE_CLIENT_ID: ${{ secrets.ARM_CLIENT_ID }}
+  AZURE_CLIENT_SECRET: ${{ secrets.ARM_CLIENT_SECRET }}
+  AZURE_TENANT_ID: ${{ secrets.ARM_TENANT_ID }}
+
+jobs:
+  fix-migration:
+    runs-on: ubuntu-latest
+    name: Fix Container Apps Migration State
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r infra/requirements.txt
+          
+      - name: Install Pulumi CLI
+        uses: pulumi/actions@v4
+        
+      - name: Fix Container Apps migration state
+        run: |
+          cd infra
+          
+          # Select the dev stack
+          pulumi stack select dev --non-interactive
+          
+          # Configure the stack
+          pulumi config set domain "vextir.com"
+          pulumi config set aadClientId "$ARM_CLIENT_ID" --secret
+          pulumi config set aadClientSecret "$ARM_CLIENT_SECRET" --secret  
+          pulumi config set aadTenantId "$ARM_TENANT_ID"
+          pulumi config set openaiApiKey "${{ secrets.OPENAI_API_KEY }}" --secret
+          pulumi config set twilioAccountSid "${{ secrets.TWILIO_ACCOUNT_SID }}" --secret
+          pulumi config set twilioAuthToken "${{ secrets.TWILIO_AUTH_TOKEN }}" --secret
+          
+          # Set image configurations
+          pulumi config set workerImage "vextiracrdev.azurecr.io/lightning-worker:latest"
+          pulumi config set conseilImage "vextiracrdev.azurecr.io/conseil-agent:latest"
+          pulumi config set uiImage "vextiracrdev.azurecr.io/integrated-ui:latest"
+          pulumi config set voiceWsImage "vextiracrdev.azurecr.io/voice-ws:latest"
+          pulumi config set hubImage "vextiracrdev.azurecr.io/context-hub:latest"
+          
+          # Backup current state
+          echo "Creating state backup..."
+          pulumi stack export --file state-backup-before-fix.json
+          
+          # List current resources to identify problematic ones
+          echo "Current resources in state:"
+          pulumi stack --show-urns | grep -E "(containerinstance|ContainerGroup)" || echo "No ACI resources found"
+          
+          # Remove old ACI resources that were migrated to Container Apps
+          echo "Removing migrated ACI resources from state..."
+          
+          # Try to remove each potential ACI resource
+          for resource in "contexthub" "chatui" "voicews"; do
+            URN="urn:pulumi:dev::vextir::azure-native:containerinstance:ContainerGroup::${resource}"
+            echo "Attempting to remove: $URN"
+            pulumi state delete "$URN" --yes 2>/dev/null || echo "Resource $URN not found or already removed"
+          done
+          
+          # Also check for any lingering func-settings dependencies
+          echo "Checking func-settings dependencies..."
+          pulumi stack --show-dependencies 2>/dev/null | grep func-settings || echo "No func-settings dependencies found"
+          
+          # Refresh state with integrity checking disabled
+          echo "Refreshing state..."
+          pulumi refresh --yes --disable-integrity-checking
+          
+          # Deploy with the fixed state
+          echo "Deploying with fixed state..."
+          pulumi up --yes --skip-preview --disable-integrity-checking
+          
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          
+      - name: Verify deployment
+        run: |
+          cd infra
+          
+          # Check outputs
+          echo "Stack outputs:"
+          pulumi stack output --json
+          
+          # Verify Container Apps are created
+          az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+          az account set --subscription $ARM_SUBSCRIPTION_ID
+          
+          echo "Checking Container Apps..."
+          az containerapp list --resource-group vextir-dev --output table || echo "No Container Apps found"
+          
+          echo "Deployment verification complete!"
+          
+      - name: Upload state backup
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: state-backup-${{ github.run_id }}
+          path: infra/state-backup-*.json
+          retention-days: 7
+          
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Container Apps Migration Fix Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This workflow:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Removed old ACI (Container Instance) resources from Pulumi state" >> $GITHUB_STEP_SUMMARY
+          echo "2. Refreshed the state with integrity checking disabled" >> $GITHUB_STEP_SUMMARY
+          echo "3. Deployed the infrastructure with Container Apps" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "- If successful, the regular deploy workflow should now work without errors" >> $GITHUB_STEP_SUMMARY
+          echo "- State backup has been saved as an artifact for recovery if needed" >> $GITHUB_STEP_SUMMARY
