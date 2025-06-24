@@ -439,16 +439,17 @@ aad_app = azuread.Application(
 )
 
 aad_sp = azuread.ServicePrincipal("aad-sp", client_id=aad_app.client_id)
-# Create a new password with a different name to avoid state conflicts
-# The old "aad-pwd" resource will be ignored
-aad_password = azuread.ApplicationPassword(
-    "aad-pwd-v2",  # New name to avoid conflicts with existing state
-    application_id=aad_app.id,
-    end_date="2026-12-31T23:59:59Z",
-    opts=pulumi.ResourceOptions(
-        ignore_changes=["end_date"]
-    )
-)
+
+# Get the existing client secret from configuration
+# This avoids creating new passwords and dealing with state issues
+existing_secret = cfg.require_secret("aadClientSecret")
+
+# Create a dummy object that looks like ApplicationPassword but uses existing secret
+class DummyPassword:
+    def __init__(self, value):
+        self.value = value
+
+aad_password = DummyPassword(existing_secret)
 pulumi.export("aadClientId", aad_app.client_id)
 pulumi.export("aadClientSecret", pulumi.Output.secret(aad_password.value))
 

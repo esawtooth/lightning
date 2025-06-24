@@ -4,7 +4,7 @@ config:
   vextir:aadClientId:
     secure: AAABABEqQX6uOHXFHCkc8CMTJnyF2ZFCA8Yw7KzPDXKMayyeJDtIkuc50nsQSlV5mLXNVKJCGQA5Pc8n9uQeoZ6ji1c=
   vextir:aadClientSecret:
-    secure: AAABAEKZyBor34dT/UroZQ4Fhbhn6mfGTPrapZxB0NOwY++GR/Rwq3FYDMqOo8vtxfMOd3b9jul4iQQWNlNt2eFU8L3BuuoR
+    secure: AAABADb/yoRJjFi+Bq3f35+BWjz0zotnf4ty6/Jrld/J54fJZBU9zaFKooQ1JNzHNNwP9zCulpsB6vZ6xZ7PtIKzeq+PCOr+
   vextir:aadTenantId: 28de532c-1be7-49e6-acc5-931ae8e9ae01
   vextir:openaiApiKey:
     secure: AAABAIBC4iEN+6RVLxp1z3s0S6DGjs5NITz6IhQuNRw+5vqRyZNYiv/8mYloV5iCk16h+WyqLizxI3nJ6APAW6uYTBAjqkqJjEZHvwtpN3o8XSaRb+tORgcrIUmJBvKVNhXhYCeb+KP5BILNSYNU+Hf3SA6nFKkkY6JHRvKy8R87iFuJkvqPiuEq5+5MzqWXaW3oBsDjalCv0JuAxEb04YQma/Nj4JMPiZbJjkA/BcPi8P5k1I/DN5MqkPpFJk8SYn518g==
