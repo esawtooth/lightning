@@ -880,6 +880,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="PYTHONDONTWRITEBYTECODE", value="1"),
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
         app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
+        app.EnvironmentVarArgs(name="AUTH_ENABLED", value="true"),  # Enable authentication
     ],
     secrets=ui_secrets,
     min_replicas=1,  # UI should be always on
@@ -969,7 +970,7 @@ ui_og, ui_origin = origin_group(
     ui_ca.configuration.ingress.fqdn,
     443,
     https=True,
-    host_header=f"www.{domain}",
+    # Don't override host header - Container Apps need their own FQDN
 )
 api_og, api_origin = origin_group(
     "api",
@@ -989,7 +990,7 @@ voice_og, voice_origin = origin_group(
     voice_ca.configuration.ingress.fqdn,
     443,
     https=True,
-    host_header=f"voice-ws.{domain}",
+    # Don't override host header - Container Apps need their own FQDN
 )
 hub_og, hub_origin = origin_group(
     "hub",
@@ -997,7 +998,7 @@ hub_og, hub_origin = origin_group(
     hub_ca.configuration.ingress.fqdn,
     443,
     https=True,
-    host_header=f"hub.{domain}",
+    # Don't override host header - Container Apps need their own FQDN
 )
 
 
