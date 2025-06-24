@@ -4,14 +4,15 @@ Test the Auth endpoint after deployment to ensure it's working correctly.
 This prevents issues like the 404 error that occurred with the Auth function.
 """
 
+import os
 import sys
 import requests
 import time
 from urllib.parse import urlparse
 
-def test_auth_endpoint(api_url: str, max_retries: int = 5) -> bool:
+def test_auth_endpoint(api_url: str, domain: str = "vextir.com", max_retries: int = 5) -> bool:
     """Test that the Auth endpoint returns a proper OAuth redirect."""
-    auth_url = f"{api_url}/api/Auth?redirect=https://www.vextir.com/"
+    auth_url = f"{api_url}/api/Auth?redirect=https://www.{domain}/"
     
     print(f"Testing Auth endpoint: {auth_url}")
     
@@ -71,17 +72,21 @@ def test_health_endpoint(api_url: str) -> bool:
 def main():
     """Run endpoint tests."""
     # Default to production API URL
-    api_url = "https://api.vextir.com"
+    api_url = os.environ.get("API_URL", "https://api.vextir.com")
+    domain = os.environ.get("DOMAIN", "vextir.com")
     
     if len(sys.argv) > 1:
         api_url = sys.argv[1].rstrip('/')
+    if len(sys.argv) > 2:
+        domain = sys.argv[2]
     
     print(f"Testing Azure Functions at: {api_url}")
+    print(f"Using domain: {domain}")
     print("-" * 50)
     
     # Test both endpoints
     health_ok = test_health_endpoint(api_url)
-    auth_ok = test_auth_endpoint(api_url)
+    auth_ok = test_auth_endpoint(api_url, domain)
     
     print("-" * 50)
     

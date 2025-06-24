@@ -10,8 +10,11 @@ logger = logging.getLogger(__name__)
 def main(req: func.HttpRequest) -> func.HttpResponse:
     """Azure AD OAuth2 authentication endpoint."""
     try:
+        # Get domain from environment
+        domain = os.environ.get('DOMAIN', 'vextir.com')
+        
         # Get redirect URL from query parameters
-        redirect = req.params.get('redirect', 'https://www.vextir.com/')
+        redirect = req.params.get('redirect', f'https://www.{domain}/')
         logger.info(f"Auth endpoint called with redirect: {redirect}")
         
         # Get Azure AD configuration
@@ -29,7 +32,7 @@ def main(req: func.HttpRequest) -> func.HttpResponse:
         auth_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
         
         # Use the actual callback URL that the UI expects
-        callback_url = "https://www.vextir.com/auth/callback"
+        callback_url = f"https://www.{domain}/auth/callback"
         
         params = {
             'client_id': client_id,

@@ -1252,7 +1252,8 @@ def get_hub_config(ctx):
     # Auto-configure Context Hub endpoint if not set
     hub_endpoint = config_obj.get('context_hub.endpoint')
     if not hub_endpoint:
-        hub_endpoint = 'https://hub.vextir.com'
+        domain = os.getenv("LIGHTNING_DOMAIN", "vextir.com")
+        hub_endpoint = f'https://hub.{domain}'
         config_obj.set('context_hub.endpoint', hub_endpoint)
     
     # Get current user from Azure CLI

@@ -22,6 +22,7 @@ AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 SESSION_SECRET = os.environ.get("SESSION_SECRET", "change-me")
 AUTH_GATEWAY_URL = os.environ.get("AUTH_GATEWAY_URL")
 CHAINLIT_URL = os.environ.get("CHAINLIT_URL")
+DOMAIN = os.environ.get("DOMAIN", "vextir.com")  # Domain for OAuth callbacks
 
 app = FastAPI(title="Vextir Integrated Dashboard")
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
@@ -134,10 +135,8 @@ def _resolve_gateway_url(request: Request) -> str:
         return base
     
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
-    host = request.headers.get("x-forwarded-host", request.url.hostname or "localhost")
-    host = host.split(":")[0]
-    # Default to /auth path when AUTH_GATEWAY_URL is not set
-    return f"{scheme}://{host}/auth"
+    # Use configured domain if AUTH_GATEWAY_URL is not set
+    return f"{scheme}://api.{DOMAIN}/api/Auth"
 
 
 @app.middleware("http")
@@ -278,8 +277,8 @@ async def auth_callback(request: Request, code: str = None, state: str = None):
         raise HTTPException(status_code=500, detail="Azure AD configuration missing")
     
     # Build callback URL - must exactly match what's registered in Azure AD
-    # Always use www.vextir.com as that's what's configured in the Auth function
-    callback_url = "https://www.vextir.com/auth/callback"
+    # Use the configured domain
+    callback_url = f"https://www.{DOMAIN}/auth/callback"
     
     logger.info(f"Token exchange - callback URL: {callback_url}")
     

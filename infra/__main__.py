@@ -937,6 +937,7 @@ func_settings = {
     "ACS_CONNECTION": comm_keys.primary_connection_string,
     "ACS_SENDER": pulumi.Output.concat("no-reply@", domain),
     "VERIFY_BASE": pulumi.Output.concat("https://www.", domain),
+    "DOMAIN": domain,  # Make domain configurable
 }
 web.WebAppApplicationSettings(
     "func-settings",
@@ -976,6 +977,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://api.", domain, "/api/Auth")),
         app.EnvironmentVarArgs(name="CONTEXT_HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
         app.EnvironmentVarArgs(name="HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
+        app.EnvironmentVarArgs(name="DOMAIN", value=domain),  # Make domain configurable
     ],
     secrets=ui_secrets,
     min_replicas=1,  # UI should be always on

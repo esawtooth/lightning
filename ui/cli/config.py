@@ -46,13 +46,14 @@ class Config:
 
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
+        domain = os.getenv("LIGHTNING_DOMAIN", "vextir.com")
         return {
-            "endpoint": "https://api.vextir.com",
+            "endpoint": f"https://api.{domain}",
             "auth": {
                 "method": "azure_cli",
                 "tenant_id": None,
                 "client_id": "26583e36-a836-478f-a4af-7b6c6d355043",
-                "scope": "api://api.vextir.com/.default"
+                "scope": f"api://api.{domain}/.default"
             },
             "output": {
                 "format": "table",
@@ -66,7 +67,7 @@ class Config:
             "context_hub": {
                 "default_path": "/",
                 "max_query_results": 1000,
-                "endpoint": "https://hub.vextir.com"
+                "endpoint": f"https://hub.{domain}"
             },
             "runtime": {
                 "mode": "local",
