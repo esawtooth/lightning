@@ -864,7 +864,7 @@ ui_secrets = [
 ui_ca = create_container_app(
     "chatui",
     ui_image,
-    8000,
+    8080,  # Changed from 8000 to 8080
     [
         app.EnvironmentVarArgs(name="API_BASE", value=pulumi.Output.concat("https://", func_app.default_host_name)),
         app.EnvironmentVarArgs(name="EVENT_API_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/events")),
@@ -879,6 +879,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="PYTHONUNBUFFERED", value="1"),
         app.EnvironmentVarArgs(name="PYTHONDONTWRITEBYTECODE", value="1"),
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
+        app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
     ],
     secrets=ui_secrets,
     min_replicas=1,  # UI should be always on
@@ -886,6 +887,7 @@ ui_ca = create_container_app(
     cpu=0.5,
     memory="1Gi",
     external=True,
+    health_path=None,  # Disable health probes for now
     scale_rules=[
         app.ScaleRuleArgs(
             name="http-rule",
