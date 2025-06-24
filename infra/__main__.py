@@ -959,6 +959,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
         app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
         app.EnvironmentVarArgs(name="AUTH_ENABLED", value="true"),  # Enable authentication
+        app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/auth")),
         app.EnvironmentVarArgs(name="CONTEXT_HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
         app.EnvironmentVarArgs(name="HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
     ],
