@@ -21,3 +21,5 @@ azure-function/__azurite_db_*.json
 azure-function/__blobstorage__/
 azure-function/__queuestorage__/
 azure-function/AzuriteConfig
+# IMPORTANT: Ensure all function directories (Health, PutEvent, UniversalEventProcessor, Auth) are committed
+# DO NOT add azure-function/*/

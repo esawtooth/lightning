@@ -76,6 +76,14 @@ setup_infrastructure() {
     popd >/dev/null
 }
 
+validate_functions() {
+    echo "Validating Azure Functions..."
+    python scripts/validate_functions.py || {
+        echo "Function validation failed! Aborting deployment."
+        exit 1
+    }
+}
+
 build_images() {
     echo "Building Docker images..."
     docker buildx create --use --name deploy_builder || docker buildx use deploy_builder
@@ -139,11 +147,21 @@ deploy_stack() {
     popd >/dev/null
 }
 
+test_endpoints() {
+    echo "Testing deployed endpoints..."
+    python scripts/test_auth_endpoint.py || {
+        echo "Endpoint tests failed! Please check the deployment."
+        exit 1
+    }
+}
+
 main() {
     login_azure
+    validate_functions
     setup_infrastructure
     build_images
     deploy_stack
+    test_endpoints
 }
 
 main "$@"

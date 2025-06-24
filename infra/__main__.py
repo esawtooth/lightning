@@ -862,6 +862,15 @@ func_blob_reader = authorization.RoleAssignment(
 def build_zip():
     build_dir = Path(tempfile.mkdtemp())
     shutil.copytree("../azure-function", build_dir / "azure-function", dirs_exist_ok=True)
+    
+    # Validate required functions are present
+    required_functions = ["Health", "PutEvent", "UniversalEventProcessor", "Auth"]
+    func_dir = build_dir / "azure-function"
+    for func_name in required_functions:
+        func_path = func_dir / func_name
+        if not func_path.is_dir() or not (func_path / "__init__.py").exists():
+            raise Exception(f"Required function '{func_name}' is missing or invalid in azure-function directory")
+    
     for extra in ("../events", "../common"):
         if Path(extra).is_dir():
             shutil.copytree(extra, build_dir / Path(extra).name, dirs_exist_ok=True)
