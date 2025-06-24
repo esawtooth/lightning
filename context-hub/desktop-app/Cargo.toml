@@ -1,0 +1,54 @@
+[package]
+name = "context-hub-desktop"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Desktop app framework
+tauri = { version = "2.0", features = ["tray", "notification", "updater"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+
+# Filesystem mounting
+fuser = "0.14"  # FUSE for Linux/macOS
+notify = "6.0"  # File watching
+
+# Authentication
+keyring = "2.0"  # OS keychain integration
+oauth2 = "4.4"  # OAuth flow
+reqwest = { version = "0.11", features = ["json"] }
+
+# Context Hub integration
+context-hub-core = { path = "../context-hub-core" }
+
+# UI
+tauri-plugin-shell = "2.0"
+tauri-plugin-fs = "2.0"
+tauri-plugin-dialog = "2.0"
+tauri-plugin-notification = "2.0"
+
+# Windows-specific
+[target.'cfg(windows)'.dependencies]
+winfsp-sys = "0.2"
+windows = { version = "0.48", features = ["Win32_Foundation", "Win32_Security"] }
+
+# Build dependencies
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+# Package metadata for installers
+[package.metadata.bundle]
+name = "Context Hub"
+identifier = "io.contexthub.desktop"
+icon = ["icons/icon.ico", "icons/icon.png", "icons/icon.icns"]
+category = "Productivity"
+short_description = "Your personal AI filesystem"
+long_description = "Context Hub syncs your files and makes them available everywhere, with built-in AI capabilities."
+deb_depends = ["libfuse3-3"]
+osx_frameworks = ["Security", "CoreServices"]
+windows_wix_language = "en-US"
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]

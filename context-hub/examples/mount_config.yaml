@@ -1,0 +1,99 @@
+# Context Hub Filesystem Mount Configuration
+
+# Default mount settings
+defaults:
+  sync_strategy: bidirectional
+  cache_size: 1GB
+  conflict_resolution: crdt  # Use CRDT for conflict resolution
+
+# Auto-mount on startup
+auto_mounts:
+  - name: "Main Hub"
+    mount_point: "~/ContextHub"
+    sync_strategy: bidirectional
+    folder_id: null  # Mount root
+    options:
+      show_hidden: false
+      follow_symlinks: false
+      
+  - name: "Projects"
+    mount_point: "~/Documents/Projects"
+    folder_id: "projects-folder"
+    sync_strategy: offline_first
+    sync_interval: 300  # seconds
+    
+  - name: "Shared Documents"
+    mount_point: "~/Shared"
+    folder_id: "shared-folder"
+    sync_strategy: read_only  # Read-only mount
+
+# Platform-specific settings
+platforms:
+  macos:
+    finder_integration: true
+    spotlight_indexing: true
+    
+  windows:
+    explorer_integration: true
+    offline_files: true
+    
+  linux:
+    desktop_integration: gnome  # or kde, xfce
+    
+# Security settings
+security:
+  allowed_mount_paths:
+    - "~/ContextHub"
+    - "~/Documents"
+    - "/tmp/context-hub"
+  
+  forbidden_paths:
+    - "/System"
+    - "/usr"
+    - "C:\\Windows"
+    
+  encryption:
+    at_rest: true
+    algorithm: "AES-256-GCM"
+
+# Performance tuning
+performance:
+  # File watcher settings
+  watcher:
+    debounce_ms: 1000
+    max_events_per_second: 100
+    
+  # Cache settings
+  cache:
+    metadata_cache_size: "100MB"
+    content_cache_size: "1GB"
+    ttl_seconds: 3600
+    
+  # Sync settings
+  sync:
+    batch_size: 100
+    parallel_uploads: 4
+    parallel_downloads: 4
+    
+# Integration with other services
+integrations:
+  # VSCode integration
+  vscode:
+    enabled: true
+    workspace_trust: true
+    
+  # Git integration
+  git:
+    enabled: true
+    ignore_patterns:
+      - ".git"
+      - "node_modules"
+      - "target"
+      
+  # Cloud backup
+  backup:
+    enabled: true
+    providers:
+      - type: "s3"
+        bucket: "context-hub-backups"
+        region: "us-west-2"

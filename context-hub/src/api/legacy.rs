@@ -7,8 +7,9 @@ use context_hub_core::{
     storage::crdt::{DocumentStore, DocumentType},
 };
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Extension, Path, Query, State},
     http::StatusCode,
+    middleware,
     response::Json,
     routing::{get, post},
     Router,
@@ -18,6 +19,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use uuid::Uuid;
+use crate::api::auth_middleware::{AuthContext, require_auth};
 
 /// API state for legacy single-node server
 #[derive(Clone)]
@@ -48,7 +50,7 @@ pub fn router(
         verifier,
     };
 
-    Router::new()
+    let auth_routes = Router::new()
         .route("/docs", post(create_document).get(list_documents))
         .route(
             "/docs/{id}",
@@ -61,7 +63,13 @@ pub fn router(
         .route("/folders/{id}/guide", get(get_folder_guide))
         .route("/search", get(search))
         // .nest("/timeline", timeline_router(store.clone(), snapshot_dir.clone())) // Temporarily disabled
-        .with_state(state)
+        .layer(middleware::from_fn_with_state(verifier.clone(), require_auth))
+        .with_state(state);
+    
+    // Add health check endpoint without auth
+    Router::new()
+        .route("/health", get(|| async { "OK" }))
+        .merge(auth_routes)
 }
 
 // Request/Response types
@@ -259,6 +267,7 @@ async fn collect_index_guides(
 // Handlers
 async fn create_document(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Json(req): Json<CreateDocumentRequest>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
     let doc_type = req.doc_type
@@ -274,12 +283,12 @@ async fn create_document(
         let parent_id = if let Some(pid) = req.parent_folder_id {
             pid
         } else {
-            store.ensure_root("default_user")
+            store.ensure_root(&auth.user_id)
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         };
         
         store
-            .create_folder(parent_id, req.name.clone(), "default_user".to_string())
+            .create_folder(parent_id, req.name.clone(), auth.user_id.clone())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
         // For regular documents, use create
@@ -287,7 +296,7 @@ async fn create_document(
             .create(
                 req.name.clone(),
                 &req.content,
-                "default_user".to_string(),
+                auth.user_id.clone(),
                 req.parent_folder_id,
                 doc_type,
             )
@@ -323,6 +332,7 @@ async fn create_document(
 
 async fn get_document(
     State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
     Path(id): Path<Uuid>,
     Query(query): Query<DocumentQuery>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
