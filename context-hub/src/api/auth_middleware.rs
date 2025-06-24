@@ -4,7 +4,7 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use context_hub_core::auth::{Claims, TokenVerifier};
+use context_hub_core::auth::TokenVerifier;
 use std::sync::Arc;
 
 /// Auth context that will be available in handlers
@@ -52,7 +52,7 @@ pub async fn extract_auth_context(
 }
 
 /// Middleware to require authentication
-pub async fn require_auth<S>(
+pub async fn require_auth(
     State(verifier): State<Arc<dyn TokenVerifier>>,
     mut request: Request,
     next: Next,

@@ -332,7 +332,7 @@ async fn create_document(
 
 async fn get_document(
     State(state): State<ApiState>,
-    Extension(auth): Extension<AuthContext>,
+    Extension(_auth): Extension<AuthContext>,
     Path(id): Path<Uuid>,
     Query(query): Query<DocumentQuery>,
 ) -> Result<Json<DocumentResponse>, StatusCode> {
