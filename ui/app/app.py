@@ -11,7 +11,10 @@ import logging
 from common.jwt_utils import verify_token
 from typing import Optional
 import httpx
-from urllib.parse import urlencode
+from urllib.parse import urlencode, quote
+
+# Configure logging
+logger = logging.getLogger(__name__)
 
 # Configuration
 API_BASE = os.environ.get("API_BASE", "http://localhost:8000/api")
@@ -140,8 +143,8 @@ def _resolve_gateway_url(request: Request) -> str:
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
     """Authentication middleware for all routes."""
-    # Allow health checks, login page, and static assets
-    if request.url.path in ["/health", "/login"] or request.url.path.startswith("/static"):
+    # Allow health checks, login page, auth callback, and static assets
+    if request.url.path in ["/health", "/login", "/auth/callback"] or request.url.path.startswith("/static"):
         return await call_next(request)
 
     # Check authentication
