@@ -6,18 +6,11 @@ WORKDIR /app
 # Build argument for deployment mode
 ARG LIGHTNING_MODE=local
 
-# Install dependencies
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn[standard] \
-    aiohttp \
-    websockets \
-    jinja2 \
-    python-multipart \
-    pydantic \
-    itsdangerous \
-    requests \
-    pyjwt
+# Copy requirements first for better caching
+COPY ui/app/requirements.txt .
+
+# Install dependencies from requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # For Azure deployment, add Azure-specific dependencies
 RUN if [ "$LIGHTNING_MODE" = "azure" ]; then \
