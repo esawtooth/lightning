@@ -9,7 +9,7 @@ import asyncio
 import json
 from typing import Any, Dict, List
 
-from .simple_registry import AccessScope, ToolType, get_tool_registry, load_planner_tools
+from .registry import AccessScope, ToolType, get_tool_registry, load_planner_tools
 
 
 def simple_table(headers: List[str], rows: List[List[str]]) -> str:

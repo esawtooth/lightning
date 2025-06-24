@@ -1,10 +1,10 @@
 """
-Simplified tool registry system for Lightning Core.
+Unified tool registry system for Lightning Core.
 Single source of truth for all tools with plugin architecture.
 """
 
-# Simplified registry (primary interface)
-from .simple_registry import (
+# Unified registry
+from .registry import (
     ToolRegistry,
     ToolMetadata,
     ToolProvider,

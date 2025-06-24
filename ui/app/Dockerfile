@@ -28,17 +28,17 @@ RUN if [ "$LIGHTNING_MODE" = "azure" ]; then \
     fi
 
 # Copy the app files based on build context
-# When building from root: COPY ui/integrated_app/* .
-# When building from ui/integrated_app: COPY . .
-COPY ui/integrated_app/app.py .
-COPY ui/integrated_app/lightning_ui.py .
+# When building from root: COPY ui/app/* .
+# When building from ui/app: COPY . .
+COPY ui/app/app.py .
+COPY ui/app/lightning_ui.py .
 
 # Copy templates and static directories
-COPY ui/integrated_app/templates ./templates
-COPY ui/integrated_app/static ./static
+COPY ui/app/templates ./templates
+COPY ui/app/static ./static
 
 # Copy common utilities
-COPY ui/integrated_app/common ./common
+COPY ui/app/common ./common
 
 # Set environment variables
 ENV LIGHTNING_MODE=${LIGHTNING_MODE}
