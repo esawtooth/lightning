@@ -373,7 +373,7 @@ aad_app = azuread.Application(
             pulumi.Output.concat("https://", domain, "/auth/callback"),
             pulumi.Output.concat("https://www.", domain, "/auth/callback"),
             pulumi.Output.concat("https://hub.", domain, "/auth/callback"),
-            pulumi.Output.concat("https://api.", domain, "/Auth"),  # Function App auth endpoint
+            pulumi.Output.concat("https://api.", domain, "/api/Auth"),  # Function App auth endpoint
             # Support legacy redirect to /auth/login
             pulumi.Output.concat("https://", domain, "/auth/login"),
             pulumi.Output.concat("https://www.", domain, "/auth/login"),
@@ -442,9 +442,11 @@ aad_sp = azuread.ServicePrincipal("aad-sp", client_id=aad_app.client_id)
 aad_password = azuread.ApplicationPassword(
     "aad-pwd",
     application_id=aad_app.id,
-    end_date=(datetime.datetime.utcnow() + datetime.timedelta(days=730)).strftime(
-        "%Y-%m-%dT%H:%M:%SZ"
-    ),
+    end_date="2026-12-31T23:59:59Z",  # Fixed end date to prevent unnecessary replacements
+    opts=pulumi.ResourceOptions(
+        ignore_changes=["end_date"],  # Ignore end date changes
+        replace_on_changes=[]  # Don't replace on any changes
+    )
 )
 pulumi.export("aadClientId", aad_app.client_id)
 pulumi.export("aadClientSecret", pulumi.Output.secret(aad_password.value))
@@ -960,7 +962,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
         app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
         app.EnvironmentVarArgs(name="AUTH_ENABLED", value="true"),  # Enable authentication
-        app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://api.", domain, "/api/auth")),
+        app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://api.", domain, "/api/Auth")),
         app.EnvironmentVarArgs(name="CONTEXT_HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
         app.EnvironmentVarArgs(name="HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
     ],
