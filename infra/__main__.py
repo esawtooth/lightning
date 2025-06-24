@@ -373,6 +373,7 @@ aad_app = azuread.Application(
             pulumi.Output.concat("https://", domain, "/auth/callback"),
             pulumi.Output.concat("https://www.", domain, "/auth/callback"),
             pulumi.Output.concat("https://hub.", domain, "/auth/callback"),
+            pulumi.Output.concat("https://api.", domain, "/Auth"),  # Function App auth endpoint
             # Support legacy redirect to /auth/login
             pulumi.Output.concat("https://", domain, "/auth/login"),
             pulumi.Output.concat("https://www.", domain, "/auth/login"),
@@ -959,7 +960,7 @@ ui_ca = create_container_app(
         app.EnvironmentVarArgs(name="LOG_LEVEL", value="INFO"),
         app.EnvironmentVarArgs(name="PORT", value="8080"),  # Ensure app runs on correct port
         app.EnvironmentVarArgs(name="AUTH_ENABLED", value="true"),  # Enable authentication
-        app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://", func_app.default_host_name, "/api/auth")),
+        app.EnvironmentVarArgs(name="AUTH_GATEWAY_URL", value=pulumi.Output.concat("https://api.", domain, "/auth")),
         app.EnvironmentVarArgs(name="CONTEXT_HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
         app.EnvironmentVarArgs(name="HUB_URL", value=pulumi.Output.concat("https://", hub_ca.configuration.ingress.fqdn)),
     ],
