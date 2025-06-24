@@ -1,6 +1,6 @@
 config:
   lightning:uiImage: lightningacr.azurecr.io/chainlit-client:latest
-  vextir:uiImage: vextiracrdev.azurecr.io/chainlit-client:b5f18f52ac17a187fe48ddef1c3802b1c00d7554
+  vextir:uiImage: vextiracrdev.azurecr.io/integrated-ui:latest
   vextir:aadClientId:
     secure: AAABABEqQX6uOHXFHCkc8CMTJnyF2ZFCA8Yw7KzPDXKMayyeJDtIkuc50nsQSlV5mLXNVKJCGQA5Pc8n9uQeoZ6ji1c=
   vextir:aadClientSecret:
