@@ -59,7 +59,7 @@ def create_unified_container_images(acr: containerregistry.Registry, acr_creds):
         "lightning-ui-azure",
         build=docker.DockerBuildArgs(
             context="..",
-            dockerfile="../ui/integrated_app/Dockerfile",
+            dockerfile="../ui/app/Dockerfile",
             args={
                 "LIGHTNING_MODE": "azure"
             },

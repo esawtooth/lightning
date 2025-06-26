@@ -185,7 +185,7 @@ services:
   integrated-app:
     build:
       context: .
-      dockerfile: ui/integrated_app/Dockerfile
+      dockerfile: ui/app/Dockerfile
       args:
         LIGHTNING_MODE: azure
     environment:
