@@ -6,6 +6,10 @@
 {% block extra_head %}
 <!-- JSTree CSS -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/themes/default/style.min.css" />
+<!-- TipTap Editor CSS -->
+<link rel="stylesheet" href="{{ url_for('static', path='css/tiptap-editor.css') }}" />
+<!-- Inline File Tree CSS -->
+<link rel="stylesheet" href="{{ url_for('static', path='css/inline-file-tree.css') }}" />
 <style>
     /* Make the main content area full height */
     #main-content {
@@ -59,10 +63,6 @@
         </div>
         
         <!-- Quick Actions -->
-        <button onclick="showCreateDocumentModal()" class="bg-green-500 text-white px-3 py-1.5 rounded text-sm hover:bg-green-600 transition-colors">
-            <i class="fas fa-file-alt mr-1"></i>
-            Create
-        </button>
         <button onclick="showUploadModal()" class="bg-blue-500 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-600 transition-colors">
             <i class="fas fa-upload mr-1"></i>
             Upload
@@ -72,16 +72,13 @@
             Export
         </button>
         
-        <!-- Folder/Document Actions -->
-        <div class="border-l border-gray-300 pl-2">
-            <button onclick="showCreateFolderModal()" class="bg-indigo-500 text-white px-3 py-1.5 rounded text-sm hover:bg-indigo-600 transition-colors">
-                <i class="fas fa-folder-plus mr-1"></i>
-                New Folder
-            </button>
-            <button onclick="showCreateDocumentModal()" class="bg-teal-500 text-white px-3 py-1.5 rounded text-sm hover:bg-teal-600 transition-colors">
-                <i class="fas fa-plus mr-1"></i>
-                New Document
-            </button>
+        <!-- Keyboard Shortcuts Hint -->
+        <div class="border-l border-gray-300 pl-2 text-xs text-gray-600">
+            <span class="hidden lg:inline">
+                <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Ctrl+N</kbd> New File
+                <span class="mx-1">•</span>
+                <kbd class="px-1 py-0.5 bg-gray-100 border border-gray-300 rounded text-xs">Ctrl+Shift+N</kbd> New Folder
+            </span>
         </div>
         
         <!-- Refresh -->
@@ -108,7 +105,7 @@
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-medium text-gray-900">Files & Folders</h3>
             </div>
-            <div class="p-4 flex-1 overflow-hidden">
+            <div class="p-4 flex-1 overflow-hidden relative">
                 <div id="folder-browser" class="h-full overflow-y-auto">
                     <!-- JSTree will be initialized here -->
                 </div>
@@ -116,6 +113,19 @@
                     <i class="fas fa-folder-open text-4xl mb-4"></i>
                     <p>Your context hub is not initialized yet.</p>
                     <p class="text-sm">Click "Initialize Context Hub" to get started.</p>
+                </div>
+                <!-- Quick action buttons -->
+                <div class="tree-quick-actions">
+                    <button onclick="window.fileTree && window.fileTree.createFileInline(contextData.selectedFolder?.id)" 
+                            class="tree-quick-action" title="New File (Ctrl+N)">
+                        <i class="fas fa-file-plus"></i>
+                        <span>File</span>
+                    </button>
+                    <button onclick="window.fileTree && window.fileTree.createFolderInline(contextData.selectedFolder?.id)" 
+                            class="tree-quick-action" title="New Folder (Ctrl+Shift+N)">
+                        <i class="fas fa-folder-plus"></i>
+                        <span>Folder</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -142,77 +152,15 @@
                     <p class="text-lg">Select a document to view or edit</p>
                     <p class="text-sm mt-2">Click on any file in the tree to open it</p>
                 </div>
-                <textarea 
-                    id="doc-editor" 
-                    class="hidden w-full h-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none"
-                    placeholder="Document content...">
-                </textarea>
+                <div id="doc-editor" class="hidden w-full h-full">
+                    <!-- TipTap editor will be initialized here -->
+                </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Create Document Modal -->
-<div id="create-doc-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Create New Document</h3>
-            </div>
-            <div class="p-6">
-                <form id="create-doc-form">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Document Name</label>
-                        <input type="text" id="doc-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter document name..." required>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Folder</label>
-                        <select id="doc-folder" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="">Root Folder</option>
-                        </select>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Content</label>
-                        <textarea id="doc-content" rows="10" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter document content..."></textarea>
-                    </div>
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" onclick="closeCreateDocumentModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Document</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Create Folder Modal -->
-<div id="create-folder-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
-    <div class="flex items-center justify-center min-h-screen p-4">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h3 class="text-lg font-medium text-gray-900">Create New Folder</h3>
-            </div>
-            <div class="p-6">
-                <form id="create-folder-form">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Folder Name</label>
-                        <input type="text" id="folder-name" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent" placeholder="Enter folder name..." required>
-                    </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Parent Folder</label>
-                        <select id="folder-parent" class="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent">
-                            <option value="">Root Level</option>
-                        </select>
-                    </div>
-                    <div class="flex justify-end space-x-3">
-                        <button type="button" onclick="closeCreateFolderModal()" class="px-4 py-2 text-gray-600 hover:text-gray-800">Cancel</button>
-                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Create Folder</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+<!-- Note: Create Document and Folder modals removed - using inline creation instead -->
 
 <!-- Upload Modal -->
 <div id="upload-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
@@ -241,13 +189,30 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 <!-- JSTree JavaScript -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"></script>
+<!-- TipTap Editor -->
+<script src="https://unpkg.com/@tiptap/core@2.1.13/dist/index.umd.js"></script>
+<script src="https://unpkg.com/@tiptap/pm@2.1.13/dist/index.umd.js"></script>
+<script src="https://unpkg.com/@tiptap/starter-kit@2.1.13/dist/index.umd.js"></script>
+<script>
+// Make TipTap available globally for our editor component
+window.TipTap = window.tiptapCore;
+window.TipTapStarterKit = window.StarterKit;
+</script>
+<!-- Our TipTap Editor Component -->
+<script src="{{ url_for('static', path='js/tiptap-editor.js') }}"></script>
+<!-- Inline File Tree Component -->
+<script src="{{ url_for('static', path='js/inline-file-tree.js') }}"></script>
+<!-- Offline Queue Manager -->
+<script src="{{ url_for('static', path='js/offline-queue.js') }}"></script>
 <script>
     // Context hub functionality
     let contextData = {
         status: null,
         folders: null,
         selectedDocument: null,
-        editorMode: false
+        editorMode: false,
+        editor: null,  // TipTap editor instance
+        fileTree: null  // Inline file tree instance
     };
 
     async function loadContextStatus() {
@@ -318,22 +283,11 @@
         }
         
         function convertFolderToJSTreeNode(folder) {
-            // Create action buttons for folders
-            const folderActions = `
-                <span class="tree-actions" style="float: right; margin-left: 20px;">
-                    <i class="fas fa-plus text-green-500 hover:text-green-700 cursor-pointer mr-1" 
-                       onclick="event.stopPropagation(); showQuickCreateModal('${folder.id}', '${folder.name.replace(/'/g, "\\'")}')" 
-                       title="Add to folder"></i>
-                    <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
-                       onclick="event.stopPropagation(); deleteItem('${folder.id}', 'folder', '${folder.name.replace(/'/g, "\\'")}')" 
-                       title="Delete folder"></i>
-                </span>
-            `;
-            
             const node = {
                 id: folder.id,
-                text: `${folder.name} (${folder.document_count || 0} documents)${folderActions}`,
+                text: `${folder.name} (${folder.document_count || 0} documents)`,
                 icon: folder.id === 'root' ? 'fas fa-home' : 'fas fa-folder',
+                type: 'folder',
                 state: { opened: true },
                 data: folder,
                 children: []
@@ -342,20 +296,11 @@
             // Add documents as child nodes
             if (folder.documents && folder.documents.length > 0) {
                 folder.documents.forEach(doc => {
-                    // Create action buttons for documents
-                    const docActions = `
-                        <span class="tree-actions" style="float: right; margin-left: 20px;">
-                            <i class="fas fa-trash text-red-500 hover:text-red-700 cursor-pointer" 
-                               onclick="event.stopPropagation(); deleteItem('${doc.id}', 'document', '${doc.name.replace(/'/g, "\\'")}')" 
-                               title="Delete document"></i>
-                        </span>
-                    `;
-                    
                     node.children.push({
                         id: `doc_${doc.id}`,
-                        text: doc.name + docActions,
+                        text: doc.name,
                         icon: 'fas fa-file-alt',
-                        type: 'document',
+                        type: 'file',
                         data: doc
                     });
                 });
@@ -410,7 +355,7 @@
             }
         }).on('select_node.jstree', function (e, data) {
             // Handle folder or document selection
-            if (data.node.type === 'document') {
+            if (data.node.type === 'file') {
                 // Document selected - load it for viewing/editing
                 loadDocument(data.node.data);
             } else {
@@ -422,6 +367,40 @@
         }).on('ready.jstree', function() {
             // Tree is ready
             console.log('JSTree initialized successfully');
+            
+            // Initialize inline file tree handler
+            if (!contextData.fileTree) {
+                contextData.fileTree = new InlineFileTree({
+                    onCreateFile: createDocumentAPI,
+                    onCreateFolder: createFolderAPI,
+                    onRename: renameItemAPI,
+                    onDelete: deleteItemAPI,
+                    onSelect: (node) => {
+                        if (node.type === 'file') {
+                            loadDocument(node.data);
+                        } else {
+                            displayFolderGuide(node.data);
+                        }
+                    }
+                });
+                
+                // Setup keyboard shortcuts
+                contextData.fileTree.setupKeyboardShortcuts();
+                
+                // Make it globally accessible for onclick handlers
+                window.fileTree = contextData.fileTree;
+            }
+            
+            // Update node texts to include action buttons
+            const tree = $('#folder-browser').jstree(true);
+            const nodes = tree.get_json('#', { flat: true });
+            nodes.forEach(node => {
+                if (node.id && node.data && node.data.name) {
+                    const nodeType = node.type || 'folder';
+                    const newText = contextData.fileTree.createNodeText(node.data.name, nodeType, node.id);
+                    tree.set_text(node.id, newText);
+                }
+            });
         });
     }
     
@@ -449,9 +428,23 @@
                     // Update document display - make it editable
                     window.document.getElementById('doc-icon').className = 'fas fa-book text-gray-500';
                     window.document.getElementById('doc-title').textContent = title + ' - Index Guide';
-                    window.document.getElementById('doc-editor').value = docData.content || '';
-                    window.document.getElementById('doc-editor').readOnly = false;
-                    window.document.getElementById('doc-editor').classList.remove('bg-gray-50');
+                    
+                    // Initialize or update TipTap editor
+                    if (!contextData.editor) {
+                        contextData.editor = new ContextHubEditor('doc-editor', {
+                            content: docData.content || '',
+                            documentId: docData.id,
+                            documentName: docData.name,
+                            onSave: async (content) => {
+                                // Save document via API
+                                await saveDocumentContent(content);
+                            }
+                        });
+                    } else {
+                        contextData.editor.setContent(docData.content || '');
+                        contextData.editor.options.documentId = docData.id;
+                        contextData.editor.options.documentName = docData.name;
+                    }
                     
                     // Show editor and save button
                     window.document.getElementById('doc-placeholder').classList.add('hidden');
@@ -503,9 +496,23 @@
             // Update document display
             window.document.getElementById('doc-icon').className = 'fas fa-file-alt text-gray-500';
             window.document.getElementById('doc-title').textContent = docData.name;
-            window.document.getElementById('doc-editor').value = docData.content || '';
-            window.document.getElementById('doc-editor').readOnly = false;
-            window.document.getElementById('doc-editor').classList.remove('bg-gray-50');
+            
+            // Initialize or update TipTap editor
+            if (!contextData.editor) {
+                contextData.editor = new ContextHubEditor('doc-editor', {
+                    content: docData.content || '',
+                    documentId: docData.id,
+                    documentName: docData.name,
+                    onSave: async (content) => {
+                        // Save document via API
+                        await saveDocumentContent(content);
+                    }
+                });
+            } else {
+                contextData.editor.setContent(docData.content || '');
+                contextData.editor.options.documentId = docData.id;
+                contextData.editor.options.documentName = docData.name;
+            }
             
             // Show editor, hide placeholder
             window.document.getElementById('doc-placeholder').classList.add('hidden');
@@ -527,12 +534,19 @@
     }
     
     async function saveDocument() {
-        if (!contextData.selectedDocument) {
-            alert('No document selected');
+        if (!contextData.selectedDocument || !contextData.editor) {
+            console.error('No document selected or editor not initialized');
             return;
         }
         
-        const content = document.getElementById('doc-editor').value;
+        // Force save the current content
+        await contextData.editor.save();
+    }
+    
+    async function saveDocumentContent(content) {
+        if (!contextData.selectedDocument) {
+            throw new Error('No document selected');
+        }
         
         try {
             const response = await fetch(`/api/context/documents/${contextData.selectedDocument.id}`, {
@@ -552,30 +566,27 @@
                 
                 // Show success feedback
                 const saveBtn = document.querySelector('button[onclick="saveDocument()"]');
-                const originalText = saveBtn.innerHTML;
-                saveBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Saved';
-                saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
-                saveBtn.classList.add('bg-green-700');
-                
-                setTimeout(() => {
-                    saveBtn.innerHTML = originalText;
-                    saveBtn.classList.remove('bg-green-700');
-                    saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
-                }, 2000);
+                if (saveBtn) {
+                    const originalText = saveBtn.innerHTML;
+                    saveBtn.innerHTML = '<i class="fas fa-check mr-2"></i>Saved';
+                    saveBtn.classList.remove('bg-green-600', 'hover:bg-green-700');
+                    saveBtn.classList.add('bg-green-700');
+                    
+                    setTimeout(() => {
+                        saveBtn.innerHTML = originalText;
+                        saveBtn.classList.remove('bg-green-700');
+                        saveBtn.classList.add('bg-green-600', 'hover:bg-green-700');
+                    }, 2000);
+                }
                 
                 // Refresh folder data to update any counts
                 loadFolders();
             } else {
-                console.error('Failed to save document');
-                // Visual feedback only - change save button color briefly
-                const saveBtn = document.querySelector('button[onclick="saveDocument()"]');
-                saveBtn.classList.add('bg-red-600');
-                setTimeout(() => {
-                    saveBtn.classList.remove('bg-red-600');
-                }, 2000);
+                throw new Error('Failed to save document');
             }
         } catch (error) {
             console.error('Error saving document:', error);
+            throw error;
         }
     }
 
@@ -650,29 +661,7 @@
         }
     }
 
-    function showCreateDocumentModal() {
-        document.getElementById('create-doc-modal').classList.remove('hidden');
-        populateFolderSelect();
-    }
-
-    function closeCreateDocumentModal() {
-        document.getElementById('create-doc-modal').classList.add('hidden');
-        document.getElementById('create-doc-form').reset();
-    }
-
-    function populateFolderSelect() {
-        const select = document.getElementById('doc-folder');
-        select.innerHTML = '<option value="">Root Folder</option>';
-        
-        if (contextData.folders && contextData.folders.folders) {
-            contextData.folders.folders.forEach(folder => {
-                const option = document.createElement('option');
-                option.value = folder.id;
-                option.textContent = folder.name;
-                select.appendChild(option);
-            });
-        }
-    }
+    // Removed modal functions - using inline creation instead
 
     function showUploadModal() {
         document.getElementById('upload-modal').classList.remove('hidden');
@@ -687,19 +676,43 @@
         console.log('Export functionality not yet implemented');
     }
 
-    // Handle create document form submission
-    document.getElementById('create-doc-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
+    // Removed modal form handlers - using inline creation instead
+
+    // Initialize page
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initialize offline queue
+        window.offlineQueue = new OfflineQueue({
+            onSync: (completed, failed) => {
+                console.log('Offline sync completed:', completed.length, 'succeeded,', failed.length, 'failed');
+                // Refresh folders if any operations completed
+                if (completed.length > 0) {
+                    loadFolders();
+                }
+            },
+            onError: (operation, error) => {
+                console.error('Offline operation failed permanently:', operation, error);
+            }
+        });
         
-        const name = document.getElementById('doc-name').value;
-        const content = document.getElementById('doc-content').value;
-        const folderId = document.getElementById('doc-folder').value || null;
-        
-        if (!name.trim()) {
-            alert('Please enter a document name');
-            return;
+        loadContextStatus();
+    });
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        if (contextData.editor) {
+            contextData.editor.destroy();
         }
-        
+    });
+
+    // Close upload modal when clicking outside
+    document.getElementById('upload-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'upload-modal') {
+            closeUploadModal();
+        }
+    });
+
+    // API functions for inline file tree
+    async function createDocumentAPI(name, content, parentFolderId) {
         try {
             const response = await fetch('/api/context/documents', {
                 method: 'POST',
@@ -708,91 +721,25 @@
                 },
                 body: JSON.stringify({
                     name: name,
-                    content: content,
-                    folder_id: folderId
+                    content: content || '',
+                    folder_id: parentFolderId
                 })
             });
             
             if (response.ok) {
-                closeCreateDocumentModal();
-                loadFolders();
-                // Silent success
+                const result = await response.json();
+                loadFolders(); // Refresh tree
+                return result;
             } else {
-                console.error('Failed to create document');
+                throw new Error('Failed to create document');
             }
         } catch (error) {
             console.error('Error creating document:', error);
-        }
-    });
-
-    function showCreateFolderModal() {
-        document.getElementById('create-folder-modal').classList.remove('hidden');
-        populateFolderParentSelect();
-    }
-
-    function closeCreateFolderModal() {
-        document.getElementById('create-folder-modal').classList.add('hidden');
-        document.getElementById('create-folder-form').reset();
-    }
-
-    function populateFolderParentSelect() {
-        const select = document.getElementById('folder-parent');
-        select.innerHTML = '<option value="">Root Level</option>';
-        
-        if (contextData.folders && contextData.folders.folders) {
-            contextData.folders.folders.forEach(folder => {
-                if (folder.id !== 'root') {
-                    const option = document.createElement('option');
-                    option.value = folder.id;
-                    const indentPrefix = '  '.repeat(folder.level || 0);
-                    option.textContent = indentPrefix + folder.name;
-                    select.appendChild(option);
-                }
-            });
-        }
-        
-        // Pre-select the currently selected folder as the parent
-        if (contextData.selectedFolder && contextData.selectedFolder.id !== 'root') {
-            select.value = contextData.selectedFolder.id;
+            throw error;
         }
     }
-
-    // Initialize page
-    document.addEventListener('DOMContentLoaded', () => {
-        loadContextStatus();
-    });
-
-    // Close modals when clicking outside
-    document.getElementById('create-doc-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'create-doc-modal') {
-            closeCreateDocumentModal();
-        }
-    });
-
-    document.getElementById('upload-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'upload-modal') {
-            closeUploadModal();
-        }
-    });
-
-    document.getElementById('create-folder-modal').addEventListener('click', (e) => {
-        if (e.target.id === 'create-folder-modal') {
-            closeCreateFolderModal();
-        }
-    });
-
-    // Handle create folder form submission
-    document.getElementById('create-folder-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const name = document.getElementById('folder-name').value;
-        const parentId = document.getElementById('folder-parent').value || null;
-        
-        if (!name.trim()) {
-            alert('Please enter a folder name');
-            return;
-        }
-        
+    
+    async function createFolderAPI(name, parentFolderId) {
         try {
             const response = await fetch('/api/context/folders', {
                 method: 'POST',
@@ -801,55 +748,74 @@
                 },
                 body: JSON.stringify({
                     name: name,
-                    parent_id: parentId
+                    parent_id: parentFolderId
                 })
             });
             
             if (response.ok) {
-                closeCreateFolderModal();
-                loadFolders();
-                // Silent success
+                const result = await response.json();
+                loadFolders(); // Refresh tree
+                return result;
             } else {
-                console.error('Failed to create folder');
+                throw new Error('Failed to create folder');
             }
         } catch (error) {
             console.error('Error creating folder:', error);
+            throw error;
         }
-    });
-
-    // Delete item function
-    async function deleteItem(itemId, itemType, itemName) {
-        // Delete without confirmation
+    }
+    
+    async function renameItemAPI(itemId, newName, itemType) {
         try {
             const endpoint = itemType === 'folder' ? 
                 `/api/context/folders/${itemId}` : 
-                `/api/context/documents/${itemId}`;
+                `/api/context/documents/${itemId.replace('doc_', '')}`;
+                
+            const response = await fetch(endpoint, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name: newName })
+            });
+            
+            if (response.ok) {
+                return await response.json();
+            } else {
+                throw new Error(`Failed to rename ${itemType}`);
+            }
+        } catch (error) {
+            console.error(`Error renaming ${itemType}:`, error);
+            throw error;
+        }
+    }
+    
+    async function deleteItemAPI(itemId, itemType) {
+        try {
+            const endpoint = itemType === 'folder' ? 
+                `/api/context/folders/${itemId}` : 
+                `/api/context/documents/${itemId.replace('doc_', '')}`;
             
             const response = await fetch(endpoint, { method: 'DELETE' });
             
             if (response.ok) {
-                // Silently refresh the folder list
-                loadFolders();
+                loadFolders(); // Refresh tree
+                return true;
             } else {
-                // Only show error if deletion fails
-                console.error(`Failed to delete ${itemType}: ${response.status}`);
+                throw new Error(`Failed to delete ${itemType}`);
             }
         } catch (error) {
             console.error(`Error deleting ${itemType}:`, error);
+            throw error;
         }
     }
 
-    // Quick create modal - default to document
-    function showQuickCreateModal(folderId, folderName) {
-        // Default to creating a document
-        contextData.selectedFolder = { id: folderId, name: folderName };
-        showCreateDocumentModal();
-        // Pre-select the folder in the modal
-        setTimeout(() => {
-            const select = document.getElementById('doc-folder');
-            if (select) select.value = folderId;
-        }, 100);
+    // Delete item function (legacy, for backwards compatibility)
+    async function deleteItem(itemId, itemType, itemName) {
+        return deleteItemAPI(itemId, itemType);
     }
+
+    // Quick create - removed in favor of inline creation
     
     // Create Index Guide for a folder
     async function createIndexGuide(folderId, folderName) {

@@ -391,6 +391,8 @@ aad_app = azuread.Application(
     api=azuread.ApplicationApiArgs(
         requested_access_token_version=2,
     ),
+    # Set Application ID URI for contexthub-cli compatibility
+    identifier_uris=["api://context-hub"],
     # Required permissions
     required_resource_accesses=[
         azuread.ApplicationRequiredResourceAccessArgs(

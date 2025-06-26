@@ -22,6 +22,16 @@ from rich.text import Text
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn, TimeRemainingColumn
 from rich import print as rprint
+import jwt
+import base64
+import urllib.parse
+import webbrowser
+import threading
+import socket
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import uuid
+import difflib
+import tempfile
 
 
 # Global console for rich output
@@ -36,7 +46,11 @@ DEFAULT_CONFIG = {
     "agent": None,
     "current_workspace": None,
     "verbose": False,
-    "json_output": False
+    "json_output": False,
+    "azure_tenant_id": None,
+    "azure_client_id": None,
+    "azure_scope": "api://context-hub/.default",
+    "token_cache_file": str(Path.home() / ".context-hub" / "tokens.json")
 }
 
 # Global flags for output control
@@ -67,6 +81,23 @@ def agent_log(message: str, level: str = "info", data: Dict[str, Any] = None):
         console.print(f"[dim]{timestamp}[/dim] [{color}]{level.upper()}[/{color}] {message}")
         if data:
             console.print(f"[dim]  Data: {data}[/dim]")
+
+
+def llm_response(success: bool, operation: str, data: Dict[str, Any] = None, error: str = None):
+    """Structured LLM-friendly response format."""
+    response = {
+        "success": success,
+        "operation": operation,
+        "timestamp": datetime.now().isoformat(),
+        "data": data or {},
+        "error": error
+    }
+    
+    if JSON_OUTPUT:
+        print(json.dumps(response, indent=2))
+        return response
+    
+    return response
 
 
 def operation_summary(operation: str, stats: Dict[str, Any]):
@@ -131,19 +162,52 @@ def get_current_user() -> str:
 
 
 def api_request(method: str, path: str, **kwargs) -> Any:
-    """Make API request with automatic user/agent headers."""
+    """Make API request with Azure AD authentication."""
     config = load_config()
     url = f"{config['url']}{path}"
     
     headers = kwargs.pop("headers", {})
-    headers["X-User-Id"] = get_current_user()
-    if config.get("agent"):
-        headers["X-Agent-Id"] = config["agent"]
+    
+    # Add Azure AD authentication if configured
+    if config.get("azure_tenant_id") and config.get("azure_client_id"):
+        try:
+            access_token = get_azure_token()
+            headers["Authorization"] = f"Bearer {access_token}"
+            agent_log("Using Azure AD authentication", "info")
+        except Exception as e:
+            agent_log("Azure AD authentication failed", "error", {"error": str(e)})
+            console.print(f"[red]Authentication failed: {e}[/red]")
+            sys.exit(1)
+    else:
+        # Fallback to legacy headers for local development
+        headers["X-User-Id"] = get_current_user()
+        if config.get("agent"):
+            headers["X-Agent-Id"] = config["agent"]
+        agent_log("Using legacy authentication headers", "info")
     
     try:
         resp = requests.request(method, url, headers=headers, **kwargs)
         if not resp.ok:
-            console.print(f"[red]Error {resp.status_code}: {resp.text}[/red]")
+            # Handle authentication errors specifically
+            if resp.status_code == 401:
+                if config.get("azure_tenant_id"):
+                    # Clear token cache and retry once
+                    agent_log("Token expired, clearing cache", "warning")
+                    cache_file = config.get("token_cache_file", str(Path.home() / ".context-hub" / "tokens.json"))
+                    cache = TokenCache(cache_file)
+                    cache_key = f"{config['azure_tenant_id']}:{config['azure_client_id']}:{config.get('azure_scope', 'api://context-hub/.default')}"
+                    cached_tokens = cache.load_tokens()
+                    if cache_key in cached_tokens:
+                        del cached_tokens[cache_key]
+                        cache.save_tokens(cached_tokens)
+                    console.print("[yellow]Token expired. Please re-authenticate.[/yellow]")
+                    # Recursively retry with fresh token
+                    return api_request(method, path, headers=kwargs.pop("headers", {}), **kwargs)
+                else:
+                    console.print("[red]Authentication failed. Check your configuration.[/red]")
+            
+            error_msg = resp.text.strip() if resp.text.strip() else f"HTTP {resp.status_code} error"
+            console.print(f"[red]Error {resp.status_code}: {error_msg}[/red]")
             sys.exit(1)
         
         if resp.text:
@@ -263,6 +327,208 @@ def format_time_ago(timestamp: str) -> str:
         return "just now"  # Simplified for now
     except:
         return "unknown"
+
+
+# ============================================================================
+# AZURE AD AUTHENTICATION
+# ============================================================================
+
+class TokenCache:
+    """Handles caching and refreshing of Azure AD tokens."""
+    
+    def __init__(self, cache_file: str):
+        self.cache_file = Path(cache_file)
+        self.cache_file.parent.mkdir(exist_ok=True)
+    
+    def load_tokens(self) -> Dict[str, Any]:
+        """Load cached tokens from file."""
+        if self.cache_file.exists():
+            try:
+                return json.loads(self.cache_file.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {}
+    
+    def save_tokens(self, tokens: Dict[str, Any]) -> None:
+        """Save tokens to cache file."""
+        self.cache_file.write_text(json.dumps(tokens, indent=2))
+    
+    def is_token_valid(self, token: str) -> bool:
+        """Check if JWT token is still valid (not expired)."""
+        try:
+            # Decode without verification to check expiration
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            exp = decoded.get("exp", 0)
+            # Add 5 minute buffer for clock skew
+            return exp > (time.time() + 300)
+        except:
+            return False
+
+
+def get_azure_token() -> str:
+    """Get Azure AD token using device code flow."""
+    config = load_config()
+    
+    tenant_id = config.get("azure_tenant_id")
+    client_id = config.get("azure_client_id")
+    scope = config.get("azure_scope", "api://context-hub/.default")
+    
+    if not tenant_id or not client_id:
+        console.print("[red]Azure AD not configured. Run 'ch config azure' first.[/red]")
+        sys.exit(1)
+    
+    # Check cache first
+    cache_file = config.get("token_cache_file", str(Path.home() / ".context-hub" / "tokens.json"))
+    cache = TokenCache(cache_file)
+    cached_tokens = cache.load_tokens()
+    cache_key = f"{tenant_id}:{client_id}:{scope}"
+    
+    if cache_key in cached_tokens:
+        access_token = cached_tokens[cache_key].get("access_token")
+        if access_token and cache.is_token_valid(access_token):
+            agent_log("Using cached access token", "info")
+            return access_token
+        
+        # Try refresh token
+        refresh_token = cached_tokens[cache_key].get("refresh_token")
+        if refresh_token:
+            agent_log("Attempting token refresh", "info")
+            new_tokens = refresh_azure_token(tenant_id, client_id, refresh_token)
+            if new_tokens:
+                cached_tokens[cache_key] = new_tokens
+                cache.save_tokens(cached_tokens)
+                return new_tokens["access_token"]
+    
+    # Need fresh authentication
+    agent_log("Starting device code flow", "info")
+    return acquire_azure_token_device_flow(tenant_id, client_id, scope, cache, cache_key)
+
+
+def acquire_azure_token_device_flow(tenant_id: str, client_id: str, scope: str, cache: TokenCache, cache_key: str) -> str:
+    """Acquire Azure AD token using device code flow."""
+    
+    # Step 1: Get device code
+    device_code_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/devicecode"
+    device_data = {
+        "client_id": client_id,
+        "scope": scope
+    }
+    
+    agent_log("Requesting device code", "info", {"tenant_id": tenant_id, "scope": scope})
+    
+    try:
+        device_resp = requests.post(device_code_url, data=device_data)
+        device_resp.raise_for_status()
+        device_info = device_resp.json()
+    except requests.RequestException as e:
+        agent_log("Device code request failed", "error", {"error": str(e)})
+        console.print(f"[red]Failed to get device code: {e}[/red]")
+        sys.exit(1)
+    
+    # Step 2: Show user instructions
+    console.print(f"\n[bold]Azure AD Authentication Required[/bold]")
+    console.print(f"Please visit: [blue]{device_info['verification_uri']}[/blue]")
+    console.print(f"And enter code: [yellow]{device_info['user_code']}[/yellow]")
+    console.print("[dim]Opening browser automatically...[/dim]")
+    
+    # Auto-open browser
+    try:
+        webbrowser.open(device_info['verification_uri'])
+    except:
+        pass  # Browser opening is optional
+    
+    # Step 3: Poll for token
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    poll_data = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        "client_id": client_id,
+        "device_code": device_info["device_code"]
+    }
+    
+    interval = device_info.get("interval", 5)
+    expires_in = device_info.get("expires_in", 900)
+    max_attempts = expires_in // interval
+    
+    console.print(f"[dim]Waiting for authentication... (timeout in {expires_in}s)[/dim]")
+    
+    with enhanced_progress_bar("Waiting for authentication...") as progress:
+        if progress:
+            task = progress.add_task("Waiting for user...", total=max_attempts)
+        
+        for attempt in range(max_attempts):
+            if progress:
+                progress.update(task, advance=1)
+            
+            try:
+                token_resp = requests.post(token_url, data=poll_data)
+                token_data = token_resp.json()
+                
+                if token_resp.status_code == 200:
+                    # Success!
+                    agent_log("Authentication successful", "success")
+                    
+                    # Cache tokens
+                    cached_tokens = cache.load_tokens()
+                    cached_tokens[cache_key] = {
+                        "access_token": token_data["access_token"],
+                        "refresh_token": token_data.get("refresh_token"),
+                        "expires_at": time.time() + token_data.get("expires_in", 3600)
+                    }
+                    cache.save_tokens(cached_tokens)
+                    
+                    console.print("[green]✓ Authentication successful![/green]")
+                    return token_data["access_token"]
+                
+                elif token_data.get("error") == "authorization_pending":
+                    # Still waiting
+                    time.sleep(interval)
+                    continue
+                
+                elif token_data.get("error") == "slow_down":
+                    # Rate limited
+                    time.sleep(interval + 5)
+                    continue
+                
+                else:
+                    # Other error
+                    error = token_data.get("error", "unknown_error")
+                    agent_log("Authentication failed", "error", {"error": error})
+                    console.print(f"[red]Authentication failed: {error}[/red]")
+                    sys.exit(1)
+                    
+            except requests.RequestException as e:
+                agent_log("Token polling failed", "error", {"error": str(e)})
+                time.sleep(interval)
+                continue
+    
+    console.print("[red]Authentication timed out[/red]")
+    sys.exit(1)
+
+
+def refresh_azure_token(tenant_id: str, client_id: str, refresh_token: str) -> Optional[Dict[str, Any]]:
+    """Refresh Azure AD token using refresh token."""
+    token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+    refresh_data = {
+        "grant_type": "refresh_token",
+        "client_id": client_id,
+        "refresh_token": refresh_token
+    }
+    
+    try:
+        resp = requests.post(token_url, data=refresh_data)
+        if resp.status_code == 200:
+            token_data = resp.json()
+            agent_log("Token refresh successful", "success")
+            return {
+                "access_token": token_data["access_token"],
+                "refresh_token": token_data.get("refresh_token", refresh_token),
+                "expires_at": time.time() + token_data.get("expires_in", 3600)
+            }
+    except requests.RequestException:
+        pass
+    
+    agent_log("Token refresh failed", "warning")
+    return None
 
 
 def download_folder_recursive(folder_id: str, local_path: Path, progress=None, task_id=None) -> Dict[str, str]:
@@ -461,54 +727,111 @@ def status():
     """Show the working directory status."""
     config = load_config()
     current_workspace = config.get("current_workspace") or "/"
+    user = get_current_user()
     
-    console.print(f"[bold]Context Hub Status[/bold]")
-    console.print(f"User: [cyan]{get_current_user()}[/cyan]")
-    console.print(f"Workspace: [blue]{current_workspace}[/blue]")
-    
-    # Get current folder info
-    folder_id = resolve_path("")
-    folder_info = api_request("GET", f"/docs/{folder_id}")
-    items = api_request("GET", f"/folders/{folder_id}")
-    
-    if not items:
-        console.print("\n[dim]Empty workspace[/dim]")
-        return
-    
-    # Show recent activity
-    console.print(f"\n[bold]Contents ({len(items)} items):[/bold]")
-    table = Table(show_header=True, header_style="bold magenta")
-    table.add_column("Type", width=8)
-    table.add_column("Name", style="cyan")
-    table.add_column("Size", justify="right", width=8)
-    table.add_column("Modified", width=12)
-    
-    for item in items:
-        doc_type = item["doc_type"]
-        if doc_type == "Folder":
-            type_str = "📁 dir"
-            size_str = ""
-        elif doc_type == "IndexGuide":
-            type_str = "📋 guide"
-            size_str = ""
-        else:
-            type_str = "📄 file"
-            # Get file details for size
-            try:
-                doc = api_request("GET", f"/docs/{item['id']}")
-                size_str = format_size(doc.get("content", ""))
-            except:
-                size_str = ""
+    try:
+        # Get current folder info
+        folder_id = resolve_path("")
+        folder_info = api_request("GET", f"/docs/{folder_id}")
+        items = api_request("GET", f"/folders/{folder_id}")
         
-        table.add_row(type_str, item["name"], size_str, format_time_ago(""))
-    
-    console.print(table)
-    
-    # Show shared folders in root
-    if current_workspace == "/":
-        shared_count = sum(1 for item in items if item["name"].endswith(" (shared)"))
-        if shared_count > 0:
-            console.print(f"\n[yellow]📤 {shared_count} shared folders available[/yellow]")
+        # Process items for structured output
+        processed_items = []
+        for item in items:
+            doc_type = item["doc_type"]
+            processed_item = {
+                "id": item["id"],
+                "name": item["name"],
+                "type": doc_type.lower(),
+                "doc_type": doc_type
+            }
+            
+            # Add size for files
+            if doc_type not in ["Folder", "IndexGuide"]:
+                try:
+                    doc = api_request("GET", f"/docs/{item['id']}")
+                    content = doc.get("content", "")
+                    processed_item["size_bytes"] = len(content.encode('utf-8'))
+                    processed_item["size_human"] = format_size(content)
+                    processed_item["line_count"] = len(content.splitlines())
+                except:
+                    processed_item["size_bytes"] = 0
+                    processed_item["size_human"] = ""
+                    processed_item["line_count"] = 0
+            
+            processed_items.append(processed_item)
+        
+        # Count types
+        folders = [item for item in processed_items if item["type"] == "folder"]
+        files = [item for item in processed_items if item["type"] not in ["folder", "indexguide"]]
+        guides = [item for item in processed_items if item["type"] == "indexguide"]
+        
+        status_data = {
+            "workspace": current_workspace,
+            "user": user,
+            "folder_id": folder_id,
+            "folder_name": folder_info.get("name", ""),
+            "total_items": len(processed_items),
+            "counts": {
+                "folders": len(folders),
+                "files": len(files),
+                "guides": len(guides)
+            },
+            "items": processed_items,
+            "is_empty": len(processed_items) == 0
+        }
+        
+        if JSON_OUTPUT:
+            return llm_response(True, "status", status_data)
+        
+        # Human-friendly output
+        console.print(f"[bold]Context Hub Status[/bold]")
+        console.print(f"User: [cyan]{user}[/cyan]")
+        console.print(f"Workspace: [blue]{current_workspace}[/blue]")
+        
+        if not items:
+            console.print("\n[dim]Empty workspace[/dim]")
+            return
+        
+        # Show contents table
+        console.print(f"\n[bold]Contents ({len(items)} items):[/bold]")
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Type", width=8)
+        table.add_column("Name", style="cyan")
+        table.add_column("Size", justify="right", width=8)
+        table.add_column("Lines", justify="right", width=6)
+        
+        for item in processed_items:
+            if item["type"] == "folder":
+                type_str = "📁 dir"
+                size_str = ""
+                lines_str = ""
+            elif item["type"] == "indexguide":
+                type_str = "📋 guide"
+                size_str = ""
+                lines_str = ""
+            else:
+                type_str = "📄 file"
+                size_str = item.get("size_human", "")
+                lines_str = str(item.get("line_count", ""))
+            
+            table.add_row(type_str, item["name"], size_str, lines_str)
+        
+        console.print(table)
+        
+        # Show shared folders in root
+        if current_workspace == "/":
+            shared_count = sum(1 for item in items if item["name"].endswith(" (shared)"))
+            if shared_count > 0:
+                console.print(f"\n[yellow]📤 {shared_count} shared folders available[/yellow]")
+                
+    except Exception as e:
+        error_msg = str(e)
+        if JSON_OUTPUT:
+            return llm_response(False, "status", error=error_msg)
+        else:
+            console.print(f"[red]Error: {error_msg}[/red]")
+            sys.exit(1)
 
 
 @cli.command()
@@ -557,16 +880,27 @@ def ls(path: str):
 
 @cli.command()
 @click.argument("path")
-def cat(path: str):
+@click.option("--numbered", "-n", is_flag=True, help="Show content with line numbers")
+def cat(path: str, numbered: bool):
     """Show content of a document."""
     doc_id = resolve_path(path)
-    doc = api_request("GET", f"/docs/{doc_id}")
+    
+    # Use numbered format if requested
+    params = {"format": "numbered"} if numbered else {}
+    doc = api_request("GET", f"/docs/{doc_id}", params=params)
     
     if doc["doc_type"] == "Folder":
         console.print(f"[red]Cannot cat a folder. Use 'ch ls {path}' instead.[/red]")
         sys.exit(1)
     
-    content = doc.get("content", "")
+    # Handle numbered or regular content
+    if numbered and "numbered_content" in doc:
+        content = doc["numbered_content"]
+        line_count = doc.get("line_count", 0)
+        agent_log("Retrieved numbered content", "info", {"line_count": line_count})
+    else:
+        content = doc.get("content", "")
+    
     if not content:
         console.print("[dim]Empty file[/dim]")
     else:
@@ -678,6 +1012,221 @@ def rm(path: str):
     
     type_str = "folder" if doc_info["doc_type"] == "Folder" else "file"
     console.print(f"[green]Removed {type_str}: {path}[/green]")
+
+
+@cli.command()
+@click.argument("path")
+@click.option("--patch-file", "-f", help="Apply patch from file")
+@click.option("--patch", "-p", help="Apply patch from string")
+@click.option("--dry-run", "-n", is_flag=True, help="Show what would be patched without applying")
+def patch(path: str, patch_file: str, patch: str, dry_run: bool):
+    """Apply unified diff patch to a document."""
+    doc_id = resolve_path(path)
+    doc_info = api_request("GET", f"/docs/{doc_id}")
+    
+    if doc_info["doc_type"] == "Folder":
+        console.print(f"[red]Cannot patch a folder: {path}[/red]")
+        sys.exit(1)
+    
+    # Get patch content
+    if patch_file:
+        try:
+            patch_content = Path(patch_file).read_text()
+            agent_log("Loaded patch from file", "info", {"file": patch_file, "size": len(patch_content)})
+        except IOError as e:
+            console.print(f"[red]Error reading patch file: {e}[/red]")
+            sys.exit(1)
+    elif patch:
+        patch_content = patch
+        agent_log("Using inline patch", "info", {"size": len(patch_content)})
+    else:
+        console.print("[red]Must specify either --patch-file or --patch[/red]")
+        sys.exit(1)
+    
+    # Validate patch format (basic check)
+    if not any(line.startswith(('@@', '---', '+++', '-', '+')) for line in patch_content.splitlines()):
+        console.print("[yellow]Warning: Patch doesn't look like unified diff format[/yellow]")
+    
+    if dry_run:
+        console.print(f"[blue]Would apply patch to: {path}[/blue]")
+        console.print("[dim]Patch content:[/dim]")
+        console.print(patch_content)
+        console.print("[dim]Use without --dry-run to apply[/dim]")
+        return
+    
+    # Apply patch
+    try:
+        data = {"patch": patch_content}
+        result = api_request("PATCH", f"/docs/{doc_id}", json=data)
+        
+        agent_log("Patch applied successfully", "success", {
+            "document": path,
+            "patch_size": len(patch_content)
+        })
+        
+        console.print(f"[green]✓ Patch applied to: {path}[/green]")
+        if result and "message" in result:
+            console.print(f"[dim]{result['message']}[/dim]")
+            
+    except Exception as e:
+        agent_log("Patch application failed", "error", {"error": str(e)})
+        console.print(f"[red]Patch failed: {e}[/red]")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("path")
+@click.argument("local_file", required=False)
+@click.option("--output", "-o", help="Save diff to file")
+@click.option("--context", "-c", default=3, help="Number of context lines")
+def diff(path: str, local_file: str, output: str, context: int):
+    """Generate unified diff between document and local file."""
+    doc_id = resolve_path(path)
+    doc = api_request("GET", f"/docs/{doc_id}")
+    
+    if doc["doc_type"] == "Folder":
+        console.print(f"[red]Cannot diff a folder: {path}[/red]")
+        sys.exit(1)
+    
+    # Get document content
+    doc_content = doc.get("content", "").splitlines(keepends=True)
+    doc_name = f"a/{doc['name']}"
+    
+    if local_file:
+        # Compare with local file
+        try:
+            local_content = Path(local_file).read_text().splitlines(keepends=True)
+            local_name = f"b/{Path(local_file).name}"
+        except IOError as e:
+            console.print(f"[red]Error reading local file: {e}[/red]")
+            sys.exit(1)
+    else:
+        # Compare with stdin or empty
+        console.print("[blue]Enter content to compare (Ctrl+D when done):[/blue]")
+        try:
+            import sys
+            stdin_content = sys.stdin.read().splitlines(keepends=True)
+            local_content = stdin_content
+            local_name = "b/stdin"
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Diff cancelled[/yellow]")
+            sys.exit(0)
+    
+    # Generate unified diff
+    diff_lines = list(difflib.unified_diff(
+        doc_content, 
+        local_content,
+        fromfile=doc_name,
+        tofile=local_name,
+        n=context
+    ))
+    
+    if not diff_lines:
+        console.print("[green]No differences found[/green]")
+        return
+    
+    diff_text = ''.join(diff_lines)
+    
+    if output:
+        # Save to file
+        Path(output).write_text(diff_text)
+        console.print(f"[green]Diff saved to: {output}[/green]")
+        agent_log("Diff saved to file", "success", {
+            "output_file": output,
+            "diff_size": len(diff_text)
+        })
+    else:
+        # Print to console
+        console.print(diff_text)
+    
+    # Show summary
+    added = len([line for line in diff_lines if line.startswith('+')])
+    removed = len([line for line in diff_lines if line.startswith('-')])
+    console.print(f"[dim]+{added} -{removed} lines[/dim]")
+
+
+@cli.command()
+@click.argument("operation", type=click.Choice(['create', 'update', 'patch', 'delete']))
+@click.option("--file", "-f", required=True, help="JSON file with batch operations")
+@click.option("--dry-run", "-n", is_flag=True, help="Show what would be done without executing")
+@click.option("--parallel", "-p", default=1, help="Number of parallel operations")
+def batch(operation: str, file: str, dry_run: bool, parallel: int):
+    """Execute batch operations from JSON file."""
+    try:
+        batch_data = json.loads(Path(file).read_text())
+    except (IOError, json.JSONDecodeError) as e:
+        console.print(f"[red]Error reading batch file: {e}[/red]")
+        sys.exit(1)
+    
+    if not isinstance(batch_data, list):
+        console.print("[red]Batch file must contain a JSON array[/red]")
+        sys.exit(1)
+    
+    console.print(f"[blue]Batch {operation}: {len(batch_data)} operations[/blue]")
+    
+    if dry_run:
+        console.print("[dim]Dry run - no changes will be made[/dim]")
+        for i, item in enumerate(batch_data, 1):
+            console.print(f"[dim]{i}. {operation} {item.get('path', item.get('name', 'unnamed'))}[/dim]")
+        return
+    
+    success_count = 0
+    error_count = 0
+    
+    with enhanced_progress_bar(f"Executing {operation} operations...") as progress:
+        if progress:
+            task = progress.add_task(f"Processing...", total=len(batch_data))
+        
+        for i, item in enumerate(batch_data):
+            if progress:
+                progress.update(task, advance=1, description=f"Processing {i+1}/{len(batch_data)}")
+            
+            try:
+                if operation == "create":
+                    # Expected: {"name": "file.txt", "content": "...", "parent_folder_id": "..."}
+                    api_request("POST", "/docs", json=item)
+                    console.print(f"[green]✓ Created: {item.get('name')}[/green]")
+                
+                elif operation == "update":
+                    # Expected: {"path": "/file.txt", "content": "..."}
+                    doc_id = resolve_path(item["path"])
+                    update_data = {k: v for k, v in item.items() if k != "path"}
+                    api_request("PUT", f"/docs/{doc_id}", json=update_data)
+                    console.print(f"[green]✓ Updated: {item['path']}[/green]")
+                
+                elif operation == "patch":
+                    # Expected: {"path": "/file.txt", "patch": "unified diff"}
+                    doc_id = resolve_path(item["path"])
+                    api_request("PATCH", f"/docs/{doc_id}", json={"patch": item["patch"]})
+                    console.print(f"[green]✓ Patched: {item['path']}[/green]")
+                
+                elif operation == "delete":
+                    # Expected: {"path": "/file.txt"}
+                    doc_id = resolve_path(item["path"])
+                    api_request("DELETE", f"/docs/{doc_id}")
+                    console.print(f"[green]✓ Deleted: {item['path']}[/green]")
+                
+                success_count += 1
+                
+            except Exception as e:
+                error_count += 1
+                path = item.get("path", item.get("name", "unknown"))
+                console.print(f"[red]✗ Failed {operation} {path}: {e}[/red]")
+                
+                if error_count > len(batch_data) // 2:
+                    console.print("[red]Too many errors, stopping batch operation[/red]")
+                    break
+    
+    console.print(f"\n[bold]Batch {operation} complete:[/bold]")
+    console.print(f"[green]Success: {success_count}[/green]")
+    console.print(f"[red]Errors: {error_count}[/red]")
+    
+    agent_log("Batch operation completed", "info", {
+        "operation": operation,
+        "total": len(batch_data),
+        "success": success_count,
+        "errors": error_count
+    })
 
 
 @cli.command()
@@ -793,7 +1342,28 @@ def show():
     table.add_row("User", config.get("user", "Not set"))
     table.add_row("Agent", config.get("agent", "Not set"))
     table.add_row("Workspace", config.get("current_workspace", "/"))
+    table.add_row("Azure Tenant ID", config.get("azure_tenant_id", "Not set"))
+    table.add_row("Azure Client ID", config.get("azure_client_id", "Not set"))
+    table.add_row("Azure Scope", config.get("azure_scope", "api://context-hub/.default"))
     
+    # Show authentication status
+    auth_status = "Legacy Headers"
+    if config.get("azure_tenant_id") and config.get("azure_client_id"):
+        cache_file = config.get("token_cache_file", str(Path.home() / ".context-hub" / "tokens.json"))
+        cache = TokenCache(cache_file)
+        cached_tokens = cache.load_tokens()
+        cache_key = f"{config['azure_tenant_id']}:{config['azure_client_id']}:{config.get('azure_scope', 'api://context-hub/.default')}"
+        
+        if cache_key in cached_tokens:
+            access_token = cached_tokens[cache_key].get("access_token")
+            if access_token and cache.is_token_valid(access_token):
+                auth_status = "Azure AD (Valid Token)"
+            else:
+                auth_status = "Azure AD (Token Expired)"
+        else:
+            auth_status = "Azure AD (Not Authenticated)"
+    
+    table.add_row("Auth Status", auth_status)
     console.print(table)
 
 
@@ -814,9 +1384,14 @@ def set(setting: str, value: Optional[str]):
         save_config(config)
         console.print(f"[green]JSON output: {'enabled' if config['json_output'] else 'disabled'}[/green]")
     
+    elif setting == "workspace":
+        config["current_workspace"] = value or "/"
+        save_config(config)
+        console.print(f"[green]Workspace set to: {config['current_workspace']}[/green]")
+    
     else:
         console.print(f"[red]Unknown setting: {setting}[/red]")
-        console.print("Available settings: verbose, json")
+        console.print("Available settings: verbose, json, workspace")
         sys.exit(1)
 
 
@@ -826,6 +1401,120 @@ def reset():
     config = DEFAULT_CONFIG.copy()
     save_config(config)
     console.print("[green]Configuration reset to defaults[/green]")
+
+
+@config.command()
+@click.argument("tenant_id", required=False)
+@click.argument("client_id", required=False)
+@click.option("--scope", default="api://context-hub/.default", help="Azure AD scope")
+@click.option("--from-env", is_flag=True, help="Load from ../env.azure file")
+def azure(tenant_id: str, client_id: str, scope: str, from_env: bool):
+    """Configure Azure AD authentication."""
+    config = load_config()
+    
+    if from_env or (not tenant_id and not client_id):
+        # Load from .env.azure file
+        env_file = Path(__file__).parent.parent / ".env.azure"
+        if env_file.exists():
+            console.print(f"[blue]Loading Azure AD config from {env_file}[/blue]")
+            
+            env_vars = {}
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+            
+            tenant_id = env_vars.get("AAD_TENANT_ID")
+            client_id = env_vars.get("AAD_CLIENT_ID")
+            
+            if not tenant_id or not client_id:
+                console.print("[red]AAD_TENANT_ID or AAD_CLIENT_ID not found in .env.azure[/red]")
+                sys.exit(1)
+                
+            console.print("[green]✓ Found Azure AD configuration in .env.azure[/green]")
+        else:
+            console.print(f"[red].env.azure file not found at {env_file}[/red]")
+            console.print("Usage: ch config azure <tenant-id> <client-id>")
+            sys.exit(1)
+    
+    if not tenant_id or not client_id:
+        console.print("[red]Missing tenant_id or client_id[/red]")
+        console.print("Usage: ch config azure <tenant-id> <client-id>")
+        console.print("   or: ch config azure --from-env")
+        sys.exit(1)
+    
+    config["azure_tenant_id"] = tenant_id
+    config["azure_client_id"] = client_id
+    config["azure_scope"] = scope
+    save_config(config)
+    
+    console.print("[green]Azure AD configuration saved[/green]")
+    console.print(f"Tenant ID: [cyan]{tenant_id}[/cyan]")
+    console.print(f"Client ID: [cyan]{client_id}[/cyan]")
+    console.print(f"Scope: [cyan]{scope}[/cyan]")
+    console.print("\n[dim]Run any command to authenticate with Azure AD[/dim]")
+
+
+@config.command()
+def login():
+    """Force Azure AD login/re-authentication."""
+    config = load_config()
+    
+    if not config.get("azure_tenant_id") or not config.get("azure_client_id"):
+        console.print("[red]Azure AD not configured. Run 'ch config azure' first.[/red]")
+        sys.exit(1)
+    
+    # Clear existing tokens to force fresh login
+    cache_file = config.get("token_cache_file", str(Path.home() / ".context-hub" / "tokens.json"))
+    cache = TokenCache(cache_file)
+    cache_key = f"{config['azure_tenant_id']}:{config['azure_client_id']}:{config.get('azure_scope', 'api://context-hub/.default')}"
+    cached_tokens = cache.load_tokens()
+    if cache_key in cached_tokens:
+        del cached_tokens[cache_key]
+        cache.save_tokens(cached_tokens)
+    
+    console.print("[blue]Initiating Azure AD authentication...[/blue]")
+    
+    try:
+        access_token = get_azure_token()
+        console.print("[green]✓ Successfully authenticated with Azure AD![/green]")
+        
+        # Decode token to show user info
+        try:
+            decoded = jwt.decode(access_token, options={"verify_signature": False})
+            if "name" in decoded:
+                console.print(f"Logged in as: [cyan]{decoded['name']}[/cyan]")
+            elif "upn" in decoded:
+                console.print(f"Logged in as: [cyan]{decoded['upn']}[/cyan]")
+        except:
+            pass
+            
+    except Exception as e:
+        console.print(f"[red]Authentication failed: {e}[/red]")
+        sys.exit(1)
+
+
+@config.command()
+def logout():
+    """Clear cached Azure AD tokens."""
+    config = load_config()
+    
+    if not config.get("azure_tenant_id"):
+        console.print("[yellow]No Azure AD configuration found[/yellow]")
+        return
+    
+    cache_file = config.get("token_cache_file", str(Path.home() / ".context-hub" / "tokens.json"))
+    cache = TokenCache(cache_file)
+    cache_key = f"{config['azure_tenant_id']}:{config['azure_client_id']}:{config.get('azure_scope', 'api://context-hub/.default')}"
+    cached_tokens = cache.load_tokens()
+    
+    if cache_key in cached_tokens:
+        del cached_tokens[cache_key]
+        cache.save_tokens(cached_tokens)
+        console.print("[green]✓ Logged out from Azure AD[/green]")
+    else:
+        console.print("[yellow]No active session found[/yellow]")
 
 
 @cli.command()
@@ -1241,6 +1930,283 @@ def auto_sync(local_path: str, watch: bool, interval: int):
                     
     except KeyboardInterrupt:
         console.print("\n[dim]Auto-sync stopped[/dim]")
+
+
+# ============================================================================
+# LLM-OPTIMIZED COMMANDS
+# ============================================================================
+
+@cli.group()
+def llm():
+    """LLM-optimized commands with structured output."""
+    pass
+
+
+@llm.command()
+@click.argument("path")
+@click.option("--lines", "-l", help="Specific line range (e.g., 1-10, 5, 10-)")
+def read(path: str, lines: str):
+    """Read document with line numbers optimized for LLM processing."""
+    try:
+        doc_id = resolve_path(path)
+        
+        # Get numbered content
+        doc = api_request("GET", f"/docs/{doc_id}", params={"format": "numbered"})
+        
+        if doc["doc_type"] == "Folder":
+            return llm_response(False, "llm_read", error="Path is a folder, not a file")
+        
+        content = doc.get("numbered_content", "")
+        line_count = doc.get("line_count", 0)
+        
+        # Parse line range if specified
+        if lines:
+            content_lines = content.splitlines()
+            try:
+                if '-' in lines:
+                    if lines.endswith('-'):
+                        # "10-" means from line 10 to end
+                        start = int(lines[:-1]) - 1
+                        filtered_lines = content_lines[start:]
+                    elif lines.startswith('-'):
+                        # "-10" means first 10 lines
+                        end = int(lines[1:])
+                        filtered_lines = content_lines[:end]
+                    else:
+                        # "5-10" means lines 5 to 10
+                        start, end = map(int, lines.split('-'))
+                        filtered_lines = content_lines[start-1:end]
+                else:
+                    # Single line number
+                    line_num = int(lines) - 1
+                    filtered_lines = [content_lines[line_num]] if 0 <= line_num < len(content_lines) else []
+                
+                content = '\n'.join(filtered_lines)
+            except (ValueError, IndexError):
+                return llm_response(False, "llm_read", error=f"Invalid line range: {lines}")
+        
+        data = {
+            "path": path,
+            "doc_id": doc_id,
+            "content": content,
+            "line_count": line_count,
+            "doc_type": doc["doc_type"],
+            "name": doc.get("name", ""),
+            "size_bytes": len(doc.get("content", "").encode('utf-8'))
+        }
+        
+        if lines:
+            data["line_range"] = lines
+        
+        return llm_response(True, "llm_read", data)
+        
+    except Exception as e:
+        return llm_response(False, "llm_read", error=str(e))
+
+
+@llm.command()
+@click.argument("path")
+@click.argument("content")
+@click.option("--patch-mode", is_flag=True, help="Treat content as unified diff patch")
+def write(path: str, content: str, patch_mode: bool):
+    """Write or patch document content optimized for LLM."""
+    try:
+        doc_id = resolve_path(path)
+        
+        if patch_mode:
+            # Apply as patch
+            result = api_request("PATCH", f"/docs/{doc_id}", json={"patch": content})
+            operation = "llm_patch"
+        else:
+            # Full content replacement
+            doc_info = api_request("GET", f"/docs/{doc_id}")
+            name = doc_info.get("name", "")
+            
+            result = api_request("PUT", f"/docs/{doc_id}", json={
+                "name": name,
+                "content": content
+            })
+            operation = "llm_write"
+        
+        # Get updated info
+        updated_doc = api_request("GET", f"/docs/{doc_id}")
+        new_content = updated_doc.get("content", "")
+        
+        data = {
+            "path": path,
+            "doc_id": doc_id,
+            "content_length": len(new_content),
+            "line_count": len(new_content.splitlines()),
+            "operation_type": "patch" if patch_mode else "write"
+        }
+        
+        return llm_response(True, operation, data)
+        
+    except Exception as e:
+        operation = "llm_patch" if patch_mode else "llm_write"
+        return llm_response(False, operation, error=str(e))
+
+
+@llm.command()
+@click.argument("query")
+@click.option("--limit", default=50, help="Maximum results")
+@click.option("--include-content", is_flag=True, help="Include file content in results")
+def find(query: str, limit: int, include_content: bool):
+    """Search with structured LLM-friendly output."""
+    try:
+        params = {"q": query, "limit": limit}
+        results = api_request("GET", "/search", params=params)
+        
+        processed_results = []
+        for result in results:
+            processed_result = {
+                "name": result.get("name", ""),
+                "snippet": result.get("snippet", ""),
+                "score": result.get("score", 0),
+                "path": result.get("path", ""),
+                "doc_type": result.get("doc_type", "")
+            }
+            
+            if include_content and result.get("id"):
+                try:
+                    doc = api_request("GET", f"/docs/{result['id']}")
+                    processed_result["full_content"] = doc.get("content", "")
+                    processed_result["line_count"] = len(doc.get("content", "").splitlines())
+                except:
+                    processed_result["full_content"] = ""
+                    processed_result["line_count"] = 0
+            
+            processed_results.append(processed_result)
+        
+        data = {
+            "query": query,
+            "total_results": len(processed_results),
+            "results": processed_results,
+            "include_content": include_content
+        }
+        
+        return llm_response(True, "llm_find", data)
+        
+    except Exception as e:
+        return llm_response(False, "llm_find", error=str(e))
+
+
+@llm.command()
+@click.argument("path", default="")
+def inspect(path: str):
+    """Get detailed structured information about path for LLM analysis."""
+    try:
+        doc_id = resolve_path(path)
+        doc_info = api_request("GET", f"/docs/{doc_id}")
+        
+        data = {
+            "id": doc_id,
+            "name": doc_info.get("name", ""),
+            "doc_type": doc_info.get("doc_type", ""),
+            "path": path or "/",
+        }
+        
+        if doc_info["doc_type"] == "Folder":
+            # Get folder contents
+            items = api_request("GET", f"/folders/{doc_id}")
+            data["is_folder"] = True
+            data["item_count"] = len(items)
+            data["items"] = [
+                {
+                    "id": item["id"],
+                    "name": item["name"],
+                    "type": item["doc_type"].lower(),
+                    "doc_type": item["doc_type"]
+                }
+                for item in items
+            ]
+        else:
+            # Get file content info
+            content = doc_info.get("content", "")
+            data["is_folder"] = False
+            data["content"] = content
+            data["size_bytes"] = len(content.encode('utf-8'))
+            data["line_count"] = len(content.splitlines())
+            data["is_empty"] = len(content.strip()) == 0
+        
+        return llm_response(True, "llm_inspect", data)
+        
+    except Exception as e:
+        return llm_response(False, "llm_inspect", error=str(e))
+
+
+@llm.command()
+def schema():
+    """Output JSON schema for LLM command responses."""
+    schema_data = {
+        "response_format": {
+            "success": "boolean - operation success status",
+            "operation": "string - operation type identifier", 
+            "timestamp": "string - ISO timestamp",
+            "data": "object - operation-specific data",
+            "error": "string|null - error message if failed"
+        },
+        "operations": {
+            "llm_read": {
+                "data": {
+                    "path": "string - document path",
+                    "doc_id": "string - document UUID",
+                    "content": "string - file content with line numbers",
+                    "line_count": "number - total lines",
+                    "doc_type": "string - document type",
+                    "name": "string - document name",
+                    "size_bytes": "number - content size",
+                    "line_range": "string - optional line range"
+                }
+            },
+            "llm_write": {
+                "data": {
+                    "path": "string - document path",
+                    "doc_id": "string - document UUID", 
+                    "content_length": "number - new content length",
+                    "line_count": "number - new line count",
+                    "operation_type": "string - 'write' or 'patch'"
+                }
+            },
+            "llm_find": {
+                "data": {
+                    "query": "string - search query",
+                    "total_results": "number - result count",
+                    "results": "array - search results with name, snippet, score",
+                    "include_content": "boolean - whether full content included"
+                }
+            },
+            "llm_inspect": {
+                "data": {
+                    "id": "string - document/folder UUID",
+                    "name": "string - item name",
+                    "doc_type": "string - type",
+                    "path": "string - full path",
+                    "is_folder": "boolean - whether item is folder",
+                    "content": "string - file content (if file)",
+                    "items": "array - folder contents (if folder)"
+                }
+            }
+        },
+        "examples": {
+            "successful_read": {
+                "success": True,
+                "operation": "llm_read",
+                "data": {
+                    "path": "/project/main.py",
+                    "content": "1: def main():\n2:     print('Hello')\n3:     return 0",
+                    "line_count": 3
+                }
+            },
+            "error_response": {
+                "success": False,
+                "operation": "llm_read", 
+                "error": "File not found: /invalid/path"
+            }
+        }
+    }
+    
+    print(json.dumps(schema_data, indent=2))
 
 
 if __name__ == "__main__":
