@@ -69,6 +69,8 @@ Cargo.lock
 /context-hub/snapshots/
 /context-hub/index/.tantivy-*.lock
 /context-hub/server.log
+context-hub/data/
+context-hub/index/
 
 # Node
 node_modules/
