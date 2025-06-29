@@ -34,8 +34,13 @@ check_prerequisites() {
         exit 1
     fi
     
-    # Check Docker Compose
-    if ! command -v docker-compose &> /dev/null && ! docker compose version &> /dev/null; then
+    # Check Docker Compose (prefer v2, fallback to v1)
+    if docker compose version &> /dev/null; then
+        DOCKER_COMPOSE="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE="docker-compose"
+        print_warn "Using docker-compose v1 (deprecated). Consider upgrading to Docker Compose v2."
+    else
         print_error "Docker Compose is not installed. Please install Docker Compose first."
         exit 1
     fi
@@ -53,42 +58,26 @@ check_prerequisites() {
 setup_environment() {
     print_info "Setting up environment..."
     
-    # Create .env file if it doesn't exist
-    if [ ! -f .env ]; then
-        cat > .env << EOF
-# Lightning OS Local Development Environment
-
-# OpenAI Configuration (required for LLM features)
-OPENAI_API_KEY=your-openai-api-key-here
-
-# Authentication (for local development)
-JWT_SECRET=local-development-secret-key-change-in-production
-AUTH_ENABLED=false
-
-# Logging
-LOG_LEVEL=INFO
-
-# Agent Type (conseil, vex, etc.)
-AGENT_TYPE=conseil
-
-# Lightning Mode
-LIGHTNING_MODE=local
-EOF
-        print_warn "Created .env file. Please update OPENAI_API_KEY before running."
-        print_info "Edit .env file and run this script again."
-        exit 0
-    fi
-    
-    # Source environment variables
-    source .env
-    
-    # Check for required variables
-    if [ "$OPENAI_API_KEY" == "your-openai-api-key-here" ] || [ -z "$OPENAI_API_KEY" ]; then
-        print_error "Please set OPENAI_API_KEY in .env file"
+    # Check if .env.local exists
+    if [ ! -f .env.local ]; then
+        print_error ".env.local file not found!"
+        print_info "Please ensure .env.local exists with your configuration."
         exit 1
     fi
     
-    print_info "✓ Environment configured"
+    # Source environment variables from .env.local
+    set -a  # automatically export all variables
+    source .env.local
+    set +a  # turn off automatic export
+    
+    # Check for required variables
+    if [ -z "$OPENAI_API_KEY" ]; then
+        print_error "OPENAI_API_KEY is not set in .env.local"
+        print_info "Please configure your API keys in .env.local"
+        exit 1
+    fi
+    
+    print_info "✓ Environment configured from .env.local"
 }
 
 # Build services
@@ -96,7 +85,7 @@ build_services() {
     print_info "Building services..."
     
     # Build with Docker Compose
-    docker-compose build
+    $DOCKER_COMPOSE -f docker-compose.local.yml build
     
     print_info "✓ Services built"
 }
@@ -106,14 +95,14 @@ start_services() {
     print_info "Starting Lightning OS services..."
     
     # Start core services first
-    docker-compose -f docker-compose.local.yml up -d postgres redis rabbitmq
+    $DOCKER_COMPOSE -f docker-compose.local.yml up -d postgres redis rabbitmq
     
     # Wait for databases to be ready
     print_info "Waiting for databases to initialize..."
     sleep 10
     
     # Start remaining services
-    docker-compose -f docker-compose.local.yml up -d
+    $DOCKER_COMPOSE -f docker-compose.local.yml up -d
     
     print_info "✓ All services started"
 }
@@ -121,7 +110,7 @@ start_services() {
 # Show service status
 show_status() {
     print_info "Service Status:"
-    docker-compose ps
+    $DOCKER_COMPOSE -f docker-compose.local.yml ps
     
     echo ""
     print_info "Access Points:"
@@ -133,8 +122,8 @@ show_status() {
     echo "  • Context Hub:      http://localhost:3000"
     echo "  • RabbitMQ Admin:   http://localhost:15672 (lightning/lightning123)"
     echo ""
-    print_info "Logs: docker-compose logs -f [service-name]"
-    print_info "Stop: docker-compose down"
+    print_info "Logs: $DOCKER_COMPOSE logs -f [service-name]"
+    print_info "Stop: $DOCKER_COMPOSE down"
 }
 
 # Main execution

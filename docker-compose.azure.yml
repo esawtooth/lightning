@@ -181,11 +181,11 @@ services:
       - azurite
       - redis
 
-  # Integrated App UI in Azure mode
-  integrated-app:
+  # React Frontend UI in Azure mode
+  frontend:
     build:
-      context: .
-      dockerfile: ui/app/Dockerfile
+      context: ./frontend
+      dockerfile: docker/Dockerfile
       args:
         LIGHTNING_MODE: azure
     environment:
@@ -211,8 +211,7 @@ services:
     depends_on:
       - lightning-api
       - context-hub
-    volumes:
-      - ./ui/integrated_app:/app
+    volumes: []
 
 volumes:
   azurite_data:

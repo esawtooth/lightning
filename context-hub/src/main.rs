@@ -4,6 +4,7 @@ use context_hub_core::{
     indexer,
     pointer::BlobPointerResolver,
     search,
+    services::compress::{compress_monitor_task, CompressConfig, CompressService},
     snapshot,
     storage,
 };
@@ -30,10 +31,10 @@ async fn main() -> anyhow::Result<()> {
 
     let store = Arc::new(RwLock::new(storage::crdt::DocumentStore::new(&data_dir)?));
     let search = Arc::new(search::SearchIndex::new(&index_dir)?);
+    let blob_resolver = Arc::new(BlobPointerResolver::new(&blob_dir)?);
     {
         let mut guard = store.write().await;
-        let blob_resolver = Arc::new(BlobPointerResolver::new(&blob_dir)?);
-        guard.register_resolver("blob", blob_resolver);
+        guard.register_resolver("blob", blob_resolver.clone());
     }
     {
         let store_guard = store.read().await;
@@ -49,26 +50,60 @@ async fn main() -> anyhow::Result<()> {
     };
     let snapshot_retention = std::env::var("SNAPSHOT_RETENTION")
         .ok()
-        .and_then(|v| v.parse::<usize>().ok());
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(10);
+    
+    // Create the compress service
+    let compress_config = CompressConfig {
+        threshold_percent: std::env::var("COMPRESS_THRESHOLD_PERCENT")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(100.0),
+        min_interval_secs: std::env::var("COMPRESS_MIN_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(300),
+        max_interval_secs: std::env::var("COMPRESS_MAX_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(86400),
+        snapshot_retention,
+        enable_wal_compact: false, // WAL not initialized in this example
+        enable_blob_cleanup: true,
+        enable_index_optimize: true,
+    };
+    
+    let compress_service = Arc::new(
+        CompressService::new(
+            store.clone(),
+            snapshot_mgr.clone(),
+            &data_dir,
+            &index_dir,
+            &data_dir, // Using data_dir as WAL dir for now
+            compress_config,
+        )
+        .with_search_index(search.clone())
+        .with_blob_resolver(blob_resolver),
+    );
+    
     let router = api::router(
         store.clone(),
         PathBuf::from(&snapshot_dir),
-        snapshot_retention,
+        Some(snapshot_retention),
         indexer.clone(),
         events.clone(),
         verifier,
     );
-    // spawn periodic snapshots every hour on a LocalSet so non-Send types work
+    
+    // Spawn the compress monitor task instead of the old snapshot task
     let local = LocalSet::new();
-    let interval = std::env::var("SNAPSHOT_INTERVAL_SECS")
+    let check_interval = std::env::var("COMPRESS_CHECK_INTERVAL_SECS")
         .ok()
         .and_then(|v| v.parse::<u64>().ok())
-        .unwrap_or(3600);
-    local.spawn_local(snapshot::snapshot_task(
-        store.clone(),
-        snapshot_mgr.clone(),
-        Duration::from_secs(interval),
-        snapshot_retention,
+        .unwrap_or(60); // Check every minute
+    local.spawn_local(compress_monitor_task(
+        compress_service,
+        Duration::from_secs(check_interval),
     ));
     let app = Router::new().merge(router);
 

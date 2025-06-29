@@ -1,6 +1,7 @@
 //! API modules for Context Hub
 
 pub mod auth_middleware;
+pub mod compress;
 
 #[cfg(feature = "distributed")]
 pub mod distributed;

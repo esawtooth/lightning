@@ -4,6 +4,7 @@ pub mod events;
 pub mod indexer;
 pub mod pointer;
 pub mod search;
+pub mod services;
 pub mod shard;
 pub mod snapshot;
 pub mod storage;

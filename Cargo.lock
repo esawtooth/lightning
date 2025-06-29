@@ -1109,7 +1109,9 @@ dependencies = [
  "tempfile",
  "tokio",
  "tokio-stream",
+ "tracing",
  "uuid",
+ "walkdir",
 ]
 
 [[package]]

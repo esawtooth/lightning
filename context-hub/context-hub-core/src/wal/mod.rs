@@ -153,9 +153,134 @@ impl WriteAheadLog {
     }
     
     /// Compact old segments by removing entries for deleted documents
-    pub async fn compact(&self, _active_docs: &[Uuid]) -> Result<()> {
-        // Implementation would rewrite segments excluding deleted docs
-        Ok(())
+    /// Returns (segments_processed, entries_removed, bytes_freed)
+    pub async fn compact(&self, active_docs: &[Uuid]) -> Result<(usize, usize, u64)> {
+        let active_set: std::collections::HashSet<Uuid> = active_docs.iter().cloned().collect();
+        let mut segments_processed = 0;
+        let mut entries_removed = 0;
+        let mut bytes_freed = 0u64;
+
+        // Get all segment files
+        let mut segment_files = Vec::new();
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            if let Some(name_str) = name.to_str() {
+                if name_str.starts_with("wal-") && name_str.ends_with(".log") {
+                    if let Ok(id) = name_str[4..name_str.len()-4].parse::<u64>() {
+                        // Don't compact the current segment
+                        let current_id = self.current_segment.read().id;
+                        if id < current_id {
+                            segment_files.push((id, entry.path()));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Process each segment
+        for (_seg_id, path) in segment_files {
+            let original_size = std::fs::metadata(&path)?.len();
+            
+            // Read all entries and filter out deleted documents
+            let mut kept_entries = Vec::new();
+            let file = File::open(&path)?;
+            let mut reader = BufReader::new(file);
+            
+            // Skip magic
+            reader.seek(SeekFrom::Start(8))?;
+            
+            while let Ok(entry) = Self::decode_entry(&mut reader) {
+                // Keep entries for active documents or delete operations
+                // (we keep delete operations for audit trail)
+                if active_set.contains(&entry.doc_id) || matches!(entry.operation, Operation::Delete) {
+                    kept_entries.push(entry);
+                } else {
+                    entries_removed += 1;
+                }
+            }
+
+            // If we removed any entries, rewrite the segment
+            if entries_removed > 0 {
+                let temp_path = path.with_extension("tmp");
+                {
+                    let mut temp_file = OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .truncate(true)
+                        .open(&temp_path)?;
+                    
+                    // Write magic
+                    temp_file.write_all(MAGIC)?;
+                    
+                    // Write kept entries
+                    for entry in kept_entries {
+                        let encoded = Self::encode_entry(&entry)?;
+                        temp_file.write_all(&encoded)?;
+                    }
+                    
+                    temp_file.sync_all()?;
+                }
+                
+                // Calculate freed bytes
+                let new_size = std::fs::metadata(&temp_path)?.len();
+                bytes_freed += original_size.saturating_sub(new_size);
+                
+                // Atomically replace the original file
+                std::fs::rename(temp_path, path)?;
+                segments_processed += 1;
+            }
+        }
+
+        Ok((segments_processed, entries_removed, bytes_freed))
+    }
+
+    /// Remove old WAL segments that have been included in snapshots
+    /// Only removes segments older than the given cutoff time
+    pub async fn cleanup_old_segments(&self, cutoff_timestamp: u64) -> Result<(usize, u64)> {
+        let mut removed_count = 0;
+        let mut freed_bytes = 0u64;
+
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let name = entry.file_name();
+            if let Some(name_str) = name.to_str() {
+                if name_str.starts_with("wal-") && name_str.ends_with(".log") {
+                    if let Ok(id) = name_str[4..name_str.len()-4].parse::<u64>() {
+                        let current_id = self.current_segment.read().id;
+                        
+                        // Only remove segments older than current and before cutoff
+                        if id < current_id {
+                            let path = entry.path();
+                            
+                            // Check if all entries in this segment are before cutoff
+                            let mut all_before_cutoff = true;
+                            if let Ok(file) = File::open(&path) {
+                                let mut reader = BufReader::new(file);
+                                reader.seek(SeekFrom::Start(8)).ok();
+                                
+                                while let Ok(entry) = Self::decode_entry(&mut reader) {
+                                    if entry.timestamp > cutoff_timestamp {
+                                        all_before_cutoff = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            if all_before_cutoff {
+                                if let Ok(metadata) = entry.metadata() {
+                                    freed_bytes += metadata.len();
+                                }
+                                std::fs::remove_file(path)?;
+                                removed_count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok((removed_count, freed_bytes))
     }
     
     fn find_latest_segment(dir: &Path) -> Result<(u64, u64)> {

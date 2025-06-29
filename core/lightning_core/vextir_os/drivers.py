@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 from .event_bus import EventBus, get_event_bus
 from .events import Event
+from .channels import AgentChannelManager, ChannelMessage
 
 
 class DriverType(Enum):
@@ -91,7 +92,7 @@ class Driver(ABC):
 
 
 class AgentDriver(Driver):
-    """Base class for LLM-powered agent drivers"""
+    """Base class for LLM-powered agent drivers with standard channel support"""
 
     def __init__(
         self, manifest: DriverManifest, config: Optional[Dict[str, Any]] = None
@@ -101,6 +102,10 @@ class AgentDriver(Driver):
         self.tools = config.get("tools", []) if config else []
         self.system_prompt = config.get("system_prompt", "") if config else ""
         self._completions_api = None
+        
+        # Initialize standard agent channels
+        self.channels = AgentChannelManager(self.manifest.id, self.event_bus)
+        self._setup_command_handler()
 
     async def get_model_client(self):
         """Get LLM client using the model registry"""
@@ -138,6 +143,119 @@ class AgentDriver(Driver):
         """Build context for LLM from event and context hub"""
         # Default implementation - subclasses can override
         return f"Event: {event.type}\nData: {event.metadata}"
+    
+    def _setup_command_handler(self):
+        """Setup handler for standard command channel"""
+        async def handle_command(command: str, params: Dict[str, Any]):
+            """Handle standard OS commands"""
+            if command == "stop":
+                await self.channels.status.report_status("stopping", "Received stop command")
+                await self.shutdown()
+            elif command == "pause":
+                await self.channels.status.report_status("paused", "Agent paused by OS")
+                # Subclasses can override to implement pause logic
+            elif command == "resume":
+                await self.channels.status.report_status("running", "Agent resumed by OS")
+                # Subclasses can override to implement resume logic
+            elif command == "configure":
+                config_updates = params.get("config", {})
+                await self._handle_config_update(config_updates)
+            else:
+                await self.channels.error.report_error(
+                    "unknown_command", 
+                    f"Unknown command: {command}",
+                    context={"command": command, "params": params}
+                )
+        
+        self.channels.setup_command_handler(handle_command)
+    
+    async def _handle_config_update(self, config_updates: Dict[str, Any]):
+        """Handle configuration updates from OS"""
+        # Update agent configuration
+        self.config.update(config_updates)
+        
+        # Update model if specified
+        if "model" in config_updates:
+            self.model_name = config_updates["model"]
+        
+        # Update system prompt if specified
+        if "system_prompt" in config_updates:
+            self.system_prompt = config_updates["system_prompt"]
+        
+        await self.channels.status.report_status("running", "Configuration updated")
+        await self.channels.activity.report_activity(
+            "config_update",
+            "Agent configuration updated by OS",
+            {"updated_keys": list(config_updates.keys())}
+        )
+    
+    async def initialize(self):
+        """Initialize agent driver with channel reporting"""
+        await super().initialize()
+        await self.channels.status.report_status("initializing", "Agent driver starting up")
+        await self.channels.health.report_health()
+        await self.channels.status.report_status("running", "Agent driver ready")
+    
+    async def shutdown(self):
+        """Shutdown agent driver with channel reporting"""
+        await self.channels.status.report_status("shutting_down", "Agent driver stopping")
+        await super().shutdown()
+        await self.channels.status.report_status("stopped", "Agent driver stopped")
+    
+    async def handle_event(self, event: Event) -> List[Event]:
+        """Handle events with automatic activity reporting"""
+        # Report activity start
+        await self.channels.activity.report_activity(
+            "event_processing",
+            f"Processing event: {event.type}",
+            {"event_id": event.id, "event_type": event.type}
+        )
+        
+        try:
+            # Set status to busy
+            await self.channels.status.report_status("busy", f"Processing {event.type}")
+            
+            # Call subclass implementation
+            result_events = await self._handle_event_impl(event)
+            
+            # Report successful completion
+            await self.channels.activity.report_activity(
+                "event_completed",
+                f"Successfully processed event: {event.type}",
+                {
+                    "event_id": event.id,
+                    "event_type": event.type,
+                    "output_events": len(result_events)
+                }
+            )
+            
+            # Set status back to idle
+            await self.channels.status.report_status("idle", "Ready for next event")
+            
+            return result_events
+            
+        except Exception as e:
+            # Report error
+            await self.channels.error.report_error(
+                "event_processing_error",
+                f"Error processing event {event.type}: {str(e)}",
+                context={
+                    "event_id": event.id,
+                    "event_type": event.type,
+                    "error_type": type(e).__name__
+                }
+            )
+            
+            # Set status to error
+            await self.channels.status.report_status("error", f"Error processing {event.type}")
+            
+            # Re-raise the exception
+            raise
+    
+    @abstractmethod
+    async def _handle_event_impl(self, event: Event) -> List[Event]:
+        """Subclasses implement this instead of handle_event"""
+        pass
 
 
 class ToolDriver(Driver):

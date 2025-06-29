@@ -1,0 +1,511 @@
+openapi: 3.0.3
+info:
+  title: Context Hub API
+  description: |
+    Context Hub is a CRDT-based document storage service with real-time collaboration,
+    versioning, and search capabilities. It uses Loro for conflict-free replicated
+    data types and provides Git-like timeline functionality.
+  version: 0.1.0
+  contact:
+    name: Lightning OS Team
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://api.contexthub.example.com
+    description: Production server
+
+security:
+  - bearerAuth: []
+  - legacyAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /root:
+    get:
+      summary: Get user's root folder
+      description: Returns the root folder for the authenticated user. Creates one if it doesn't exist.
+      tags: [Folders]
+      responses:
+        '200':
+          description: Root folder information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /docs:
+    get:
+      summary: List all documents
+      tags: [Documents]
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+    
+    post:
+      summary: Create a new document
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDocumentRequest'
+      responses:
+        '200':
+          description: Document created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /docs/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Document ID
+    
+    get:
+      summary: Get document by ID
+      tags: [Documents]
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [numbered]
+          description: Return format (numbered adds line numbers)
+      responses:
+        '200':
+          description: Document details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    put:
+      summary: Update document content
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: New document content
+      responses:
+        '204':
+          description: Document updated successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    patch:
+      summary: Apply patch to document
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [patch]
+              properties:
+                patch:
+                  type: string
+                  description: Unified diff patch to apply
+                  example: "--- a/file.txt\n+++ b/file.txt\n@@ -1 +1 @@\n-old line\n+new line"
+      responses:
+        '200':
+          description: Patch applied successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    
+    delete:
+      summary: Delete document
+      tags: [Documents]
+      responses:
+        '204':
+          description: Document deleted successfully
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /folders/{id}:
+    get:
+      summary: List folder contents
+      tags: [Folders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Folder ID
+      responses:
+        '200':
+          description: Folder contents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /folders/{id}/guide:
+    get:
+      summary: Get folder index guide
+      tags: [Folders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Folder ID
+      responses:
+        '200':
+          description: Folder guide content
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  content:
+                    type: string
+                    description: Concatenated index guides from folder hierarchy
+
+  /search:
+    get:
+      summary: Search documents
+      tags: [Search]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+          description: Maximum results to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DocumentSummary'
+
+  /timeline/info:
+    get:
+      summary: Get timeline information
+      tags: [Timeline]
+      responses:
+        '200':
+          description: Timeline information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TimelineInfo'
+
+  /timeline/snapshots:
+    get:
+      summary: List available snapshots
+      tags: [Timeline]
+      responses:
+        '200':
+          description: List of snapshots
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SnapshotList'
+
+  /timeline/versions/{id}:
+    get:
+      summary: Get document version history
+      tags: [Timeline]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Document ID
+      responses:
+        '200':
+          description: Document version history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentVersions'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /timeline/replay/{id}:
+    post:
+      summary: Replay document to specific version
+      tags: [Timeline]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Document ID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplayRequest'
+      responses:
+        '200':
+          description: Document state at requested version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplayResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token (HS256 or RS256 for Azure AD)
+    
+    legacyAuth:
+      type: apiKey
+      in: header
+      name: X-User-Id
+      description: Legacy authentication header (development only)
+
+  schemas:
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        content:
+          type: string
+        owner:
+          type: string
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        doc_type:
+          type: string
+          enum: [Text, Folder, IndexGuide]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        index_guide:
+          type: string
+          nullable: true
+        numbered_content:
+          type: string
+          nullable: true
+          description: Content with line numbers (when format=numbered)
+        line_count:
+          type: integer
+          nullable: true
+      required: [id, name, content, owner, doc_type, created_at, updated_at]
+
+    DocumentSummary:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        snippet:
+          type: string
+          description: Content preview
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        doc_type:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+        index_guide:
+          type: string
+          nullable: true
+
+    CreateDocumentRequest:
+      type: object
+      required: [name, content]
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+        parent_folder_id:
+          type: string
+          format: uuid
+          nullable: true
+        doc_type:
+          type: string
+          enum: [Text, Folder]
+          default: Text
+
+    TimelineInfo:
+      type: object
+      properties:
+        snapshots_available:
+          type: boolean
+        snapshot_dir:
+          type: string
+        message:
+          type: string
+
+    SnapshotList:
+      type: object
+      properties:
+        snapshots:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              message:
+                type: string
+        total_count:
+          type: integer
+
+    DocumentVersions:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        versions:
+          type: array
+          items:
+            type: object
+            properties:
+              timestamp:
+                type: string
+                format: date-time
+              version:
+                type: string
+                description: Base64-encoded version identifier
+        current_version:
+          type: string
+          description: Base64-encoded current version
+
+    ReplayRequest:
+      type: object
+      properties:
+        version:
+          type: string
+          description: Base64-encoded version to replay to
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+          description: Timestamp to replay to (not yet implemented)
+          nullable: true
+
+    ReplayResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        content:
+          type: string
+        version:
+          type: string
+          description: Base64-encoded version
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication required
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Unauthorized
+    
+    NotFound:
+      description: Resource not found
+      content:
+        text/plain:
+          schema:
+            type: string
+            example: Not found

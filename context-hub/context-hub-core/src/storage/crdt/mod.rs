@@ -3,7 +3,7 @@
 
 use crate::pointer::PointerResolver;
 use anyhow::{anyhow, Result};
-use loro::{LoroDoc, LoroMap, ToJson};
+use loro::{LoroDoc, LoroMap, ToJson, Frontiers};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use std::{
@@ -233,6 +233,44 @@ impl Document {
         self.doc
             .export(loro::ExportMode::Snapshot)
             .map_err(|e| anyhow!(e))
+    }
+    
+    /// Get the current version frontiers for timeline tracking
+    pub fn get_frontiers(&self) -> Frontiers {
+        self.doc.oplog_frontiers()
+    }
+    
+    /// Export document state at a specific version
+    pub fn export_at_version(&self, version: &Frontiers) -> Result<Vec<u8>> {
+        self.doc
+            .export(loro::ExportMode::SnapshotAt {
+                version: std::borrow::Cow::Borrowed(version),
+            })
+            .map_err(|e| anyhow!(e))
+    }
+    
+    /// Fork the document at a specific version
+    pub fn fork_at_version(&self, version: &Frontiers) -> Result<Document> {
+        let forked_doc = self.doc.fork_at(version);
+        let mut new_document = Document {
+            id: self.id,
+            name: self.name.clone(),
+            doc_type: self.doc_type.clone(),
+            owner: self.owner.clone(),
+            parent_folder_id: self.parent_folder_id,
+            doc: forked_doc,
+            acl: self.acl.clone(),
+        };
+        // Ensure metadata is set
+        let meta = new_document.doc.get_map("meta");
+        meta.insert("doc_type", self.doc_type.as_str()).map_err(|e| anyhow!(e))?;
+        meta.insert("owner", self.owner.as_str()).map_err(|e| anyhow!(e))?;
+        meta.insert("name", self.name.as_str()).map_err(|e| anyhow!(e))?;
+        if let Some(parent) = self.parent_folder_id {
+            meta.insert("parent_folder_id", parent.to_string()).map_err(|e| anyhow!(e))?;
+        }
+        new_document.doc.commit();
+        Ok(new_document)
     }
 
     pub fn insert_pointer(&mut self, index: usize, pointer: Pointer) -> Result<()> {
@@ -628,6 +666,30 @@ impl DocumentStore {
     /// Iterate over all documents in the store.
     pub fn iter(&self) -> std::collections::hash_map::Iter<'_, Uuid, Document> {
         self.docs.iter()
+    }
+    
+    /// Get timeline versions for a document - returns list of (timestamp, version) pairs
+    pub fn get_document_timeline(&self, doc_id: Uuid) -> Result<Vec<(chrono::DateTime<chrono::Utc>, Frontiers)>> {
+        let doc = self.get(doc_id).ok_or_else(|| anyhow!("Document not found"))?;
+        
+        // For now, return current version only
+        // In a full implementation, we'd track version history
+        let version = doc.get_frontiers();
+        let now = chrono::Utc::now();
+        
+        Ok(vec![(now, version)])
+    }
+    
+    /// Get document state at a specific version
+    pub fn get_document_at_version(&self, doc_id: Uuid, version: &Frontiers) -> Result<Document> {
+        let doc = self.get(doc_id).ok_or_else(|| anyhow!("Document not found"))?;
+        doc.fork_at_version(version)
+    }
+    
+    /// Replay document to a specific version and return its content
+    pub fn replay_document_to_version(&self, doc_id: Uuid, version: &Frontiers) -> Result<String> {
+        let doc = self.get_document_at_version(doc_id, version)?;
+        Ok(doc.text())
     }
 
     /// Reload the store contents from disk, discarding any in-memory state.
@@ -1163,6 +1225,86 @@ impl DocumentStore {
         }
         
         children
+    }
+
+    /// Garbage collect deleted documents from disk
+    /// Returns the number of files removed and total bytes freed
+    pub fn garbage_collect_documents(&mut self) -> Result<(usize, u64)> {
+        let mut removed_count = 0;
+        let mut freed_bytes = 0u64;
+
+        // Get all document IDs currently in memory
+        let active_ids: std::collections::HashSet<Uuid> = self.docs.keys().cloned().collect();
+
+        // Scan the data directory for orphaned files
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            // Only process .bin files
+            if path.extension().and_then(|s| s.to_str()) != Some("bin") {
+                continue;
+            }
+
+            // Extract UUID from filename
+            if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if let Ok(id) = Uuid::parse_str(file_stem) {
+                    // If this ID is not in our active set, it's orphaned
+                    if !active_ids.contains(&id) {
+                        // Get file size before deletion
+                        if let Ok(metadata) = entry.metadata() {
+                            freed_bytes += metadata.len();
+                        }
+                        
+                        // Remove the orphaned file
+                        std::fs::remove_file(&path)?;
+                        removed_count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok((removed_count, freed_bytes))
+    }
+
+    /// Get all active document IDs for use in other GC operations
+    pub fn active_document_ids(&self) -> Vec<Uuid> {
+        self.docs.keys().cloned().collect()
+    }
+
+    /// Compact CRDT history for all documents and optionally GC orphaned files
+    /// Returns (files_removed, bytes_freed)
+    pub fn full_compact(&mut self, gc_orphaned: bool) -> Result<(usize, u64)> {
+        // First compact CRDT history
+        self.compact_history()?;
+        
+        // Then optionally GC orphaned files
+        if gc_orphaned {
+            self.garbage_collect_documents()
+        } else {
+            Ok((0, 0))
+        }
+    }
+
+    /// Get blob references from all documents
+    pub fn collect_blob_references(&self) -> std::collections::HashSet<String> {
+        let mut blob_refs = std::collections::HashSet::new();
+        
+        for doc in self.docs.values() {
+            // Get content list length for non-folder documents
+            if doc.doc_type() != DocumentType::Folder {
+                let list = doc.doc.get_list(CONTENT_KEY);
+                for i in 0..list.len() {
+                    if let Some(pointer) = doc.pointer_at(i) {
+                        if pointer.pointer_type == "blob" {
+                            blob_refs.insert(pointer.target.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        blob_refs
     }
 }
 

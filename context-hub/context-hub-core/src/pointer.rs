@@ -55,6 +55,65 @@ impl BlobPointerResolver {
         std::fs::create_dir_all(&dir)?;
         Ok(Self { dir })
     }
+
+    /// Get the directory where blobs are stored
+    pub fn blob_dir(&self) -> &std::path::Path {
+        &self.dir
+    }
+
+    /// Garbage collect unreferenced blobs
+    /// Returns (files_removed, bytes_freed)
+    pub fn garbage_collect(&self, active_references: &std::collections::HashSet<String>) -> Result<(usize, u64)> {
+        let mut removed_count = 0;
+        let mut freed_bytes = 0u64;
+
+        // Scan blob directory
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            if path.is_file() {
+                if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                    // Check if this blob is referenced
+                    if !active_references.contains(filename) {
+                        // Check age - only remove blobs older than 1 hour (grace period)
+                        if let Ok(metadata) = entry.metadata() {
+                            if let Ok(modified) = metadata.modified() {
+                                let age = std::time::SystemTime::now()
+                                    .duration_since(modified)
+                                    .unwrap_or_default();
+                                
+                                // Only remove if older than 1 hour
+                                if age > std::time::Duration::from_secs(3600) {
+                                    freed_bytes += metadata.len();
+                                    std::fs::remove_file(&path)?;
+                                    removed_count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok((removed_count, freed_bytes))
+    }
+
+    /// Get total size of blob storage
+    pub fn calculate_size(&self) -> Result<u64> {
+        let mut total_size = 0u64;
+        
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                if let Ok(metadata) = entry.metadata() {
+                    total_size += metadata.len();
+                }
+            }
+        }
+        
+        Ok(total_size)
+    }
 }
 
 impl PointerResolver for BlobPointerResolver {
