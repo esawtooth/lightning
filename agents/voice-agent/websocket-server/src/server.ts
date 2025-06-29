@@ -13,8 +13,6 @@ import {
   setCallEndCallback,
 } from "./sessionManager";
 import functions from "./functionHandlers";
-import { CosmosClient, Container } from "@azure/cosmos";
-import { ServiceBusClient, ServiceBusMessage } from "@azure/service-bus";
 import { getCallSid, startCall } from "./callControl";
 
 dotenv.config();
@@ -23,117 +21,103 @@ const PORT = parseInt(process.env.PORT || "8081", 10);
 const PUBLIC_URL = process.env.PUBLIC_URL || "";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 const OBJECTIVE = process.env.OBJECTIVE || "";
-const COSMOS_CONNECTION = process.env.COSMOS_CONNECTION || "";
-const COSMOS_DATABASE = process.env.COSMOS_DATABASE || "vextir";
-const USER_CONTAINER = process.env.USER_CONTAINER || "users";
-const LOG_CONTAINER = process.env.LOG_CONTAINER || "logs";
-const REPO_CONTAINER = process.env.REPO_CONTAINER || "repos";
-const CALL_CONTAINER = process.env.CALL_CONTAINER || "calls";
-const SERVICEBUS_CONNECTION = process.env.SERVICEBUS_CONNECTION || "";
-const SERVICEBUS_QUEUE = process.env.SERVICEBUS_QUEUE || "";
 const OUTBOUND_TO = process.env.OUTBOUND_TO;
 
-let userContainer: Container | undefined;
-let logContainer: Container | undefined;
-let repoContainer: Container | undefined;
-let callContainer: Container | undefined;
-let sbClient: ServiceBusClient | undefined;
-if (COSMOS_CONNECTION) {
-  try {
-    const cosmosClient = new CosmosClient(COSMOS_CONNECTION);
-    userContainer = cosmosClient
-      .database(COSMOS_DATABASE)
-      .container(USER_CONTAINER);
-    logContainer = cosmosClient
-      .database(COSMOS_DATABASE)
-      .container(LOG_CONTAINER);
-    repoContainer = cosmosClient
-      .database(COSMOS_DATABASE)
-      .container(REPO_CONTAINER);
-    callContainer = cosmosClient
-      .database(COSMOS_DATABASE)
-      .container(CALL_CONTAINER);
-  } catch (err) {
-    console.error("Failed to init Cosmos client", err);
-  }
-}
+// Lightning Core Integration
+const LIGHTNING_MODE = process.env.LIGHTNING_MODE || "local";
+const API_BASE = process.env.API_BASE || "http://lightning-api:8000";
+const CONTEXT_HUB_URL = process.env.CONTEXT_HUB_URL || "http://context-hub:3000";
 
-if (SERVICEBUS_CONNECTION && SERVICEBUS_QUEUE) {
-  try {
-    sbClient = new ServiceBusClient(SERVICEBUS_CONNECTION);
-  } catch (err) {
-    console.error("Failed to init Service Bus client", err);
+// Lightning Core API helpers
+async function callLightningAPI(endpoint: string, options: RequestInit = {}) {
+  const url = `${API_BASE}${endpoint}`;
+  const response = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+    ...options,
+  });
+  
+  if (!response.ok) {
+    throw new Error(`Lightning API call failed: ${response.status} ${response.statusText}`);
   }
+  
+  return response.json();
 }
 
 setLogCallback(recordLog);
 setCallEndCallback(saveTranscript);
 
 function recordLog(event: any) {
-  if (!logContainer) return;
+  // Store logs through Lightning Core storage API
   const callId = getCallSid() || "unknown";
-  const entity = {
+  const logData = {
     id: `${callId}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    pk: callId,
+    call_id: callId,
     timestamp: new Date().toISOString(),
     event,
   };
-  logContainer.items
-    .create(entity)
-    .catch((err) => console.error("Failed to store log", err));
+  
+  callLightningAPI('/storage/voice-logs', {
+    method: 'POST',
+    body: JSON.stringify(logData),
+  }).catch((err) => console.error("Failed to store log via Lightning Core:", err));
 }
 
 async function saveTranscript(logs: any[], user?: any) {
   const callId = getCallSid() || `call-${Date.now()}`;
-  if (callContainer) {
-    const entity = {
-      id: callId,
-      pk: user?.id || "anon",
-      timestamp: new Date().toISOString(),
-      logs,
-    };
-    try {
-      await callContainer.items.create(entity);
-    } catch (err) {
-      console.error("Failed to save call transcript", err);
-    }
+  
+  // Save transcript through Lightning Core storage
+  const transcriptData = {
+    id: callId,
+    user_id: user?.id || "anon",
+    timestamp: new Date().toISOString(),
+    logs,
+  };
+  
+  try {
+    await callLightningAPI('/storage/call-transcripts', {
+      method: 'POST',
+      body: JSON.stringify(transcriptData),
+    });
+  } catch (err) {
+    console.error("Failed to save call transcript via Lightning Core:", err);
   }
 
-  if (sbClient) {
-    const outEvent = {
-      timestamp: new Date().toISOString(),
-      source: "voice-agent",
-      type: "voice.call.done",
-      userID: user?.id || "anon",
-      metadata: { callId },
-    };
-    const message: ServiceBusMessage = {
-      body: JSON.stringify(outEvent),
-      applicationProperties: { topic: outEvent.type },
-    } as any;
-    try {
-      const sender = sbClient.createSender(SERVICEBUS_QUEUE);
-      await sender.sendMessages(message);
-      await sender.close();
-    } catch (err) {
-      console.error("Failed to publish call event", err);
-    }
+  // Publish event through Lightning Core event system
+  const eventData = {
+    type: "voice.call.completed",
+    source: "voice-agent",
+    description: `Voice call completed for user ${user?.id || "anon"}`,
+    metadata: {
+      call_id: callId,
+      user_id: user?.id || "anon",
+      duration_ms: logs.length > 0 ? Date.now() - new Date(logs[0]?.timestamp || Date.now()).getTime() : 0,
+      total_interactions: logs.filter(log => log.type === 'function_call').length,
+    },
+  };
+  
+  try {
+    await callLightningAPI('/events', {
+      method: 'POST',
+      body: JSON.stringify(eventData),
+    });
+  } catch (err) {
+    console.error("Failed to publish call completion event via Lightning Core:", err);
   }
 }
 
 let currentUserProfile: any | null = null;
 
 async function lookupUserByPhone(phone: string): Promise<any | null> {
-  if (!userContainer || !phone) return null;
+  if (!phone) return null;
   try {
-    const query = {
-      query: "SELECT * FROM c WHERE c.phone_number = @phone",
-      parameters: [{ name: "@phone", value: phone }],
-    };
-    const { resources } = await userContainer.items.query(query).fetchAll();
-    return resources[0] || null;
+    // Use Lightning Core storage API to lookup user by phone
+    const users = await callLightningAPI(`/storage/users?phone_number=${encodeURIComponent(phone)}`);
+    return users.length > 0 ? users[0] : null;
   } catch (err) {
-    console.error("Failed to query user", err);
+    console.error("Failed to query user via Lightning Core:", err);
     return null;
   }
 }
@@ -163,8 +147,10 @@ app.get("/health", (req, res) => {
     status: "healthy",
     service: "voice-websocket-server",
     timestamp: new Date().toISOString(),
-    cosmos: !!userContainer,
-    servicebus: !!sbClient
+    lightning_mode: LIGHTNING_MODE,
+    api_base: API_BASE,
+    context_hub: CONTEXT_HUB_URL,
+    openai_configured: !!OPENAI_API_KEY
   });
 });
 
