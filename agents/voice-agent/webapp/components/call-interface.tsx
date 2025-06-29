@@ -10,6 +10,7 @@ import FunctionCallsPanel from "@/components/function-calls-panel";
 import { Item } from "@/components/types";
 import handleRealtimeEvent from "@/lib/handle-realtime-event";
 import PhoneNumberChecklist from "@/components/phone-number-checklist";
+import { getVoiceChannels, initializeVoiceChannels } from "@/utils/channels";
 
 const CallInterface = () => {
   const [selectedPhoneNumber, setSelectedPhoneNumber] = useState("");
@@ -20,11 +21,20 @@ const CallInterface = () => {
 
   useEffect(() => {
     if (allConfigsReady && !ws) {
+      // Initialize VextirOS channels
+      initializeVoiceChannels().catch(console.warn);
+      
       const newWs = new WebSocket("ws://localhost:8081/logs");
 
       newWs.onopen = () => {
         console.log("Connected to logs websocket");
         setCallStatus("connected");
+        
+        // Report connection to VextirOS channels
+        const channels = getVoiceChannels();
+        if (channels.isEnabled()) {
+          channels.reportConversationState("idle", { websocket_connected: true }).catch(console.warn);
+        }
       };
 
       newWs.onmessage = (event) => {

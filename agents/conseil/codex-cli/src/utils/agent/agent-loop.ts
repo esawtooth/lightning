@@ -38,11 +38,28 @@ import {
   tmuxOutput,
   tmuxSend,
 } from "./tmux.js";
+import {
+  contexthubPull,
+  contexthubPush,
+  contexthubSyncStatus,
+  contexthubRead,
+  contexthubWrite,
+  contexthubFind,
+  contexthubInspect,
+  contexthubLs,
+  contexthubStatus,
+  contexthubCd,
+  contexthubPwd,
+  contexthubPatch,
+  contexthubDiff,
+  contexthubSearch,
+} from "./contexthub.js";
 import { HttpsProxyAgent } from "https-proxy-agent";
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import OpenAI, { APIConnectionTimeoutError, AzureOpenAI } from "openai";
 import os from "os";
+import { AgentChannelManager } from "../channels/channel-manager.js";
 
 // Wait time before retrying after rate limit errors (ms).
 const RATE_LIMIT_RETRY_WAIT_MS = parseInt(
@@ -215,6 +232,182 @@ const tmuxSendTool: FunctionTool = {
   },
 };
 
+// ContextHub Tools
+const contexthubPullTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_pull",
+  description: "Pull documents/folders from contexthub to local filesystem for editing. Use this for hybrid local/remote workflows.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      hub_path: { type: "string", description: "Path in contexthub to pull from" },
+      local_path: { type: "string", description: "Local filesystem path to pull to" },
+      force: { type: "boolean", description: "Force overwrite existing files" },
+    },
+    required: ["hub_path", "local_path"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubPushTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_push",
+  description: "Push local changes back to contexthub. Use after editing files locally.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      local_path: { type: "string", description: "Local filesystem path to push from" },
+      dry_run: { type: "boolean", description: "Preview changes without applying" },
+      no_confirm: { type: "boolean", description: "Skip confirmation prompts" },
+    },
+    required: ["local_path"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubSyncStatusTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_sync_status",
+  description: "Check sync status of a local directory against contexthub.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      local_path: { type: "string", description: "Local filesystem path to check" },
+    },
+    required: ["local_path"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubReadTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_read",
+  description: "Read document content from contexthub with optional line numbers. Perfect for code editing workflows.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Document path in contexthub" },
+      numbered: { type: "boolean", description: "Include line numbers for precise editing" },
+      lines: { type: "number", description: "Limit number of lines to read" },
+    },
+    required: ["path"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubWriteTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_write",
+  description: "Write content to a document in contexthub (create or update).",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Document path in contexthub" },
+      content: { type: "string", description: "Content to write to the document" },
+      patch_mode: { type: "boolean", description: "Use patch mode for partial updates" },
+    },
+    required: ["path", "content"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubFindTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_find",
+  description: "Search documents with structured JSON output, optimized for AI agents.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      query: { type: "string", description: "Search query" },
+      limit: { type: "number", description: "Maximum results to return" },
+      include_content: { type: "boolean", description: "Include document content in results" },
+    },
+    required: ["query"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubInspectTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_inspect",
+  description: "Get detailed structured information about a path (folder contents, file metadata).",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Path to inspect in contexthub" },
+    },
+    required: ["path"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubLsTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_ls",
+  description: "List directory contents with file types and sizes.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Directory path to list (optional, defaults to current)" },
+    },
+    additionalProperties: false,
+  },
+};
+
+const contexthubStatusTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_status",
+  description: "Show current workspace status and overview.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {},
+    additionalProperties: false,
+  },
+};
+
+const contexthubPatchTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_patch",
+  description: "Apply a unified diff patch to a document. Perfect for precise code edits.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Document path in contexthub" },
+      patch: { type: "string", description: "Unified diff patch to apply" },
+      dry_run: { type: "boolean", description: "Preview patch without applying" },
+    },
+    required: ["path", "patch"],
+    additionalProperties: false,
+  },
+};
+
+const contexthubDiffTool: FunctionTool = {
+  type: "function",
+  name: "contexthub_diff",
+  description: "Generate unified diff between hub document and local file.",
+  strict: false,
+  parameters: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Document path in contexthub" },
+      local_file: { type: "string", description: "Local file to compare against (optional)" },
+      context: { type: "number", description: "Lines of context around changes" },
+    },
+    required: ["path"],
+    additionalProperties: false,
+  },
+};
+
 export class AgentLoop {
   private model: string;
   private provider: string;
@@ -224,6 +417,9 @@ export class AgentLoop {
   private additionalWritableRoots: ReadonlyArray<string>;
   /** Whether we ask the API to persist conversation state on the server */
   private readonly disableResponseStorage: boolean;
+  
+  /** Channel manager for VextirOS integration */
+  private channels: AgentChannelManager;
 
   // Using `InstanceType<typeof OpenAI>` sidesteps typing issues with the OpenAI package under
   // the TS 5+ `moduleResolution=bundler` setup. OpenAI client instance. We keep the concrete
@@ -343,6 +539,16 @@ export class AgentLoop {
   }
 
   /**
+   * Initialize the agent and report readiness to VextirOS
+   */
+  public async initialize(): Promise<void> {
+    if (this.channels.isEnabled()) {
+      await this.channels.initialize();
+      await this.channels.setReady();
+    }
+  }
+
+  /**
    * Hard‑stop the agent loop. After calling this method the instance becomes
    * unusable: any in‑flight operations are aborted and subsequent invocations
    * of `run()` will throw.
@@ -352,6 +558,11 @@ export class AgentLoop {
       return;
     }
     this.terminated = true;
+
+    // Report shutdown to VextirOS channels
+    if (this.channels.isEnabled()) {
+      this.channels.shutdown().catch(console.warn);
+    }
 
     this.hardAbort.abort();
 
@@ -462,6 +673,12 @@ export class AgentLoop {
       () => this.execAbortController?.abort(),
       { once: true },
     );
+
+    // Initialize channel manager for VextirOS integration
+    this.channels = new AgentChannelManager(`conseil-${this.sessionId}`, {
+      vextir_url: process.env.VEXTIR_OS_URL,
+      enabled: process.env.VEXTIR_CHANNELS_ENABLED !== "false",
+    });
   }
 
   private async handleFunctionCall(
@@ -550,6 +767,15 @@ export class AgentLoop {
     // used to tell model to stop if needed
     const additionalItems: Array<ResponseInputItem> = [];
 
+    // Report tool execution to VextirOS channels
+    if (this.channels.isEnabled()) {
+      await this.channels.activity.reportActivity(
+        "tool_execution_started",
+        `Executing tool: ${name}`,
+        { tool_name: name, arguments: jsonArgs }
+      );
+    }
+
     // TODO: allow arbitrary function calls (beyond shell/container.exec)
     if (name === "web_search") {
       try {
@@ -623,6 +849,94 @@ export class AgentLoop {
       if (additionalItemsFromExec) {
         additionalItems.push(...additionalItemsFromExec);
       }
+    } else if (name === "contexthub_pull") {
+      const { output, metadata } = await contexthubPull(
+        String(jsonArgs.hub_path || ""),
+        String(jsonArgs.local_path || ""),
+        Boolean(jsonArgs.force),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_push") {
+      const { output, metadata } = await contexthubPush(
+        String(jsonArgs.local_path || ""),
+        Boolean(jsonArgs.dry_run),
+        Boolean(jsonArgs.no_confirm),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_sync_status") {
+      const { output, metadata } = await contexthubSyncStatus(
+        String(jsonArgs.local_path || ""),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_read") {
+      const { output, metadata } = await contexthubRead(
+        String(jsonArgs.path || ""),
+        Boolean(jsonArgs.numbered),
+        jsonArgs.lines ? Number(jsonArgs.lines) : undefined,
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_write") {
+      const { output, metadata } = await contexthubWrite(
+        String(jsonArgs.path || ""),
+        String(jsonArgs.content || ""),
+        Boolean(jsonArgs.patch_mode),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_find") {
+      const { output, metadata } = await contexthubFind(
+        String(jsonArgs.query || ""),
+        jsonArgs.limit ? Number(jsonArgs.limit) : undefined,
+        Boolean(jsonArgs.include_content),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_inspect") {
+      const { output, metadata } = await contexthubInspect(
+        String(jsonArgs.path || ""),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_ls") {
+      const { output, metadata } = await contexthubLs(
+        jsonArgs.path ? String(jsonArgs.path) : undefined,
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_status") {
+      const { output, metadata } = await contexthubStatus(this.config);
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_patch") {
+      const { output, metadata } = await contexthubPatch(
+        String(jsonArgs.path || ""),
+        String(jsonArgs.patch || ""),
+        Boolean(jsonArgs.dry_run),
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    } else if (name === "contexthub_diff") {
+      const { output, metadata } = await contexthubDiff(
+        String(jsonArgs.path || ""),
+        jsonArgs.local_file ? String(jsonArgs.local_file) : undefined,
+        jsonArgs.context ? Number(jsonArgs.context) : 3,
+        this.config,
+      );
+      outputItem.output = JSON.stringify({ output, metadata });
+    }
+
+    // Report tool execution completion to VextirOS channels
+    if (this.channels.isEnabled()) {
+      const success = outputItem.output !== "no function found";
+      await this.channels.reportToolExecution(
+        name || "unknown",
+        jsonArgs,
+        success,
+        success ? outputItem.output : undefined
+      );
     }
 
     return [outputItem, ...additionalItems];
@@ -721,6 +1035,16 @@ export class AgentLoop {
       this.canceled = false;
       this.currentStream = null;
 
+      // Report activity to VextirOS channels
+      if (this.channels.isEnabled()) {
+        await this.channels.setBusy("Processing user request");
+        await this.channels.activity.reportActivity(
+          "run_started",
+          "Agent run started",
+          { input_items: input.length, generation: thisGeneration }
+        );
+      }
+
       // Create a fresh AbortController for this run so that tool calls from a
       // previous run do not accidentally get signalled.
       this.execAbortController = new AbortController();
@@ -787,6 +1111,18 @@ export class AgentLoop {
         tmuxDeleteTool,
         tmuxOutputTool,
         tmuxSendTool,
+        // ContextHub tools
+        contexthubPullTool,
+        contexthubPushTool,
+        contexthubSyncStatusTool,
+        contexthubReadTool,
+        contexthubWriteTool,
+        contexthubFindTool,
+        contexthubInspectTool,
+        contexthubLsTool,
+        contexthubStatusTool,
+        contexthubPatchTool,
+        contexthubDiffTool,
       ];
       if (this.model.startsWith("codex")) {
         tools = [
@@ -797,6 +1133,18 @@ export class AgentLoop {
           tmuxDeleteTool,
           tmuxOutputTool,
           tmuxSendTool,
+          // ContextHub tools  
+          contexthubPullTool,
+          contexthubPushTool,
+          contexthubSyncStatusTool,
+          contexthubReadTool,
+          contexthubWriteTool,
+          contexthubFindTool,
+          contexthubInspectTool,
+          contexthubLsTool,
+          contexthubStatusTool,
+          contexthubPatchTool,
+          contexthubDiffTool,
         ];
       }
 
@@ -1520,6 +1868,16 @@ export class AgentLoop {
         // });
 
         this.onLoading(false);
+
+        // Report completion to VextirOS channels
+        if (this.channels.isEnabled()) {
+          this.channels.setIdle().catch(console.warn);
+          this.channels.activity.reportActivity(
+            "run_completed",
+            "Agent run completed successfully",
+            { generation: thisGeneration }
+          ).catch(console.warn);
+        }
       };
 
       // Use a small delay to make sure UI rendering is smooth. Double-check
@@ -1657,6 +2015,18 @@ export class AgentLoop {
         } catch {
           /* best‑effort */
         }
+        
+        // Report error to VextirOS channels
+        if (this.channels.isEnabled()) {
+          this.channels.error.reportError(
+            "run_error",
+            err instanceof Error ? err.message : String(err),
+            err instanceof Error ? err.stack : undefined,
+            true
+          ).catch(console.warn);
+          this.channels.status.reportStatus("error", "Agent run failed").catch(console.warn);
+        }
+        
         this.onLoading(false);
         return;
       }
@@ -1794,6 +2164,8 @@ You can:
 - Stream responses and emit function calls (e.g., shell commands, code edits).
 - Apply patches, run commands, and manage user approvals based on policy.
 - Work inside a sandboxed, git-backed workspace with rollback support.
+- Access ContextHub - a distributed document management system with versioning, search, and CRDT-based synchronization.
+- Use hybrid local/remote workflows with ContextHub: pull documents to local filesystem, edit locally, then push changes back.
 - Log telemetry so sessions can be replayed or inspected later.
 - More details on your functionality are available at \`codex --help\`
 
@@ -1817,6 +2189,12 @@ You MUST adhere to the following criteria when executing the task:
         - Update documentation as necessary.
         - Keep changes consistent with the style of the existing codebase. Changes should be minimal and focused on the task.
             - Use \`git log\` and \`git blame\` to search the history of the codebase if additional context is required. Internet access is available via the \`web_search\` and \`get_url\` tools.
+            - Use ContextHub tools for document management and persistent storage:
+                - \`contexthub_read\` with \`numbered: true\` for precise line-based editing
+                - \`contexthub_patch\` for applying unified diffs to documents
+                - \`contexthub_pull\` + local editing + \`contexthub_push\` for hybrid workflows
+                - \`contexthub_find\` and \`contexthub_search\` for content discovery
+                - Always check \`contexthub_status\` to understand workspace state
         - NEVER add copyright or license headers unless specifically requested.
         - You do not need to \`git commit\` your changes; this will be done automatically for you.
         - If there is a .pre-commit-config.yaml, use \`pre-commit run --files ...\` to check that your changes pass the pre-commit checks. However, do not fix pre-existing errors on lines you didn't touch.

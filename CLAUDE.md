@@ -8,7 +8,7 @@ Lightning is an event-driven AI operating system that orchestrates autonomous an
 - **Lightning Core**: Python library with planning system (Petri net-based workflows) and Vextir OS (event-driven architecture)
 - **Azure Infrastructure**: Serverless deployment using Functions, Service Bus, Cosmos DB
 - **Multiple UIs**: Chat client (Chainlit), dashboard (FastAPI), voice agent (Next.js)
-- **Context Hub**: Rust-based persistent storage with CRDT synchronization
+- **Context Hub**: Rust-based persistent storage with CRDT synchronization, timeline/versioning, and search
 
 ## Common Development Commands
 

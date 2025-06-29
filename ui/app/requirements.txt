@@ -1,3 +1,0 @@
-# This file is kept for backward compatibility but is no longer used
-# The new frontend is built with React/Vite and uses nginx for serving
-# All dependencies are now managed via npm in the frontend/ directory

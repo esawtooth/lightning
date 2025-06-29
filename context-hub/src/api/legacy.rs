@@ -6,6 +6,7 @@ use context_hub_core::{
     indexer::LiveIndex,
     storage::crdt::{DocumentStore, DocumentType},
 };
+use base64;
 use axum::{
     extract::{Extension, Path, Query, State},
     http::StatusCode,
@@ -55,6 +56,7 @@ pub fn router(
     };
 
     let auth_routes = Router::new()
+        .route("/root", get(get_root))
         .route("/docs", post(create_document).get(list_documents))
         .route(
             "/docs/{id}",
@@ -66,7 +68,10 @@ pub fn router(
         .route("/folders/{id}", get(get_folder_contents))
         .route("/folders/{id}/guide", get(get_folder_guide))
         .route("/search", get(search))
-        // .nest("/timeline", timeline_router(store.clone(), snapshot_dir.clone())) // Temporarily disabled
+        .route("/timeline/info", get(get_timeline_info))
+        .route("/timeline/snapshots", get(get_timeline_snapshots))
+        .route("/timeline/versions/{id}", get(get_document_versions))
+        .route("/timeline/replay/{id}", post(replay_document))
         .layer(middleware::from_fn_with_state(verifier.clone(), require_auth))
         .with_state(state.clone());
     
@@ -272,7 +277,95 @@ async fn collect_index_guides(
     }
 }
 
+// Efficient helper to build index guide cache for all folders
+async fn build_index_guide_cache(
+    store: &DocumentStore,
+) -> std::collections::HashMap<Option<Uuid>, String> {
+    use std::collections::HashMap;
+    
+    let mut cache = HashMap::new();
+    let mut folder_guides = HashMap::new();
+    
+    // First pass: collect all index guides by folder
+    for (_id, doc) in store.iter() {
+        if doc.doc_type() == DocumentType::IndexGuide {
+            folder_guides.insert(doc.parent_folder_id(), doc.text());
+        }
+    }
+    
+    // Second pass: build hierarchy cache for each unique folder
+    let mut processed_folders = std::collections::HashSet::new();
+    
+    for (_id, doc) in store.iter() {
+        let folder_id = doc.parent_folder_id();
+        if processed_folders.contains(&folder_id) {
+            continue;
+        }
+        processed_folders.insert(folder_id);
+        
+        let mut guides = Vec::new();
+        let mut current_folder = folder_id;
+        
+        // Walk up the folder hierarchy collecting index guides
+        while let Some(folder_id) = current_folder {
+            if let Some(guide_text) = folder_guides.get(&Some(folder_id)) {
+                guides.push(guide_text.clone());
+            }
+            
+            if let Some(folder_doc) = store.get(folder_id) {
+                current_folder = folder_doc.parent_folder_id();
+            } else {
+                break;
+            }
+        }
+        
+        // Add root index guide if exists
+        if let Some(root_guide) = folder_guides.get(&None) {
+            guides.push(root_guide.clone());
+        }
+        
+        // Reverse to get root-to-leaf order
+        guides.reverse();
+        
+        let combined_guide = if guides.is_empty() {
+            String::new()
+        } else {
+            guides.join("\n\n---\n\n")
+        };
+        
+        cache.insert(folder_id, combined_guide);
+    }
+    
+    cache
+}
+
 // Handlers
+async fn get_root(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<DocumentResponse>, StatusCode> {
+    let mut store = state.store.write().await;
+    let root_id = store.ensure_root(&auth.user_id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let root_doc = store.get(root_id)
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    Ok(Json(DocumentResponse {
+        id: root_id,
+        name: root_doc.name().to_string(),
+        content: root_doc.text(),
+        owner: auth.user_id.clone(),
+        parent_folder_id: root_doc.parent_folder_id(),
+        doc_type: root_doc.doc_type().as_str().to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        updated_at: chrono::Utc::now().to_rfc3339(),
+        index_guide: None,
+        numbered_content: None,
+        line_count: None,
+    }))
+}
+
 async fn create_document(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -452,6 +545,9 @@ async fn list_documents(
     let store = state.store.read().await;
     let mut documents = Vec::new();
     
+    // Build index guide cache once for all folders - O(n) instead of O(n²)
+    let index_guide_cache = build_index_guide_cache(&*store).await;
+    
     // Collect all documents
     for (id, doc) in store.iter() {
         
@@ -461,8 +557,11 @@ async fn list_documents(
             doc.text()
         };
         
-        // Collect index guides for this document's location
-        let index_guide = collect_index_guides(&*store, doc.parent_folder_id()).await;
+        // Get cached index guide for this document's location - O(1) lookup
+        let index_guide = index_guide_cache
+            .get(&doc.parent_folder_id())
+            .cloned()
+            .unwrap_or_default();
         
         documents.push(DocumentSummary {
             id: *id,
@@ -589,8 +688,158 @@ async fn get_folder_guide(
     }))
 }
 
-// Timeline router factory - temporarily disabled
-// fn timeline_router(store: Arc<RwLock<DocumentStore>>, snapshot_dir: PathBuf) -> Router {
-//     // Implementation temporarily disabled due to Send/Sync issues with SnapshotManager
-//     Router::new()
-// }
+// Simple timeline info endpoint
+#[derive(Serialize)]
+pub struct TimelineInfoResponse {
+    pub snapshots_available: bool,
+    pub snapshot_dir: String,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct SnapshotInfo {
+    pub timestamp: String,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct TimelineSnapshotsResponse {
+    pub snapshots: Vec<SnapshotInfo>,
+    pub total_count: usize,
+}
+
+async fn get_timeline_info(
+    State(state): State<ApiState>,
+) -> Result<Json<TimelineInfoResponse>, StatusCode> {
+    // For now, just indicate that snapshots are available
+    // Full timeline functionality requires LocalSet context due to git2 thread safety
+    Ok(Json(TimelineInfoResponse {
+        snapshots_available: true,
+        snapshot_dir: state.snapshot_dir.to_string_lossy().to_string(),
+        message: "Timeline snapshots are being created automatically. Full timeline API requires special runtime context.".to_string(),
+    }))
+}
+
+async fn get_timeline_snapshots(
+    State(state): State<ApiState>,
+) -> Result<Json<TimelineSnapshotsResponse>, StatusCode> {
+    use std::process::Command;
+    
+    // Use git command to list snapshots
+    let output = Command::new("git")
+        .args(&["log", "--oneline", "--no-decorate", "-n", "20"])
+        .current_dir(&state.snapshot_dir)
+        .output()
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    if !output.status.success() {
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout);
+    let snapshots: Vec<SnapshotInfo> = log_output
+        .lines()
+        .filter_map(|line| {
+            let parts: Vec<&str> = line.splitn(2, ' ').collect();
+            if parts.len() == 2 {
+                Some(SnapshotInfo {
+                    timestamp: parts[1].trim_start_matches("Snapshot ").to_string(),
+                    message: format!("Snapshot at {}", parts[1].trim_start_matches("Snapshot ")),
+                })
+            } else {
+                None
+            }
+        })
+        .collect();
+    
+    let total_count = snapshots.len();
+    
+    Ok(Json(TimelineSnapshotsResponse {
+        snapshots,
+        total_count,
+    }))
+}
+
+#[derive(Serialize)]
+pub struct DocumentVersion {
+    pub timestamp: String,
+    pub version: String, // Base64 encoded
+}
+
+#[derive(Serialize)]
+pub struct DocumentVersionsResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub versions: Vec<DocumentVersion>,
+    pub current_version: String,
+}
+
+async fn get_document_versions(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+) -> Result<Json<DocumentVersionsResponse>, StatusCode> {
+    let store = state.store.read().await;
+    
+    let doc = store.get(id).ok_or(StatusCode::NOT_FOUND)?;
+    let current_version = doc.get_frontiers();
+    
+    // Get version timeline
+    let timeline = store.get_document_timeline(id)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    let versions: Vec<DocumentVersion> = timeline
+        .into_iter()
+        .map(|(timestamp, version)| DocumentVersion {
+            timestamp: timestamp.to_rfc3339(),
+            version: base64::encode(format!("{:?}", version)), // Serialize as debug string for now
+        })
+        .collect();
+    
+    Ok(Json(DocumentVersionsResponse {
+        id,
+        name: doc.name().to_string(),
+        versions,
+        current_version: base64::encode(format!("{:?}", current_version)), // Serialize as debug string for now
+    }))
+}
+
+#[derive(Deserialize)]
+pub struct ReplayRequest {
+    pub version: Option<String>, // Base64 encoded version bytes
+    pub timestamp: Option<String>, // ISO timestamp to replay to
+}
+
+#[derive(Serialize)]
+pub struct ReplayResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub content: String,
+    pub version: String, // Base64 encoded version
+    pub timestamp: String,
+    pub message: String,
+}
+
+async fn replay_document(
+    State(state): State<ApiState>,
+    Path(id): Path<Uuid>,
+    Json(_req): Json<ReplayRequest>,
+) -> Result<Json<ReplayResponse>, StatusCode> {
+    let store = state.store.read().await;
+    
+    // For now, just return current state with version info
+    let doc = store.get(id).ok_or(StatusCode::NOT_FOUND)?;
+    let version = doc.get_frontiers();
+    
+    // TODO: Implement proper version deserialization and replay
+    // For now, we return the current state
+    let content = doc.text();
+    
+    Ok(Json(ReplayResponse {
+        id,
+        name: doc.name().to_string(),
+        content,
+        version: base64::encode(format!("{:?}", version)),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        message: "Document current state (replay coming soon)".to_string(),
+    }))
+}

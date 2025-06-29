@@ -448,12 +448,12 @@ Remember: Use the context hub actively but speak about it sparingly. Be helpful 
     def get_resource_requirements(self) -> ResourceSpec:
         return ResourceSpec(memory_mb=1024, timeout_seconds=60)
 
-    async def handle_event(self, event: Event) -> List[Event]:
+    async def _handle_event_impl(self, event: Event) -> List[Event]:
         """Handle chat-related events"""
         output_events = []
 
         # Add logging to trace event handling
-        logging.info(f"[TRACE] ChatAgentDriver.handle_event called: event_id={event.id}, event_type={event.type}, user_id={event.user_id}")
+        logging.info(f"[TRACE] ChatAgentDriver._handle_event_impl called: event_id={event.id}, event_type={event.type}, user_id={event.user_id}")
 
         if isinstance(event, LLMChatEvent):
             # Process chat request
@@ -1146,9 +1146,9 @@ class AuthenticationDriver(ToolDriver):
     async def _verify_token(self, token: str) -> Optional[str]:
         """Verify JWT token and return user ID"""
         # This would integrate with the existing JWT verification logic
-        # from common.jwt_utils import verify_token
+        # from lightning_core.security.jwt_utils import verify_token
         try:
-            from common.jwt_utils import verify_token
+            from lightning_core.security.jwt_utils import verify_token
 
             return verify_token(token)
         except Exception as e:

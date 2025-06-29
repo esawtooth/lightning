@@ -31,10 +31,14 @@ const Context = () => {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [saveStatus, setSaveStatus] = useState(null) // 'saving', 'saved', 'error'
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+  const [undoNotification, setUndoNotification] = useState(null)
+  const [actionHistory, setActionHistory] = useState([]) // Store recent actions for undo
+  const [redoStack, setRedoStack] = useState([]) // Store undone actions for redo
   const editorRef = useRef(null)
   const crepeEditor = useRef(null)
   const autoSaveTimer = useRef(null)
   const mutationObserver = useRef(null)
+  const undoTimeoutRef = useRef(null)
 
   useEffect(() => {
     loadContextStatus()
@@ -51,9 +55,13 @@ const Context = () => {
     
     // Cleanup on unmount or document change
     return () => {
-      if (autoSaveTimer.current) {
+      // Save any pending changes before cleanup
+      if (crepeEditor.current && selectedDocument?.id && autoSaveTimer.current) {
         clearTimeout(autoSaveTimer.current)
+        // Force immediate save on unmount
+        handleSaveDocument(true)
       }
+      cleanupEditor()
     }
   }, [selectedDocument, isLoadingDocument])
 
@@ -98,6 +106,112 @@ const Context = () => {
       setExpandedFolders(autoExpandFolders)
     }
   }, [folders])
+
+  const showUndoNotification = (message, undoAction) => {
+    // Clear any existing timeout
+    if (undoTimeoutRef.current) {
+      clearTimeout(undoTimeoutRef.current)
+    }
+    
+    // Show notification
+    setUndoNotification({ message, undoAction })
+    
+    // Auto-hide after 5 seconds
+    undoTimeoutRef.current = setTimeout(() => {
+      setUndoNotification(null)
+    }, 5000)
+  }
+
+  const performUndo = async () => {
+    if (actionHistory.length === 0) return
+    
+    const lastAction = actionHistory[actionHistory.length - 1]
+    setActionHistory(prev => prev.slice(0, -1))
+    
+    try {
+      switch (lastAction.type) {
+        case 'delete':
+          // Restore deleted item
+          const item = lastAction.item
+          
+          if (item.doc_type === 'Folder') {
+            // Restore folder
+            const response = await fetch('/api/context/folders', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: item.name,
+                description: item.description || '',
+                parent_folder_id: item.parent_folder_id || null
+              })
+            })
+            
+            if (!response.ok) {
+              throw new Error('Failed to restore folder')
+            }
+          } else {
+            // Restore document
+            const response = await fetch('/api/context/documents', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: item.name,
+                content: item.content || `# ${item.name}\n\nRestored document`,
+                folder_id: item.folder_id || null
+              })
+            })
+            
+            if (!response.ok) {
+              throw new Error('Failed to restore document')
+            }
+            
+            const restoredDoc = await response.json()
+            // If this was the selected document, select the restored one
+            if (selectedDocument?.id === item.id) {
+              setSelectedDocument(restoredDoc)
+            }
+          }
+          
+          showUndoNotification(`Restored "${item.name}"`, null)
+          break
+          
+        case 'create':
+          // Delete the created item
+          await handleDelete(lastAction.item, false) // false = no undo for this delete
+          break
+          
+        case 'rename':
+          // Rename back to original name
+          // TODO: Implement rename functionality
+          break
+      }
+      
+      // Add to redo stack
+      setRedoStack(prev => [...prev, lastAction])
+      
+      // Reload folders to refresh UI
+      await loadFolders()
+    } catch (error) {
+      console.error('Undo failed:', error)
+      showUndoNotification('Undo failed', null)
+    }
+    
+    // Hide notification
+    setUndoNotification(null)
+  }
+
+  const performRedo = async () => {
+    if (redoStack.length === 0) return
+    
+    const action = redoStack[redoStack.length - 1]
+    setRedoStack(prev => prev.slice(0, -1))
+    
+    // Re-perform the action
+    // Implementation would be similar to undo but in reverse
+    
+    // Add back to history
+    setActionHistory(prev => [...prev, action])
+  }
 
   const loadContextStatus = async () => {
     try {
@@ -180,10 +294,22 @@ const Context = () => {
       autoSaveTimer.current = null
     }
     
+    // Clear periodic save interval
+    if (editorRef.current?.periodicSaveInterval) {
+      clearInterval(editorRef.current.periodicSaveInterval)
+      editorRef.current.periodicSaveInterval = null
+    }
+    
     // Disconnect mutation observer
     if (mutationObserver.current) {
       mutationObserver.current.disconnect()
       mutationObserver.current = null
+    }
+    
+    // Remove event listeners
+    const editorElement = editorRef.current?.querySelector('.ProseMirror')
+    if (editorElement) {
+      editorElement.removeEventListener('input', () => {})
     }
     
     // Clear editor instance
@@ -226,18 +352,33 @@ const Context = () => {
       // Initialize the editor
       await crepeEditor.current.create()
 
-      // Set up auto-save on content changes
-      mutationObserver.current = new MutationObserver(() => {
+      // Get the Milkdown editor instance to listen for changes
+      const editor = crepeEditor.current.editor
+      
+      // Function to handle content changes
+      const handleContentChange = () => {
         // Clear any existing timer
         if (autoSaveTimer.current) {
           clearTimeout(autoSaveTimer.current)
         }
         
-        // Set a new timer to save after 2 seconds of inactivity
+        // Set a new timer to save after 1 second of inactivity (reduced from 2)
         autoSaveTimer.current = setTimeout(() => {
           handleSaveDocument(true) // true = auto-save
-        }, 2000)
-      })
+        }, 1000)
+      }
+
+      // Set up auto-save using multiple methods for better reliability
+      
+      // Method 1: Listen to editor transactions (most reliable)
+      if (editor) {
+        editor.onTransaction = () => {
+          handleContentChange()
+        }
+      }
+      
+      // Method 2: MutationObserver as fallback
+      mutationObserver.current = new MutationObserver(handleContentChange)
       
       // Observe changes in the editor DOM
       const editorElement = editorRef.current.querySelector('.ProseMirror')
@@ -248,6 +389,24 @@ const Context = () => {
           characterData: true,
           attributes: true
         })
+        
+        // Method 3: Input event listener
+        editorElement.addEventListener('input', handleContentChange)
+        
+        // Method 4: Periodic save every 5 seconds if content has changed
+        let lastContent = selectedDocument.content || ''
+        const periodicSaveInterval = setInterval(() => {
+          if (crepeEditor.current && selectedDocument?.id) {
+            const currentContent = crepeEditor.current.getMarkdown()
+            if (currentContent !== lastContent) {
+              lastContent = currentContent
+              handleSaveDocument(true)
+            }
+          }
+        }, 5000)
+        
+        // Store interval ID for cleanup
+        editorRef.current.periodicSaveInterval = periodicSaveInterval
       }
 
       console.log('Crepe editor initialized successfully!')
@@ -406,10 +565,22 @@ const Context = () => {
     closeContextMenu()
   }
 
-  const handleDelete = async (item) => {
-    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return
-    
+  const handleDelete = async (item, trackForUndo = true) => {
     try {
+      // If it's a document, fetch its content before deletion for undo
+      let documentContent = null
+      if (item.doc_type !== 'Folder' && trackForUndo) {
+        try {
+          const docResponse = await fetch(`/api/context/documents/${item.id}`)
+          if (docResponse.ok) {
+            const docData = await docResponse.json()
+            documentContent = docData.content
+          }
+        } catch (err) {
+          console.error('Failed to fetch document content for undo:', err)
+        }
+      }
+      
       const endpoint = item.doc_type === 'Folder' ? 'folders' : 'documents'
       const response = await fetch(`/api/context/${endpoint}/${item.id}`, {
         method: 'DELETE'
@@ -417,12 +588,29 @@ const Context = () => {
       
       if (response.ok) {
         await loadFolders()
+        
+        if (trackForUndo) {
+          // Add to action history with content for restoration
+          setActionHistory(prev => [...prev, {
+            type: 'delete',
+            item: {
+              ...item,
+              content: documentContent // Store content for documents
+            },
+            timestamp: new Date()
+          }])
+          
+          // Clear redo stack when new action is performed
+          setRedoStack([])
+          
+          // Show undo notification
+          showUndoNotification(`Deleted "${item.name}"`, performUndo)
+        }
       } else {
-        alert('Failed to delete item')
+        console.error('Failed to delete item')
       }
     } catch (error) {
       console.error('Error deleting item:', error)
-      alert('Failed to delete item')
     }
     closeContextMenu()
   }
@@ -862,6 +1050,27 @@ const Context = () => {
               <i className="fas fa-file-plus mr-1"></i>
               New Document
             </button>
+            
+            {/* Undo/Redo */}
+            <div className="flex items-center gap-1 border-l pl-4 ml-2">
+              <button 
+                onClick={performUndo}
+                disabled={actionHistory.length === 0}
+                className="btn-secondary text-sm disabled:opacity-50"
+                title="Undo"
+              >
+                <i className="fas fa-undo"></i>
+              </button>
+              <button 
+                onClick={performRedo}
+                disabled={redoStack.length === 0}
+                className="btn-secondary text-sm disabled:opacity-50"
+                title="Redo"
+              >
+                <i className="fas fa-redo"></i>
+              </button>
+            </div>
+            
             <button className="btn-secondary text-sm">
               <i className="fas fa-upload mr-1"></i>
               Upload
@@ -1032,6 +1241,24 @@ const Context = () => {
           </div>
         </div>
       </div>
+
+      {/* Undo Notification */}
+      {undoNotification && (
+        <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-3">
+            <span>{undoNotification.message}</span>
+            <button
+              onClick={() => {
+                undoNotification.undoAction()
+                setUndoNotification(null)
+              }}
+              className="px-3 py-1 bg-white text-gray-900 rounded hover:bg-gray-100 transition-colors font-medium"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Context Menu */}
       {contextMenu && (

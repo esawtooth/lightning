@@ -46,8 +46,7 @@ Lightning is an event-driven AI operating system that orchestrates autonomous an
 - [Voice Agent](components/agents/voice-agent.md) - Voice interaction agent
 
 ### UI Components
-- [Lightning UI](components/ui/README.md) - User interface overview
-- [Integrated App](components/ui/integrated-app.md) - Unified UI application
+- [Lightning UI](components/ui/README.md) - React-based user interface
 
 ## Reference
 

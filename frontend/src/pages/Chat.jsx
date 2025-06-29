@@ -14,7 +14,7 @@ const Chat = () => {
       return wsRef.current
     }
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/chat/${userId}`)
+    const ws = new WebSocket(`ws://${window.location.hostname}:8000/ws/chat/${userId}`)
     
     ws.onopen = () => {
       console.log('WebSocket connected')
