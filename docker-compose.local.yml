@@ -186,6 +186,135 @@ services:
     volumes:
       - ./ui/app:/app
 
+  # Voice Agent WebSocket Server
+  voice-agent-server:
+    build:
+      context: ./agents/voice-agent/websocket-server
+      dockerfile: Dockerfile
+    environment:
+      # Lightning Core Integration
+      LIGHTNING_MODE: local
+      API_BASE: http://lightning-api:8000
+      CONTEXT_HUB_URL: http://context-hub:3000
+      
+      # Event Bus (use Lightning Core's Redis)
+      REDIS_URL: redis://redis:6379
+      LIGHTNING_EVENT_BUS_CONNECTION: redis://redis:6379
+      
+      # Voice Agent Configuration
+      PORT: 8081
+      PUBLIC_URL: ${NGROK_TUNNEL_URL:-http://localhost:8081}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OBJECTIVE: ${VOICE_AGENT_OBJECTIVE}
+      
+      # Twilio Configuration
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      
+      # Outbound Calling
+      ENABLE_OUTBOUND_CALLING: ${ENABLE_OUTBOUND_CALLING:-false}
+      OUTBOUND_TO: ${OUTBOUND_TO:-}
+    ports:
+      - "${VOICE_AGENT_PORT:-8081}:8081"
+    volumes:
+      - ./agents/voice-agent/websocket-server:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - lightning-api
+      - context-hub
+      - redis
+    profiles:
+      - voice-agent
+      - all
+
+  # Voice Agent Frontend (Next.js monitoring interface)
+  voice-agent-frontend:
+    build:
+      context: ./agents/voice-agent/webapp
+      dockerfile: Dockerfile
+    environment:
+      # Backend Integration
+      NEXT_PUBLIC_VOICE_SERVER_URL: ws://localhost:${VOICE_AGENT_PORT:-8081}
+      NEXT_PUBLIC_API_BASE: http://localhost:8000
+      
+      # Twilio Integration
+      NEXT_PUBLIC_TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+    ports:
+      - "${VOICE_AGENT_FRONTEND_PORT:-3001}:3000"
+    volumes:
+      - ./agents/voice-agent/webapp:/app
+      - /app/node_modules
+    depends_on:
+      - voice-agent-server
+    profiles:
+      - voice-agent
+      - all
+
+  # Ngrok Tunnel for Local Development
+  ngrok:
+    image: ngrok/ngrok:latest
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    command: 
+      - "http"
+      - "voice-agent-server:8081"
+      - "--log=stdout"
+      - "--log-level=info"
+    depends_on:
+      - voice-agent-server
+    profiles:
+      - voice-agent
+      - ngrok
+
+  # Python Outbound Voice Agent
+  voice-agent-outbound:
+    build:
+      context: ./core
+      dockerfile: Dockerfile
+      args:
+        LIGHTNING_MODE: local
+        SERVICE_TYPE: agent
+    environment:
+      # Lightning Core Configuration
+      LIGHTNING_MODE: local
+      LIGHTNING_STORAGE_PROVIDER: local
+      LIGHTNING_EVENT_BUS_PROVIDER: redis
+      
+      # Services
+      REDIS_URL: redis://redis:6379
+      LIGHTNING_EVENT_BUS_CONNECTION: redis://redis:6379
+      DATABASE_URL: postgres://lightning:lightning123@postgres:5432/lightning_db
+      CONTEXT_HUB_URL: http://context-hub:3000
+      API_BASE: http://lightning-api:8000
+      
+      # Voice Agent
+      VOICE_AGENT_WEBHOOK_URL: ${NGROK_TUNNEL_URL:-http://localhost:8081}/twiml
+      
+      # Twilio Configuration
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
+      TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}
+      
+      # OpenAI
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      
+      # Logging
+      LOG_LEVEL: INFO
+    volumes:
+      - ./agents/voice-agent:/app/voice-agent
+      - ./core:/app/core
+      - lightning_data:/app/data
+    depends_on:
+      - lightning-api
+      - voice-agent-server
+      - redis
+    working_dir: /app/voice-agent
+    command: tail -f /dev/null  # Keep container running for manual script execution
+    profiles:
+      - voice-agent-outbound
+      - outbound
+
   # Local Agent Runner (for testing agents)
   agent-runner:
     build:
