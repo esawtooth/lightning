@@ -22,6 +22,10 @@ use uuid::Uuid;
 use crate::api::auth_middleware::{AuthContext, require_auth};
 
 /// API state for legacy single-node server
+/// 
+/// Note: CompressService is not included due to thread safety limitations
+/// with git2::Repository. The compress functionality works in LocalSet context
+/// but is not compatible with Axum's multi-threaded router.
 #[derive(Clone)]
 pub struct ApiState {
     pub store: Arc<RwLock<DocumentStore>>,
@@ -64,7 +68,11 @@ pub fn router(
         .route("/search", get(search))
         // .nest("/timeline", timeline_router(store.clone(), snapshot_dir.clone())) // Temporarily disabled
         .layer(middleware::from_fn_with_state(verifier.clone(), require_auth))
-        .with_state(state);
+        .with_state(state.clone());
+    
+    // TODO: Add compress routes when thread safety is resolved
+    // Note: CompressService contains SnapshotManager which uses git2::Repository
+    // that is not Send/Sync. This requires running in a LocalSet context.
     
     // Add health check endpoint without auth
     Router::new()

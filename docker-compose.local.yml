@@ -161,30 +161,16 @@ services:
       "
 
 
-  # Unified Integrated App UI (replaces chat-client and dashboard)
-  integrated-app:
+  # React Frontend (replaces old template-based UI)
+  frontend:
     build:
       context: .
       dockerfile: ui/app/Dockerfile
-      args:
-        LIGHTNING_MODE: local
-    environment:
-      # Backend APIs
-      API_BASE: http://lightning-api:8000/api
-      EVENT_API_URL: http://lightning-api:8000/api/events
-      CONTEXT_HUB_URL: http://context-hub:3000
-      
-      # App Configuration
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8080
-      LOG_LEVEL: INFO
     ports:
-      - "8080:8080"
+      - "8080:80"
     depends_on:
       - lightning-api
       - context-hub
-    volumes:
-      - ./ui/app:/app
 
   # Local Agent Runner (for testing agents)
   agent-runner:

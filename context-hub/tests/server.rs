@@ -29,8 +29,8 @@ async fn server_health_endpoint() {
         verifier,
     );
     let app = Router::new()
-        .merge(router)
-        .route("/health", get(|| async { "OK" }));
+        .merge(router);
+        // Note: Health endpoint is already included in the router
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

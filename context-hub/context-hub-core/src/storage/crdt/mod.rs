@@ -1164,6 +1164,86 @@ impl DocumentStore {
         
         children
     }
+
+    /// Garbage collect deleted documents from disk
+    /// Returns the number of files removed and total bytes freed
+    pub fn garbage_collect_documents(&mut self) -> Result<(usize, u64)> {
+        let mut removed_count = 0;
+        let mut freed_bytes = 0u64;
+
+        // Get all document IDs currently in memory
+        let active_ids: std::collections::HashSet<Uuid> = self.docs.keys().cloned().collect();
+
+        // Scan the data directory for orphaned files
+        for entry in std::fs::read_dir(&self.dir)? {
+            let entry = entry?;
+            let path = entry.path();
+            
+            // Only process .bin files
+            if path.extension().and_then(|s| s.to_str()) != Some("bin") {
+                continue;
+            }
+
+            // Extract UUID from filename
+            if let Some(file_stem) = path.file_stem().and_then(|s| s.to_str()) {
+                if let Ok(id) = Uuid::parse_str(file_stem) {
+                    // If this ID is not in our active set, it's orphaned
+                    if !active_ids.contains(&id) {
+                        // Get file size before deletion
+                        if let Ok(metadata) = entry.metadata() {
+                            freed_bytes += metadata.len();
+                        }
+                        
+                        // Remove the orphaned file
+                        std::fs::remove_file(&path)?;
+                        removed_count += 1;
+                    }
+                }
+            }
+        }
+
+        Ok((removed_count, freed_bytes))
+    }
+
+    /// Get all active document IDs for use in other GC operations
+    pub fn active_document_ids(&self) -> Vec<Uuid> {
+        self.docs.keys().cloned().collect()
+    }
+
+    /// Compact CRDT history for all documents and optionally GC orphaned files
+    /// Returns (files_removed, bytes_freed)
+    pub fn full_compact(&mut self, gc_orphaned: bool) -> Result<(usize, u64)> {
+        // First compact CRDT history
+        self.compact_history()?;
+        
+        // Then optionally GC orphaned files
+        if gc_orphaned {
+            self.garbage_collect_documents()
+        } else {
+            Ok((0, 0))
+        }
+    }
+
+    /// Get blob references from all documents
+    pub fn collect_blob_references(&self) -> std::collections::HashSet<String> {
+        let mut blob_refs = std::collections::HashSet::new();
+        
+        for doc in self.docs.values() {
+            // Get content list length for non-folder documents
+            if doc.doc_type() != DocumentType::Folder {
+                let list = doc.doc.get_list(CONTENT_KEY);
+                for i in 0..list.len() {
+                    if let Some(pointer) = doc.pointer_at(i) {
+                        if pointer.pointer_type == "blob" {
+                            blob_refs.insert(pointer.target.clone());
+                        }
+                    }
+                }
+            }
+        }
+        
+        blob_refs
+    }
 }
 
 #[cfg(test)]

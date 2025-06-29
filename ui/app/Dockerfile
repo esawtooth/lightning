@@ -1,54 +1,32 @@
-# Unified Lightning UI Dockerfile
-FROM python:3.10-slim
+# Lightning React Frontend Dockerfile
+FROM node:18-alpine AS builder
 
 WORKDIR /app
 
-# Build argument for deployment mode
-ARG LIGHTNING_MODE=local
+# Copy package files
+COPY frontend/package*.json ./
+RUN npm install
 
-# Copy requirements first for better caching
-COPY ui/app/requirements.txt .
+# Copy source code
+COPY frontend/ ./
 
-# Install dependencies from requirements.txt
-RUN pip install --no-cache-dir -r requirements.txt
+# Build the application
+RUN npm run build
 
-# For Azure deployment, add Azure-specific dependencies
-RUN if [ "$LIGHTNING_MODE" = "azure" ]; then \
-        pip install --no-cache-dir \
-            azure-identity \
-            opencensus-ext-azure \
-            opencensus-ext-logging; \
-    fi
+# Production server
+FROM nginx:alpine
 
-# Copy the app files based on build context
-# When building from root: COPY ui/app/* .
-# When building from ui/app: COPY . .
-COPY ui/app/app.py .
-COPY ui/app/lightning_ui.py .
+# Copy build files to nginx
+COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy templates and static directories
-COPY ui/app/templates ./templates
-COPY ui/app/static ./static
+# Copy nginx configuration
+COPY ui/app/nginx.conf /etc/nginx/conf.d/default.conf
 
-# Copy common utilities
-COPY ui/app/common ./common
-
-# Set environment variables
-ENV LIGHTNING_MODE=${LIGHTNING_MODE}
-ENV SERVICE_TYPE=ui
-
-# Expose port (Azure Container Instances will override this)
-EXPOSE 8080
+# Expose port
+EXPOSE 80
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
 
-# Run the appropriate application based on environment variable
-CMD if [ "$LIGHTNING_UI" = "true" ]; then \
-        uvicorn lightning_ui:app --host 0.0.0.0 --port 8080; \
-    elif [ -f "app.py" ]; then \
-        uvicorn app:app --host 0.0.0.0 --port 8080; \
-    else \
-        uvicorn app:app --host 0.0.0.0 --port 8080; \
-    fi
+CMD ["nginx", "-g", "daemon off;"]

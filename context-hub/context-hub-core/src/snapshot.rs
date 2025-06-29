@@ -74,6 +74,74 @@ impl SnapshotManager {
         Ok(commit_id)
     }
 
+    /// Commit with metadata about storage and compression
+    pub fn snapshot_with_metadata(
+        &self,
+        store: &DocumentStore,
+        storage_size: u64,
+        compression_stats: Option<&crate::services::compress::CompressStats>,
+    ) -> Result<Oid> {
+        let workdir = self
+            .repo
+            .workdir()
+            .ok_or_else(|| anyhow!("snapshot repository has no working directory"))?;
+
+        // copy all document files into the repo workdir
+        for entry in std::fs::read_dir(store.data_dir())? {
+            let entry = entry?;
+            if entry.file_type()?.is_file() {
+                let dest = PathBuf::from(workdir).join(entry.file_name());
+                std::fs::copy(entry.path(), dest)?;
+            }
+        }
+
+        // stage all changes
+        let mut index = self.repo.index()?;
+        index.add_all(["*"].iter(), IndexAddOption::DEFAULT, None)?;
+        index.write()?;
+        let tree_id = index.write_tree()?;
+        let tree = self.repo.find_tree(tree_id)?;
+
+        let sig = Signature::now("context-hub", "context@hub")?;
+        let ts = Utc::now();
+        
+        // Build commit message with metadata
+        let mut msg = format!("Snapshot {}\n\n", ts.to_rfc3339());
+        msg.push_str(&format!("Storage size: {}\n", 
+            crate::storage::metrics::StorageMetrics::format_size(storage_size)));
+        
+        if let Some(stats) = compression_stats {
+            msg.push_str(&format!("Compression stats:\n"));
+            msg.push_str(&format!("  - Bytes freed: {}\n", 
+                crate::storage::metrics::StorageMetrics::format_size(stats.bytes_freed)));
+            msg.push_str(&format!("  - Documents removed: {}\n", stats.documents_removed));
+            msg.push_str(&format!("  - Blobs removed: {}\n", stats.blobs_removed));
+            msg.push_str(&format!("  - WAL entries removed: {}\n", stats.wal_entries_removed));
+            msg.push_str(&format!("  - Index docs removed: {}\n", stats.index_docs_removed));
+            msg.push_str(&format!("  - Duration: {:.2}s\n", stats.duration_secs));
+        }
+        
+        let commit_id = match self.repo.head() {
+            Ok(head) => {
+                let parent = head.peel_to_commit()?;
+                self.repo
+                    .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[&parent])?
+            }
+            Err(_) => self
+                .repo
+                .commit(Some("HEAD"), &sig, &sig, &msg, &tree, &[])?,
+        };
+        
+        // Tag with both timestamp and size info
+        let tag_name = format!("snapshot-{}-{}MB", 
+            ts.timestamp(),
+            storage_size / (1024 * 1024)
+        );
+        let obj = self.repo.find_object(commit_id, None)?;
+        let _ = self.repo.tag_lightweight(&tag_name, &obj, false);
+        Ok(commit_id)
+    }
+
     pub fn prune_old_tags(&self, keep: usize) -> Result<()> {
         let names = self.repo.tag_names(Some("snapshot-*"))?;
         let mut entries = Vec::new();
@@ -194,6 +262,8 @@ impl SnapshotManager {
 }
 
 /// Spawn a background task that periodically snapshots the document store.
+/// DEPRECATED: Use CompressService with compress_monitor_task instead
+#[deprecated(note = "Use CompressService with compress_monitor_task for threshold-based compression")]
 pub async fn snapshot_task(
     store: Arc<RwLock<DocumentStore>>,
     manager: Arc<SnapshotManager>,
