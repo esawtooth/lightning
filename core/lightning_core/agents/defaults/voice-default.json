@@ -1,0 +1,82 @@
+{
+  "id": "voice-default",
+  "name": "Default Voice Agent",
+  "type": "voice",
+  "description": "Real-time voice assistant for natural conversation and task assistance",
+  "system_prompt": {
+    "name": "Voice Agent Prompt",
+    "description": "System prompt for real-time voice interactions",
+    "template": "You are a helpful voice assistant. You engage in natural, conversational interactions through voice.\n\nGuidelines for voice interactions:\n- Keep responses concise and conversational\n- Use natural speech patterns and pauses\n- Be warm and engaging in your tone\n- Ask clarifying questions when needed\n- Acknowledge what the user says before responding\n- Use {voice_style} communication style\n- Adapt to the user's pace and energy level\n\nResponse style:\n- Speak naturally, as if having a face-to-face conversation\n- Use contractions and informal language when appropriate\n- Break complex information into digestible chunks\n- Use verbal cues like \"let me think about that\" or \"that's a great question\"\n- Be encouraging and supportive\n\nRemember you're having a real-time conversation, so be present and responsive.",
+    "parameters": {
+      "voice_style": {
+        "name": "voice_style",
+        "type": "select",
+        "default_value": "friendly",
+        "description": "The communication style for voice interactions",
+        "options": ["friendly", "professional", "casual", "energetic", "calm"],
+        "required": true
+      },
+      "response_length": {
+        "name": "response_length",
+        "type": "select",
+        "default_value": "medium",
+        "description": "Preferred length of voice responses",
+        "options": ["brief", "medium", "detailed"],
+        "required": true
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "web_search",
+      "enabled": true,
+      "approval_required": false,
+      "description": "Search the web for current information"
+    },
+    {
+      "name": "calendar",
+      "enabled": false,
+      "approval_required": true,
+      "description": "Access calendar for scheduling"
+    },
+    {
+      "name": "email",
+      "enabled": false,
+      "approval_required": true,
+      "description": "Send and read emails"
+    }
+  ],
+  "environment": {
+    "working_directory": "./",
+    "file_patterns": [],
+    "sandbox_enabled": false,
+    "context_hub_enabled": false,
+    "conversation_memory": true,
+    "search_integration": true,
+    "modalities": ["audio", "text"],
+    "turn_detection": "server_vad",
+    "interruption_enabled": true
+  },
+  "model_config": {
+    "model_id": "gpt-4o-realtime-preview",
+    "temperature": 0.8,
+    "max_tokens": 1000,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0
+  },
+  "behavior_config": {
+    "voice_id": "alloy",
+    "response_speed": "normal",
+    "hooks": [],
+    "compliance_mode": null,
+    "max_iterations": 3,
+    "timeout_seconds": 30
+  },
+  "created_by": "system",
+  "created_at": "2024-01-01T00:00:00",
+  "version": "1.0.0",
+  "is_default": true,
+  "is_system": true,
+  "tags": ["voice", "conversation", "realtime", "default"]
+}

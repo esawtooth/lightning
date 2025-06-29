@@ -1,0 +1,77 @@
+{
+  "id": "planner-default", 
+  "name": "Default Planner Agent",
+  "type": "planner",
+  "description": "Workflow planning agent that creates and validates Petri net-based plans for task automation",
+  "system_prompt": {
+    "name": "Lightning Planner Prompt",
+    "description": "System prompt for the Lightning workflow planner",
+    "template": "You are **Lightning‑Planner**, an expert workflow designer.\n\nDesign a Petri‑net workflow plan that obeys the following schema:\n\nJSON object with:\n• plan_name          : string\n• graph_type         : \"acyclic\" | \"reactive\"\n• events             : array of {{name, kind?, schedule?, description?}}\n• steps              : array of {{name, on[], action, args{{}}, emits[], guard?}}\nAll string enums must be lowercase; unknown keys forbidden.\n\nExternal events you can use:\n{external_events}\n\nAvailable actions (tools):\n{available_tools}\n\nAdditional rules:\n• You MAY invent new internal events (names must start with \"event.\").\n  They must be produced by some step before they are consumed.\n• You MAY NOT invent new actions—pick only from the tool list.\n• External triggers must be chosen ONLY from the external‑event list.\n• Every step must fire at least once in the normal run.\n• Return a JSON object with two fields:\n  - \"plan\": The complete workflow plan following the schema\n  - \"summary\": A 2-3 sentence natural language summary of what the plan does\n• Return *only* JSON, no comments, no markdown.\n\nPlan complexity: {complexity_level}\nValidation mode: {validation_mode}",
+    "parameters": {
+      "external_events": {
+        "name": "external_events", 
+        "type": "string",
+        "default_value": "Will be populated from EventRegistry",
+        "description": "Available external events from the system registry",
+        "required": true
+      },
+      "available_tools": {
+        "name": "available_tools",
+        "type": "string", 
+        "default_value": "Will be populated from ToolRegistry",
+        "description": "Available tools/actions from the system registry",
+        "required": true
+      },
+      "complexity_level": {
+        "name": "complexity_level",
+        "type": "select",
+        "default_value": "moderate",
+        "description": "Complexity level for generated plans",
+        "options": ["simple", "moderate", "complex"],
+        "required": true
+      },
+      "validation_mode": {
+        "name": "validation_mode",
+        "type": "select",
+        "default_value": "strict",
+        "description": "Validation strictness for plans",
+        "options": ["permissive", "strict", "pedantic"],
+        "required": true
+      }
+    }
+  },
+  "tools": [],
+  "environment": {
+    "working_directory": "./",
+    "file_patterns": ["*.json"],
+    "sandbox_enabled": true,
+    "context_hub_enabled": false,
+    "conversation_memory": false,
+    "search_integration": false,
+    "event_types": ["user.input", "schedule.trigger", "webhook.received"],
+    "plan_types": ["acyclic", "reactive"],
+    "validation_enabled": true
+  },
+  "model_config": {
+    "model_id": "o3-mini",
+    "temperature": 0.3,
+    "max_tokens": 2000,
+    "top_p": 1.0,
+    "frequency_penalty": 0.0,
+    "presence_penalty": 0.0
+  },
+  "behavior_config": {
+    "planning_model": "o3-mini",
+    "max_retries": 4,
+    "validation_strict": true,
+    "auto_execute": false,
+    "max_iterations": 4,
+    "timeout_seconds": 120
+  },
+  "created_by": "system",
+  "created_at": "2024-01-01T00:00:00",
+  "version": "1.0.0",
+  "is_default": true,
+  "is_system": true,
+  "tags": ["planner", "workflow", "automation", "default"]
+}
